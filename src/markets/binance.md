@@ -27,7 +27,7 @@ I need you to extract information about the specified **Action Type** for the sp
    - Do not process the same announcement twice - keep track of which announcements have been processed
    - Look for announcements about the **Action Type** specified in the configuration
    - **Skip announcements ONLY if** the title clearly indicates a DIFFERENT trading pair type than **Target Trading Pairs**:
-     - If targeting Futures/Perpetual contracts → Skip titles containing "Spot", "Margin", "Alpha"
+     - If targeting Futures/Perpetual contracts → Skip titles containing "Spot", "Margin", "Alpha", "Collateral", "Lending"
      - If targeting Spot → Skip titles containing "Futures", "Perpetual", "Alpha"
      - etc.
    - **MUST investigate announcements** if:
