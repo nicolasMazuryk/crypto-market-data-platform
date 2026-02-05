@@ -24,6 +24,28 @@ npm run lint:fix       # Fix lint issues
 npm run format         # Format code
 ```
 
+## Development Workflow (IMPORTANT)
+
+**Always validate work through tests and tooling.** This provides feedback for iteration.
+
+### TypeScript Typings
+- Define interfaces/types for all data structures (API responses, database records)
+- Let the compiler catch errors early
+
+### Linting & Formatting
+- Run `npm run lint` before committing to catch issues
+- Run `npm run format` to maintain consistent code style
+- Fix all lint errors - don't ignore them
+
+### Testing (Critical)
+- **Write tests for every new function or module** - tests provide validation feedback
+- Run `npm test` frequently to verify changes work correctly
+- When debugging or iterating, use tests to confirm fixes
+- Test edge cases: empty data, malformed responses, rate limit scenarios
+
+### Why This Matters
+Tests and type checking give Claude immediate feedback on whether code works correctly. Instead of guessing, run the tests to validate. This enables faster iteration and catches bugs early.
+
 ## Project Structure
 
 ```
