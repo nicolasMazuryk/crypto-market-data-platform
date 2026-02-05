@@ -9,7 +9,7 @@ export async function pingClickHouse(): Promise<boolean> {
       return result
     }
 
-    if (result && typeof result === 'object' && 'success' in result) {
+    if (typeof result === 'object' && 'success' in result) {
       return Boolean((result as { success?: boolean }).success)
     }
 

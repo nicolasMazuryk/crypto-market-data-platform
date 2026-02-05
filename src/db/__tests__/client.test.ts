@@ -32,9 +32,13 @@ describe('ClickHouse client', () => {
       query_params: { database },
       format: 'JSONEachRow',
     })
-    const rows = await result.json<{ name: string }[]>()
+    const rows = await result.json<{ name: string }>()
 
     expect(rows.length).toBe(1)
-    expect(rows[0].name).toBe(database)
+    const row = rows[0]
+    if (!row) {
+      throw new Error('Expected database row')
+    }
+    expect(row.name).toBe(database)
   })
 })

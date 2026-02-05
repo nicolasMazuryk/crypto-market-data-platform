@@ -25,7 +25,7 @@ export async function listMarketsByExchange(exchange: string): Promise<MarketRow
     format: 'JSONEachRow',
   })
 
-  return result.json<MarketRow[]>()
+  return result.json<MarketRow>()
 }
 
 export async function getMarketByExchangeSymbol(
@@ -41,6 +41,6 @@ export async function getMarketByExchangeSymbol(
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<MarketRow[]>()
+  const rows = await result.json<MarketRow>()
   return rows[0] ?? null
 }

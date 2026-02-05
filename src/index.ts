@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   logger.error({ err: error }, 'markets-sync fatal error')
   process.exitCode = 1
 })

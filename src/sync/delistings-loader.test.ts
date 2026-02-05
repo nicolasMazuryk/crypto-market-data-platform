@@ -51,8 +51,12 @@ describe('loadDelistingsForExchange', () => {
     )
 
     expect(markets).toHaveLength(1)
+    const market = markets[0]
+    if (!market) {
+      throw new Error('Expected delisted market')
+    }
 
-    expect(markets[0]).toMatchObject({
+    expect(market).toMatchObject({
       exchange: 'mexc',
       symbol: '1000RATSUSDT',
       exchange_symbol: '1000RATS_USDT',
@@ -61,11 +65,15 @@ describe('loadDelistingsForExchange', () => {
       is_active: false
     })
 
-    expect(markets[0].delisting_date?.toISOString()).toBe(
+    expect(market.delisting_date?.toISOString()).toBe(
       '2026-02-06T09:00:00.000Z'
     )
 
-    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    const persistedRaw: unknown = JSON.parse(await readFile(filePath, 'utf8'))
+    if (persistedRaw === null || typeof persistedRaw !== 'object') {
+      throw new Error('Expected persisted JSON object')
+    }
+    const persisted = persistedRaw as Record<string, string>
     expect(persisted['1000RATSUSDT']).toBe('2026-02-06 09:00')
   })
 })

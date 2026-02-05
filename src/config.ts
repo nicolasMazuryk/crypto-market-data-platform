@@ -1,8 +1,12 @@
 import { config as loadEnv } from 'dotenv'
 
 const envResult = loadEnv()
-if (envResult.error && envResult.error.code !== 'ENOENT') {
-  throw envResult.error
+const envError = envResult.error
+if (envError) {
+  const errorCode = (envError as NodeJS.ErrnoException).code
+  if (errorCode !== 'ENOENT') {
+    throw envError
+  }
 }
 
 const ENVIRONMENTS = ['development', 'test', 'production'] as const

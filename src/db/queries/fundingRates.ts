@@ -28,7 +28,7 @@ export async function listFundingRatesByExchange(
     format: 'JSONEachRow',
   })
 
-  return result.json<FundingRateRow[]>()
+  return result.json<FundingRateRow>()
 }
 
 export async function listFundingRatesByExchangeSymbolRange(
@@ -44,5 +44,5 @@ export async function listFundingRatesByExchangeSymbolRange(
     format: 'JSONEachRow',
   })
 
-  return result.json<FundingRateRow[]>()
+  return result.json<FundingRateRow>()
 }

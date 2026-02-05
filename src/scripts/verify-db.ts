@@ -8,7 +8,7 @@ import { insertFundingRates, listFundingRatesByExchange, listFundingRatesByExcha
 import { getMarketByExchangeSymbol, insertMarkets } from '../db/queries/markets.js'
 import { toClickHouseDateTime, type FundingRateRow, type MarketRow } from '../db/types.js'
 
-type ColumnDef = {
+interface ColumnDef {
   name: string
   type: string
 }
@@ -50,7 +50,7 @@ async function fetchColumns(table: string): Promise<ColumnDef[]> {
     format: 'JSONEachRow',
   })
 
-  return result.json<ColumnDef[]>()
+  return result.json<ColumnDef>()
 }
 
 function assertSchema(table: string, expected: ColumnDef[], actual: ColumnDef[]): void {
@@ -89,7 +89,7 @@ async function verifyDatabaseExists(): Promise<void> {
     query_params: { database },
     format: 'JSONEachRow',
   })
-  const rows = await result.json<{ name: string }[]>()
+  const rows = await result.json<{ name: string }>()
 
   if (rows.length === 0) {
     throw new Error(`Database not found: ${database}`)
@@ -137,7 +137,7 @@ async function verifyMarketQueries(): Promise<void> {
     throw new Error('Expected market row not found')
   }
 
-  if (latest.is_active !== false) {
+  if (latest.is_active) {
     throw new Error('ReplacingMergeTree did not return latest market record')
   }
 }

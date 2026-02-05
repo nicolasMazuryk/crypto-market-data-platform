@@ -1,6 +1,6 @@
 export type ClickHouseDateTime = string
 
-export type MarketRow = {
+export interface MarketRow {
   exchange: string
   symbol: string
   exchange_symbol: string
@@ -12,7 +12,7 @@ export type MarketRow = {
   updated_at?: ClickHouseDateTime
 }
 
-export type FundingRateRow = {
+export interface FundingRateRow {
   exchange: string
   symbol: string
   exchange_symbol: string

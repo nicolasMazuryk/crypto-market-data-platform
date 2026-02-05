@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ExchangeConfig, Market } from '../exchanges/types.js'
+import type { ExchangeConfig, ExchangeName, Market } from '../exchanges/types.js'
+import type { ExchangeSymbolResolver } from '../exchanges/symbol-resolver.js'
 
 const exchangeConfigsRef = vi.hoisted(() => ({
   configs: [] as ExchangeConfig[]
 }))
 
-const fetchActiveMarketsMock = vi.hoisted(() => vi.fn())
-const loadDelistingsMock = vi.hoisted(() => vi.fn())
-const createExchangeSymbolResolverMock = vi.hoisted(() => vi.fn())
+const fetchActiveMarketsMock = vi.hoisted(() =>
+  vi.fn<(config: ExchangeConfig) => Promise<Market[]>>()
+)
+const loadDelistingsMock = vi.hoisted(() =>
+  vi.fn<(exchange: string, resolver?: ExchangeSymbolResolver) => Promise<Market[]>>()
+)
+const createExchangeSymbolResolverMock = vi.hoisted(() =>
+  vi.fn<(exchange: ExchangeName, activeMarkets: Market[]) => ExchangeSymbolResolver>()
+)
 const loggerMock = vi.hoisted(() => ({
   info: vi.fn(),
   warn: vi.fn(),
@@ -100,17 +107,21 @@ describe('syncMarkets', () => {
 
     const merged = await syncMarkets()
 
-    expect(fetchActiveMarketsMock).toHaveBeenCalledWith(
-      exchangeConfigsRef.configs[0]
-    )
+    const config = exchangeConfigsRef.configs[0]
+    if (!config) {
+      throw new Error('Expected exchange config')
+    }
+    expect(fetchActiveMarketsMock).toHaveBeenCalledWith(config)
     expect(createExchangeSymbolResolverMock).toHaveBeenCalledWith(
       'binance',
       activeMarkets
     )
-    expect(loadDelistingsMock).toHaveBeenCalledWith(
-      'binance',
-      createExchangeSymbolResolverMock.mock.results[0].value
-    )
+    const resolverResult = createExchangeSymbolResolverMock.mock.results[0]
+    if (resolverResult?.type !== 'return') {
+      throw new Error('Expected exchange symbol resolver')
+    }
+    const resolver = resolverResult.value
+    expect(loadDelistingsMock).toHaveBeenCalledWith('binance', resolver)
 
     expect(merged).toHaveLength(2)
 
@@ -128,11 +139,11 @@ describe('syncMarkets', () => {
       { name: 'bybit', ccxtId: 'bybit' }
     )
 
-    fetchActiveMarketsMock.mockImplementation(async (config: ExchangeConfig) => {
+    fetchActiveMarketsMock.mockImplementation((config: ExchangeConfig) => {
       if (config.name === 'binance') {
         throw new Error('boom')
       }
-      return [
+      return Promise.resolve([
         {
           exchange: 'bybit',
           symbol: 'SOLUSDT',
@@ -142,12 +153,12 @@ describe('syncMarkets', () => {
           delisting_date: null,
           is_active: true
         }
-      ]
+      ])
     })
 
-    loadDelistingsMock.mockImplementation(async (exchange: string) => {
+    loadDelistingsMock.mockImplementation((exchange: string) => {
       if (exchange === 'binance') {
-        return [
+        return Promise.resolve([
           {
             exchange: 'binance',
             symbol: 'FOOUSDT',
@@ -157,9 +168,9 @@ describe('syncMarkets', () => {
             delisting_date: new Date('2026-02-06T09:00:00.000Z'),
             is_active: false
           }
-        ]
+        ])
       }
-      return []
+      return Promise.resolve([])
     })
 
     createExchangeSymbolResolverMock.mockReturnValue({

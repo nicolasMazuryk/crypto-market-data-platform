@@ -99,7 +99,7 @@ export function extractListingDate(
   }
 
   const fields = uniqueFields([
-    ...(EXCHANGE_LISTING_FIELDS[exchange] ?? []),
+    ...EXCHANGE_LISTING_FIELDS[exchange],
     ...DEFAULT_LISTING_FIELDS
   ])
 

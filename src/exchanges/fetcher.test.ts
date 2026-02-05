@@ -13,8 +13,8 @@ const { MockExchange, ccxtMock } = vi.hoisted(() => {
       this.markets = MockExchange.nextMarkets
     }
 
-    async loadMarkets(): Promise<Record<string, CcxtMarket>> {
-      return this.markets
+    loadMarkets(): Promise<Record<string, CcxtMarket>> {
+      return Promise.resolve(this.markets)
     }
   }
 
@@ -50,6 +50,7 @@ describe('fetchActiveMarkets', () => {
         info: { onboardDate: 1700000000000 }
       },
       ETHUSDT: {
+        id: 'ETHUSDT',
         symbol: 'ETH/USDT:USDT',
         swap: true,
         linear: true,
@@ -57,6 +58,7 @@ describe('fetchActiveMarkets', () => {
         info: { onboardDate: 1700000001000 }
       },
       XRPUSDT: {
+        id: 'XRPUSDT',
         symbol: 'XRP/USDT:USDT',
         swap: false,
         linear: true,
@@ -64,6 +66,7 @@ describe('fetchActiveMarkets', () => {
         active: true
       },
       ADAUSDC: {
+        id: 'ADAUSDC',
         symbol: 'ADA/USDC:USDC',
         swap: true,
         linear: true,
@@ -71,6 +74,7 @@ describe('fetchActiveMarkets', () => {
         active: true
       },
       DOGEUSDT: {
+        id: 'DOGEUSDT',
         symbol: 'DOGE/USDT:USDT',
         swap: true,
         linear: false,
@@ -78,6 +82,7 @@ describe('fetchActiveMarkets', () => {
         active: true
       },
       SOLUSDT: {
+        id: 'SOLUSDT',
         symbol: 'SOL/USDT:USDT',
         swap: true,
         linear: true,
@@ -118,7 +123,7 @@ describe('fetchActiveMarkets', () => {
     expect(eth).toMatchObject({
       exchange: 'binance',
       symbol: 'ETHUSDT',
-      exchange_symbol: 'ETH/USDT:USDT',
+      exchange_symbol: 'ETHUSDT',
       type: 'perpetual',
       is_active: true
     })

@@ -11,7 +11,7 @@ import {
 } from '../queries/fundingRates.js'
 import { toClickHouseDateTime, type FundingRateRow } from '../types.js'
 
-type ColumnDef = {
+interface ColumnDef {
   name: string
   type: string
 }
@@ -37,7 +37,7 @@ async function fetchColumns(table: string): Promise<ColumnDef[]> {
     format: 'JSONEachRow',
   })
 
-  return result.json<ColumnDef[]>()
+  return result.json<ColumnDef>()
 }
 
 function assertSchema(expected: ColumnDef[], actual: ColumnDef[]): void {
@@ -127,6 +127,10 @@ describe('funding_rates table', () => {
 
     const januaryRows = await listFundingRatesByExchangeSymbolRange(exchange, symbol, januaryStart, februaryStart)
     expect(januaryRows.length).toBe(1)
-    expect(Number(januaryRows[0].funding_rate)).toBeCloseTo(0.0001)
+    const januaryRow = januaryRows[0]
+    if (!januaryRow) {
+      throw new Error('Expected January funding rate row')
+    }
+    expect(Number(januaryRow.funding_rate)).toBeCloseTo(0.0001)
   })
 })

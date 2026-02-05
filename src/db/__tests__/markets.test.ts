@@ -7,7 +7,7 @@ import { pingClickHouse } from '../health.js'
 import { getMarketByExchangeSymbol, insertMarkets, listMarketsByExchange } from '../queries/markets.js'
 import { toClickHouseDateTime, type MarketRow } from '../types.js'
 
-type ColumnDef = {
+interface ColumnDef {
   name: string
   type: string
 }
@@ -35,7 +35,7 @@ async function fetchColumns(table: string): Promise<ColumnDef[]> {
     format: 'JSONEachRow',
   })
 
-  return result.json<ColumnDef[]>()
+  return result.json<ColumnDef>()
 }
 
 function assertSchema(expected: ColumnDef[], actual: ColumnDef[]): void {

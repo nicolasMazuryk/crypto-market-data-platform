@@ -1,6 +1,6 @@
 export function normalizeSymbol(ccxtSymbol: string): string {
   const trimmed = ccxtSymbol.trim().toUpperCase()
-  const base = trimmed.split(':')[0]
+  const [base = trimmed] = trimmed.split(':')
   const cleaned = base.replace(/[\\/_-]/g, '')
   const quoteIndex = cleaned.lastIndexOf('USDT')
 

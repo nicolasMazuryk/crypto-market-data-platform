@@ -13,8 +13,8 @@ function parseDelistingDate(value: string): Date | null {
     return null
   }
 
-  const [datePart, timePart = '00:00'] = trimmed.split(/\s+/)
-  const [yearRaw, monthRaw, dayRaw] = datePart.split('-')
+  const [datePart = '', timePart = '00:00'] = trimmed.split(/\s+/)
+  const [yearRaw = '', monthRaw = '', dayRaw = ''] = datePart.split('-')
   const year = Number(yearRaw)
   const month = Number(monthRaw)
   const day = Number(dayRaw)
@@ -43,9 +43,9 @@ export async function loadDelistingsForExchange(
   }
 
   const content = await readFile(filePath, 'utf8')
-  const parsed = JSON.parse(content)
+  const parsed: unknown = JSON.parse(content)
 
-  if (!parsed || typeof parsed !== 'object') {
+  if (parsed === null || typeof parsed !== 'object') {
     return []
   }
 

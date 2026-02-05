@@ -34,7 +34,7 @@ function isUsdtPerpetualMarket(market: CcxtMarket): boolean {
     return false
   }
 
-  const isActive = market.active === undefined ? true : market.active === true
+  const isActive = market.active ?? true
   if (!isActive) {
     return false
   }
@@ -44,7 +44,7 @@ function isUsdtPerpetualMarket(market: CcxtMarket): boolean {
 
 function toMarketRecord(exchange: ExchangeConfig, market: CcxtMarket): Market {
   const symbol = normalizeSymbol(market.symbol)
-  const exchangeSymbol = market.id ?? market.symbol
+  const exchangeSymbol = market.id
 
   return {
     exchange: exchange.name,
@@ -64,7 +64,7 @@ export async function fetchActiveMarkets(
 
   await exchange.loadMarkets()
 
-  const markets = Object.values(exchange.markets ?? {})
+  const markets = Object.values(exchange.markets)
 
   return markets.filter(isUsdtPerpetualMarket).map((market) => {
     return toMarketRecord(exchangeConfig, market)
