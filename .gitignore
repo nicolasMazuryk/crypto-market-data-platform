@@ -7,3 +7,4 @@ dist/
 coverage/
 
 tasks/
+src/markets/snapshots/

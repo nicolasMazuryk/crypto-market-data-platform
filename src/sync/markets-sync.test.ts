@@ -1,0 +1,177 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { ExchangeConfig, Market } from '../exchanges/types.js'
+
+const exchangeConfigsRef = vi.hoisted(() => ({
+  configs: [] as ExchangeConfig[]
+}))
+
+const fetchActiveMarketsMock = vi.hoisted(() => vi.fn())
+const loadDelistingsMock = vi.hoisted(() => vi.fn())
+const createExchangeSymbolResolverMock = vi.hoisted(() => vi.fn())
+
+vi.mock('../exchanges/index.js', () => ({
+  EXCHANGE_CONFIGS: exchangeConfigsRef.configs
+}))
+
+vi.mock('../exchanges/fetcher.js', () => ({
+  fetchActiveMarkets: fetchActiveMarketsMock
+}))
+
+vi.mock('../exchanges/symbol-resolver.js', () => ({
+  createExchangeSymbolResolver: createExchangeSymbolResolverMock
+}))
+
+vi.mock('./delistings-loader.js', () => ({
+  loadDelistingsForExchange: loadDelistingsMock
+}))
+
+import { syncMarkets } from './markets-sync.js'
+
+describe('syncMarkets', () => {
+  beforeEach(() => {
+    exchangeConfigsRef.configs.length = 0
+    fetchActiveMarketsMock.mockReset()
+    loadDelistingsMock.mockReset()
+    createExchangeSymbolResolverMock.mockReset()
+
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('merges active and delisted markets, preferring active entries', async () => {
+    exchangeConfigsRef.configs.push({
+      name: 'binance',
+      ccxtId: 'binanceusdm'
+    })
+
+    const activeMarkets: Market[] = [
+      {
+        exchange: 'binance',
+        symbol: 'BTCUSDT',
+        exchange_symbol: 'BTCUSDT',
+        type: 'perpetual',
+        listing_date: null,
+        delisting_date: null,
+        is_active: true
+      },
+      {
+        exchange: 'binance',
+        symbol: 'ETHUSDT',
+        exchange_symbol: 'ETHUSDT',
+        type: 'perpetual',
+        listing_date: null,
+        delisting_date: null,
+        is_active: true
+      }
+    ]
+
+    const delistedMarkets: Market[] = [
+      {
+        exchange: 'binance',
+        symbol: 'BTCUSDT',
+        exchange_symbol: 'BTCUSDT',
+        type: 'perpetual',
+        listing_date: null,
+        delisting_date: new Date('2026-02-06T09:00:00.000Z'),
+        is_active: false
+      }
+    ]
+
+    fetchActiveMarketsMock.mockResolvedValue(activeMarkets)
+    loadDelistingsMock.mockResolvedValue(delistedMarkets)
+    createExchangeSymbolResolverMock.mockReturnValue({
+      exchange: 'binance',
+      getExchangeSymbol: (symbol: string) => symbol
+    })
+
+    const merged = await syncMarkets()
+
+    expect(fetchActiveMarketsMock).toHaveBeenCalledWith(
+      exchangeConfigsRef.configs[0]
+    )
+    expect(createExchangeSymbolResolverMock).toHaveBeenCalledWith(
+      'binance',
+      activeMarkets
+    )
+    expect(loadDelistingsMock).toHaveBeenCalledWith(
+      'binance',
+      createExchangeSymbolResolverMock.mock.results[0].value
+    )
+
+    expect(merged).toHaveLength(2)
+
+    const btc = merged.find((market) => market.symbol === 'BTCUSDT')
+    const eth = merged.find((market) => market.symbol === 'ETHUSDT')
+
+    expect(btc?.is_active).toBe(true)
+    expect(btc?.delisting_date).toBeNull()
+    expect(eth?.is_active).toBe(true)
+  })
+
+  it('continues syncing when active market fetch fails', async () => {
+    exchangeConfigsRef.configs.push(
+      { name: 'binance', ccxtId: 'binanceusdm' },
+      { name: 'bybit', ccxtId: 'bybit' }
+    )
+
+    fetchActiveMarketsMock.mockImplementation(async (config: ExchangeConfig) => {
+      if (config.name === 'binance') {
+        throw new Error('boom')
+      }
+      return [
+        {
+          exchange: 'bybit',
+          symbol: 'SOLUSDT',
+          exchange_symbol: 'SOLUSDT',
+          type: 'perpetual',
+          listing_date: null,
+          delisting_date: null,
+          is_active: true
+        }
+      ]
+    })
+
+    loadDelistingsMock.mockImplementation(async (exchange: string) => {
+      if (exchange === 'binance') {
+        return [
+          {
+            exchange: 'binance',
+            symbol: 'FOOUSDT',
+            exchange_symbol: 'FOOUSDT',
+            type: 'perpetual',
+            listing_date: null,
+            delisting_date: new Date('2026-02-06T09:00:00.000Z'),
+            is_active: false
+          }
+        ]
+      }
+      return []
+    })
+
+    createExchangeSymbolResolverMock.mockReturnValue({
+      exchange: 'binance',
+      getExchangeSymbol: (symbol: string) => symbol
+    })
+
+    const merged = await syncMarkets()
+
+    expect(fetchActiveMarketsMock).toHaveBeenCalledTimes(2)
+    expect(createExchangeSymbolResolverMock).toHaveBeenCalledWith(
+      'binance',
+      []
+    )
+
+    expect(merged).toHaveLength(2)
+
+    const foo = merged.find((market) => market.symbol === 'FOOUSDT')
+    const sol = merged.find((market) => market.symbol === 'SOLUSDT')
+
+    expect(foo?.is_active).toBe(false)
+    expect(sol?.is_active).toBe(true)
+  })
+})

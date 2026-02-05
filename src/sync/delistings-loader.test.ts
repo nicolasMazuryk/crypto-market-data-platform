@@ -1,0 +1,71 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+
+import { afterEach, describe, expect, it } from 'vitest'
+
+import type { Market } from '../exchanges/types.js'
+import { createExchangeSymbolResolver } from '../exchanges/symbol-resolver.js'
+import { loadDelistingsForExchange } from './delistings-loader.js'
+
+describe('loadDelistingsForExchange', () => {
+  let tempDir: string | null = null
+
+  afterEach(async () => {
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true })
+      tempDir = null
+    }
+  })
+
+  it('normalizes symbols, resolves exchange format, and parses UTC delisting dates', async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'delistings-'))
+    const delistingsDir = path.join(tempDir, 'delistings')
+    await mkdir(delistingsDir, { recursive: true })
+
+    const filePath = path.join(delistingsDir, 'mexc.json')
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        '1000RATSUSDT': '2026-02-06 09:00'
+      })
+    )
+
+    const activeMarkets: Market[] = [
+      {
+        exchange: 'mexc',
+        symbol: '1000RATSUSDT',
+        exchange_symbol: '1000RATS_USDT',
+        type: 'perpetual',
+        listing_date: null,
+        delisting_date: null,
+        is_active: true
+      }
+    ]
+
+    const resolver = createExchangeSymbolResolver('mexc', activeMarkets)
+    const markets = await loadDelistingsForExchange(
+      'mexc',
+      resolver,
+      delistingsDir
+    )
+
+    expect(markets).toHaveLength(1)
+
+    expect(markets[0]).toMatchObject({
+      exchange: 'mexc',
+      symbol: '1000RATSUSDT',
+      exchange_symbol: '1000RATS_USDT',
+      type: 'perpetual',
+      listing_date: null,
+      is_active: false
+    })
+
+    expect(markets[0].delisting_date?.toISOString()).toBe(
+      '2026-02-06T09:00:00.000Z'
+    )
+
+    const persisted = JSON.parse(await readFile(filePath, 'utf8'))
+    expect(persisted['1000RATSUSDT']).toBe('2026-02-06 09:00')
+  })
+})
