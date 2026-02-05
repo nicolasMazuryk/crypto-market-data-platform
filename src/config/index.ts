@@ -14,4 +14,3 @@ export const EXCHANGE_CONFIGS: ExchangeConfig[] = [
 ]
 
 export const DELISTINGS_DIR = 'src/markets/delistings'
-export const MARKETS_OUTPUT_DIR = 'src/markets/snapshots'

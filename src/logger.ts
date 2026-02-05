@@ -19,7 +19,6 @@ const transport = !isProduction
 export const logger = pino(
   {
     level: config.logLevel,
-    base: { service: 'datapipeline' },
     redact: {
       paths: ['*.token', '*.secret', '*.password'],
       remove: true,

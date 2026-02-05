@@ -9,6 +9,11 @@ const exchangeConfigsRef = vi.hoisted(() => ({
 const fetchActiveMarketsMock = vi.hoisted(() => vi.fn())
 const loadDelistingsMock = vi.hoisted(() => vi.fn())
 const createExchangeSymbolResolverMock = vi.hoisted(() => vi.fn())
+const loggerMock = vi.hoisted(() => ({
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+}))
 
 vi.mock('../exchanges/index.js', () => ({
   EXCHANGE_CONFIGS: exchangeConfigsRef.configs
@@ -26,6 +31,10 @@ vi.mock('./delistings-loader.js', () => ({
   loadDelistingsForExchange: loadDelistingsMock
 }))
 
+vi.mock('../logger.js', () => ({
+  logger: loggerMock,
+}))
+
 import { syncMarkets } from './markets-sync.js'
 
 describe('syncMarkets', () => {
@@ -34,9 +43,9 @@ describe('syncMarkets', () => {
     fetchActiveMarketsMock.mockReset()
     loadDelistingsMock.mockReset()
     createExchangeSymbolResolverMock.mockReset()
-
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    loggerMock.info.mockReset()
+    loggerMock.warn.mockReset()
+    loggerMock.error.mockReset()
   })
 
   afterEach(() => {
