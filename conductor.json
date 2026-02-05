@@ -1,7 +1,7 @@
 {
     "scripts": {
         "setup": "npm install\ncp $CONDUCTOR_ROOT_PATH/.env .env",
-        "run": "npm run start",
+        "run": "npm run db:up & npm run start",
         "archive": "rm -rf node_modules"
     }
 }

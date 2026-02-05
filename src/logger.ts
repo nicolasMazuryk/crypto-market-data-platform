@@ -11,6 +11,7 @@ const transport = !isProduction
         colorize: true,
         translateTime: 'SYS:standard',
         ignore: 'pid,hostname',
+        messageKey: 'message',
         singleLine: false,
       },
     })
