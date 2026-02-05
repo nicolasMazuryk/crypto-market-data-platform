@@ -46,6 +46,7 @@ I need you to extract information about the specified **Action Type** for the sp
    - General announcements often have multiple sections (Spot, Futures, Margin, etc.) - extract data ONLY from the section matching **Target Trading Pairs**
    - Extract the token names in the format matching **Target Trading Pairs** (e.g., append "USDT" for USDT pairs)
    - Extract the action datetime in UTC format from the relevant section
+   - Each time you found the **Target Trading Pairs:** - save it to file before moving to next announcement
 
 4. **Output format:**
    Create a JSON object with token names as keys and action datetimes as values:

@@ -26,14 +26,15 @@ I need you to extract information about the specified **Action Type** for the sp
    - Process announcements in chronological order (top-to-bottom on each page, from newest to oldest)
    - Do not process the same announcement twice - keep track of which announcements have been processed
    - Look for announcements about the **Action Type** specified in the configuration
+   - **DO NOT Skip announcements if** the title clearly indicates a BOTH **Target Trading Pairs** type and other than trading pair type (e.g. "... margin trading pair and perpetual future")
    - **Skip announcements ONLY if** the title clearly indicates a DIFFERENT trading pair type than **Target Trading Pairs**:
      - If targeting Futures/Perpetual contracts → Skip titles containing "Spot", "Margin", "Alpha", "Collateral", "Lending"
      - If targeting Spot → Skip titles containing "Futures", "Perpetual", "Alpha", "Collateral", "Lending"
-     - etc.
    - **MUST investigate announcements** if:
      - Title explicitly mentions the **Target Trading Pairs** type → Always open
      - Title is a general announcement (e.g., "[Exchange] Will Delist X, Y, Z on DATE") → Always open, as these often contain multiple sections for different trading pair types
      - Title doesn't clearly indicate the trading pair type → Always open
+     - Title explicitly mentions "crypto migration" → Always open
    - Focus only on announcements within the **Date Range** specified in the configuration
    - **START** processing from the page number specified in **Pagination Start** (including that page) - skip pages before this
    - **STOP** when you reach the page number specified in **Pagination Stop** (including that page) - do not process any further pages
