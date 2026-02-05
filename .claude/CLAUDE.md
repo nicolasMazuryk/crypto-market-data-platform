@@ -11,6 +11,7 @@ Funding rates collected **backward** (from most recent to oldest).
 
 - TypeScript 5.7 + tsx (no compilation)
 - ClickHouse (database)
+- CCXT (cryptocurrency exchange API library)
 - Vitest (testing)
 - ESLint + Prettier
 
@@ -114,6 +115,16 @@ All use USDT-margined perpetual futures:
 - Save data frequently to avoid losing progress
 - Output to `src/markets/delistings/{exchange}.json`
 - Prompts are in `src/markets/delistings/prompts/{exchange}.md`
+
+## CCXT Integration (REST API)
+
+Use CCXT npm package for all exchange REST API requests. Docs: https://github.com/ccxt/ccxt
+
+### Rate Limit Handling
+CCXT handles rate limits automatically. For heavy data collection:
+```typescript
+exchange.rateLimit = 100; // ms between requests (adjust per exchange)
+```
 
 ## API Integration Notes
 
