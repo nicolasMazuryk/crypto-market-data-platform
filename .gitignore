@@ -5,6 +5,7 @@ dist/
 .env
 .env.local
 coverage/
+package-lock.json
 
 tasks/
 src/markets/snapshots/
