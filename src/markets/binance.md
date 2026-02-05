@@ -6,7 +6,7 @@
 **Date Range:** 01 January 2025 - 01 April 2026
 **Pagination Start:** Page 7 (including)
 **Pagination Stop:** Page 12 (including)
-**Output Path:** /Users/nicolas/Documents/datapipeline/src/markets/delistings/binance.json
+**Output Path:** ./src/markets/delistings/binance.json
 
 ---
 
