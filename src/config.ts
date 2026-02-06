@@ -1,13 +1,4 @@
-import { config as loadEnv } from 'dotenv'
-
-const envResult = loadEnv()
-const envError = envResult.error
-if (envError) {
-  const errorCode = (envError as NodeJS.ErrnoException).code
-  if (errorCode !== 'ENOENT') {
-    throw envError
-  }
-}
+import { requireEnv } from './config/env.js'
 
 const ENVIRONMENTS = ['development', 'test', 'production'] as const
 
@@ -19,19 +10,6 @@ function normalizeNodeEnv(value: string): Environment {
   }
 
   throw new Error(`Invalid NODE_ENV: ${value}`)
-}
-
-function requireEnv(name: string, options: { allowEmpty?: boolean } = {}): string {
-  const value = process.env[name]
-  if (value === undefined) {
-    throw new Error(`Missing required environment variable: ${name}`)
-  }
-
-  if (!options.allowEmpty && value.trim() === '') {
-    throw new Error(`Missing required environment variable: ${name}`)
-  }
-
-  return value
 }
 
 const nodeEnv = normalizeNodeEnv(requireEnv('NODE_ENV'))

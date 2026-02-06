@@ -26,15 +26,26 @@ export interface ExchangeConfig {
 export interface CcxtMarket {
   id: string
   symbol: string
+  info?: Record<string, unknown>
   active?: boolean
   swap?: boolean
   linear?: boolean
   settle?: string
-  info?: Record<string, unknown>
   [key: string]: unknown
 }
 
 export interface CcxtExchange {
   loadMarkets(): Promise<Record<string, CcxtMarket>>
+  market(symbol: string): CcxtMarket
   markets: Record<string, CcxtMarket>
+  markets_by_id?: Record<string, CcxtMarket | CcxtMarket[]>
+  has?: Record<string, boolean>
+  rateLimit?: number
+  fetchFundingRateHistory?(
+    symbol?: string,
+    since?: number,
+    limit?: number,
+    params?: Record<string, unknown>
+  ): Promise<Array<Record<string, unknown>>>
+  close?(): Promise<void>
 }

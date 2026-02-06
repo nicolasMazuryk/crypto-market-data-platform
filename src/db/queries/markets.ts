@@ -17,10 +17,14 @@ export async function insertMarkets(rows: MarketRow[]): Promise<void> {
   })
 }
 
-export async function listMarketsByExchange(exchange: string): Promise<MarketRow[]> {
+export async function listMarketsByExchange(
+  exchange: string,
+  useFinal = false
+): Promise<MarketRow[]> {
   const client = getClickHouseClient()
+  const finalClause = useFinal ? ' FINAL' : ''
   const result = await client.query({
-    query: `SELECT ${MARKET_COLUMNS} FROM markets WHERE exchange = {exchange: String} ORDER BY symbol`,
+    query: `SELECT ${MARKET_COLUMNS} FROM markets${finalClause} WHERE exchange = {exchange: String} ORDER BY symbol`,
     query_params: { exchange },
     format: 'JSONEachRow',
   })

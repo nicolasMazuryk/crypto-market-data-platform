@@ -7,6 +7,8 @@
   "types": "src/index.ts",
   "scripts": {
     "start": "tsx src/index.ts",
+    "sync:markets": "tsx src/scripts/sync-markets.ts",
+    "sync:funding-rates": "tsx src/scripts/sync-funding-rates.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.ts\"",

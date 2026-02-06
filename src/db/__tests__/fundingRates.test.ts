@@ -5,9 +5,13 @@ import { config } from '../../config.js'
 import { closeClickHouseClient, getClickHouseClient } from '../client.js'
 import { pingClickHouse } from '../health.js'
 import {
+  getOldestFundingRateTime,
   insertFundingRates,
+  getFundingRateRangeStats,
+  listFundingRateCompletenessGaps,
   listFundingRatesByExchange,
   listFundingRatesByExchangeSymbolRange,
+  listFundingRateTimesByExchangeSymbolRange,
 } from '../queries/fundingRates.js'
 import { toClickHouseDateTime, type FundingRateRow } from '../types.js'
 
@@ -132,5 +136,133 @@ describe('funding_rates table', () => {
       throw new Error('Expected January funding rate row')
     }
     expect(Number(januaryRow.funding_rate)).toBeCloseTo(0.0001)
+  })
+
+  it('lists funding rate times and range stats', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const exchange = `times_${runId}`
+    const symbol = `SYM_${runId}`
+
+    const january = new Date(Date.UTC(2025, 0, 10, 0, 0, 0))
+    const february = new Date(Date.UTC(2025, 1, 10, 0, 0, 0))
+
+    const rows: FundingRateRow[] = [
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(january),
+        funding_rate: '0.00030000',
+        mark_price: '100.00000000',
+        created_at: toClickHouseDateTime(january),
+      },
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(february),
+        funding_rate: '0.00040000',
+        mark_price: '101.00000000',
+        created_at: toClickHouseDateTime(february),
+      },
+    ]
+
+    await insertFundingRates(rows)
+
+    const januaryStart = toClickHouseDateTime(new Date(Date.UTC(2025, 0, 1, 0, 0, 0)))
+    const februaryStart = toClickHouseDateTime(new Date(Date.UTC(2025, 1, 1, 0, 0, 0)))
+
+    const times = await listFundingRateTimesByExchangeSymbolRange(
+      exchange,
+      symbol,
+      januaryStart,
+      februaryStart
+    )
+    expect(times.length).toBe(1)
+
+    const stats = await getFundingRateRangeStats(
+      exchange,
+      symbol,
+      januaryStart,
+      februaryStart
+    )
+    expect(stats.count).toBe(1)
+    expect(stats.min_time).toBe(times[0])
+    expect(stats.max_time).toBe(times[0])
+  })
+
+  it('returns oldest funding rate timestamp per symbol', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const exchange = `oldest_${runId}`
+    const symbol = `SYM_${runId}`
+
+    const older = new Date(Date.UTC(2025, 0, 5, 0, 0, 0))
+    const newer = new Date(Date.UTC(2025, 0, 6, 0, 0, 0))
+
+    await insertFundingRates([
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(newer),
+        funding_rate: '0.00010000',
+        mark_price: '100.00000000',
+        created_at: toClickHouseDateTime(newer),
+      },
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(older),
+        funding_rate: '0.00020000',
+        mark_price: '101.00000000',
+        created_at: toClickHouseDateTime(older),
+      },
+    ])
+
+    const oldest = await getOldestFundingRateTime(exchange, symbol)
+    expect(oldest).toBeTruthy()
+    expect(new Date((oldest ?? '').replace(' ', 'T') + 'Z').getTime()).toBe(
+      older.getTime()
+    )
+  })
+
+  it('detects completeness gaps', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const exchange = `gap_${runId}`
+    const symbol = `SYM_${runId}`
+
+    const t1 = new Date(Date.UTC(2025, 0, 1, 0, 0, 0))
+    const t3 = new Date(Date.UTC(2025, 0, 1, 16, 0, 0))
+
+    await insertFundingRates([
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(t1),
+        funding_rate: '0.00010000',
+        mark_price: '100.00000000',
+        created_at: toClickHouseDateTime(t1),
+      },
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(t3),
+        funding_rate: '0.00020000',
+        mark_price: '101.00000000',
+        created_at: toClickHouseDateTime(t3),
+      },
+    ])
+
+    const gaps = await listFundingRateCompletenessGaps()
+    const match = gaps.find(
+      (entry) => entry.exchange === exchange && entry.symbol === symbol
+    )
+
+    expect(match).toBeTruthy()
+    expect(match?.expected).toBe(3)
+    expect(match?.actual).toBe(2)
   })
 })

@@ -4,7 +4,13 @@ import { config } from '../config.js'
 import { logger } from '../logger.js'
 import { closeClickHouseClient, getClickHouseClient } from '../db/client.js'
 import { assertClickHouseHealthy } from '../db/health.js'
-import { insertFundingRates, listFundingRatesByExchange, listFundingRatesByExchangeSymbolRange } from '../db/queries/fundingRates.js'
+import {
+  getOldestFundingRateTime,
+  insertFundingRates,
+  listFundingRateCompletenessGaps,
+  listFundingRatesByExchange,
+  listFundingRatesByExchangeSymbolRange,
+} from '../db/queries/fundingRates.js'
 import { getMarketByExchangeSymbol, insertMarkets } from '../db/queries/markets.js'
 import { toClickHouseDateTime, type FundingRateRow, type MarketRow } from '../db/types.js'
 
@@ -51,6 +57,19 @@ async function fetchColumns(table: string): Promise<ColumnDef[]> {
   })
 
   return result.json<ColumnDef>()
+}
+
+async function fetchEngine(table: string): Promise<string | null> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query:
+      'SELECT engine FROM system.tables WHERE database = {database: String} AND name = {table: String} LIMIT 1',
+    query_params: { database, table },
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<Array<{ engine: string }>>()
+  return rows[0]?.engine ?? null
 }
 
 function assertSchema(table: string, expected: ColumnDef[], actual: ColumnDef[]): void {
@@ -102,6 +121,13 @@ async function verifySchema(): Promise<void> {
 
   const fundingColumns = await fetchColumns('funding_rates')
   assertSchema('funding_rates', expectedFundingRateColumns, fundingColumns)
+
+  const fundingEngine = await fetchEngine('funding_rates')
+  if (fundingEngine !== 'ReplacingMergeTree') {
+    throw new Error(
+      `Expected funding_rates engine ReplacingMergeTree, got ${fundingEngine ?? 'unknown'}`
+    )
+  }
 }
 
 async function verifyMarketQueries(): Promise<void> {
@@ -147,27 +173,27 @@ async function verifyFundingRateQueries(): Promise<void> {
   const exchange = `verify_${runId}`
   const symbol = `VER_${runId}`
 
-  const january = new Date(Date.UTC(2025, 0, 15, 0, 0, 0))
-  const february = new Date(Date.UTC(2025, 1, 15, 0, 0, 0))
+  const first = new Date(Date.UTC(2025, 0, 15, 0, 0, 0))
+  const second = new Date(Date.UTC(2025, 0, 15, 8, 0, 0))
 
   const rows: FundingRateRow[] = [
     {
       exchange,
       symbol,
       exchange_symbol: symbol,
-      funding_time: toClickHouseDateTime(january),
+      funding_time: toClickHouseDateTime(first),
       funding_rate: '0.00010000',
       mark_price: '100.00000000',
-      created_at: toClickHouseDateTime(january),
+      created_at: toClickHouseDateTime(first),
     },
     {
       exchange,
       symbol,
       exchange_symbol: symbol,
-      funding_time: toClickHouseDateTime(february),
+      funding_time: toClickHouseDateTime(second),
       funding_rate: '0.00020000',
       mark_price: '101.00000000',
-      created_at: toClickHouseDateTime(february),
+      created_at: toClickHouseDateTime(second),
     },
   ]
 
@@ -182,8 +208,19 @@ async function verifyFundingRateQueries(): Promise<void> {
   const februaryStart = toClickHouseDateTime(new Date(Date.UTC(2025, 1, 1, 0, 0, 0)))
 
   const januaryRows = await listFundingRatesByExchangeSymbolRange(exchange, symbol, januaryStart, februaryStart)
-  if (januaryRows.length !== 1) {
-    throw new Error('Expected funding rate query to return a single January row')
+  if (januaryRows.length !== 2) {
+    throw new Error('Expected funding rate query to return two contiguous January rows')
+  }
+
+  const oldest = await getOldestFundingRateTime(exchange, symbol)
+  if (!oldest || oldest !== toClickHouseDateTime(first)) {
+    throw new Error('Expected getOldestFundingRateTime to return the January row')
+  }
+
+  const gaps = await listFundingRateCompletenessGaps()
+  const hasGap = gaps.some((entry) => entry.exchange === exchange && entry.symbol === symbol)
+  if (hasGap) {
+    throw new Error('Expected no completeness gap for contiguous funding rows')
   }
 }
 

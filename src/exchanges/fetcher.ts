@@ -1,24 +1,7 @@
-import ccxt from 'ccxt'
-
 import { normalizeSymbol } from '../utils/symbol-normalizer.js'
+import { createCcxtExchange } from './ccxt-client.js'
 import { extractListingDate } from './listing-date.js'
-import type { CcxtExchange, CcxtMarket, ExchangeConfig, Market } from './types.js'
-
-type CcxtConstructor = new (config?: Record<string, unknown>) => CcxtExchange
-
-function createExchange(exchangeConfig: ExchangeConfig): CcxtExchange {
-  const ccxtRegistry = ccxt as unknown as Record<string, CcxtConstructor>
-  const ExchangeClass = ccxtRegistry[exchangeConfig.ccxtId]
-
-  if (!ExchangeClass) {
-    throw new Error(`Unsupported CCXT exchange id: ${exchangeConfig.ccxtId}`)
-  }
-
-  return new ExchangeClass({
-    enableRateLimit: true,
-    options: exchangeConfig.options ?? {}
-  })
-}
+import type { CcxtMarket, ExchangeConfig, Market } from './types.js'
 
 function isUsdtPerpetualMarket(market: CcxtMarket): boolean {
   if (market.swap !== true) {
@@ -60,7 +43,7 @@ function toMarketRecord(exchange: ExchangeConfig, market: CcxtMarket): Market {
 export async function fetchActiveMarkets(
   exchangeConfig: ExchangeConfig
 ): Promise<Market[]> {
-  const exchange = createExchange(exchangeConfig)
+  const exchange = createCcxtExchange(exchangeConfig)
 
   await exchange.loadMarkets()
 
