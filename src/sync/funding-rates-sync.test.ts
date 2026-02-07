@@ -14,7 +14,7 @@ const {
   const listFundingRateTimesByExchangeSymbolRangeMock = vi.fn()
 
   const mockExchange = {
-    loadMarkets: vi.fn(async () => ({})),
+    loadMarkets: vi.fn(() => Promise.resolve({})),
     markets: {
       'BTC/USDT:USDT': {
         id: 'BTCUSDT',
@@ -34,7 +34,7 @@ const {
     }),
     has: { fetchFundingRateHistory: true },
     rateLimit: 10,
-    fetchFundingRateHistory: vi.fn(async () => {
+    fetchFundingRateHistory: vi.fn(() => {
       const base = Date.UTC(2025, 0, 1, 0, 0, 0)
       return [
         {
@@ -80,11 +80,11 @@ vi.mock('../exchanges/ccxt-client.js', () => ({
 }))
 
 vi.mock('../db/health.js', () => ({
-  assertClickHouseHealthy: vi.fn(async () => {}),
+  assertClickHouseHealthy: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('../db/queries/markets.js', () => ({
-  listMarketsByExchange: vi.fn(async () => [
+  listMarketsByExchange: vi.fn(() => Promise.resolve([
     {
       exchange: 'binance',
       symbol: 'BTCUSDT',
@@ -94,14 +94,15 @@ vi.mock('../db/queries/markets.js', () => ({
       delisting_date: null,
       is_active: true,
     },
-  ]),
+  ])),
 }))
 
 vi.mock('../db/queries/fundingRates.js', () => ({
   getOldestFundingRateTime: oldestFundingRateTimeMock,
-  listFundingRateCompletenessGaps: vi.fn(async () => []),
+  listFundingRateCompletenessGaps: vi.fn(() => Promise.resolve([])),
   listFundingRateTimesByExchangeSymbolRange: listFundingRateTimesByExchangeSymbolRangeMock,
   insertFundingRates: insertFundingRatesMock,
+  validateSymbolsForExchange: vi.fn(() => Promise.resolve({ isMatch: true, expectedSymbols: [], actualSymbols: [], missingSymbols: [], extraSymbols: [], exchange: '' })),
 }))
 
 describe('funding rate sync', () => {
@@ -155,19 +156,10 @@ describe('funding rate sync', () => {
     await syncFundingRates()
 
     expect(insertFundingRatesMock).toHaveBeenCalledTimes(1)
-    const firstCall = insertFundingRatesMock.mock.calls[0]
-    expect(firstCall).toBeDefined()
-    if (!firstCall) {
-      throw new Error('Expected first insert call to exist')
-    }
-    const rows = firstCall[0]
-    expect(rows[0]).toBeDefined()
-    const firstRow = rows[0]
-    if (!firstRow) {
-      throw new Error('Expected first inserted row to exist')
-    }
+    const firstCall = insertFundingRatesMock.mock.calls[0] as unknown[]
+    const rows = firstCall[0] as { exchange: string; symbol: string; exchange_symbol: string; funding_rate: string }[]
     expect(rows).toHaveLength(1)
-    expect(firstRow).toMatchObject({
+    expect(rows[0]).toMatchObject({
       exchange: 'binance',
       symbol: 'BTCUSDT',
       exchange_symbol: 'BTCUSDT',
@@ -185,19 +177,10 @@ describe('funding rate sync', () => {
     await syncFundingRates()
 
     expect(insertFundingRatesMock).toHaveBeenCalledTimes(1)
-    const firstCall = insertFundingRatesMock.mock.calls[0]
-    expect(firstCall).toBeDefined()
-    if (!firstCall) {
-      throw new Error('Expected first insert call to exist')
-    }
-    const rows = firstCall[0]
-    expect(rows[0]).toBeDefined()
-    const firstRow = rows[0]
-    if (!firstRow) {
-      throw new Error('Expected first inserted row to exist')
-    }
+    const firstCall = insertFundingRatesMock.mock.calls[0] as unknown[]
+    const rows = firstCall[0] as { exchange: string; symbol: string; exchange_symbol: string; funding_rate: string }[]
     expect(rows).toHaveLength(2)
-    expect(firstRow).toMatchObject({
+    expect(rows[0]).toMatchObject({
       exchange: 'binance',
       symbol: 'BTCUSDT',
       exchange_symbol: 'BTCUSDT',

@@ -21,8 +21,8 @@ export async function insertMarkets(rows: MarketRow[]): Promise<void> {
       seen.set(key, row)
     } else {
       // Keep the one with latest updated_at
-      const currentTime = row.updated_at || new Date().toISOString()
-      const existingTime = existing.updated_at || new Date().toISOString()
+      const currentTime = row.updated_at ?? new Date().toISOString()
+      const existingTime = existing.updated_at ?? new Date().toISOString()
 
       if (currentTime > existingTime) {
         seen.set(key, row)

@@ -43,7 +43,7 @@ export async function runMarketsSync(): Promise<void> {
 const entrypoint = process.argv[1]
 const isMain = entrypoint ? import.meta.url === pathToFileURL(entrypoint).href : false
 if (isMain) {
-  runMarketsSync().catch(error => {
+  runMarketsSync().catch((error: unknown) => {
     logger.error({ err: error }, 'markets-sync fatal error')
     process.exitCode = 1
   })

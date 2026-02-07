@@ -178,7 +178,7 @@ function isRetryableError(error: unknown): boolean {
     return false
   }
 
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  const message = (error instanceof Error ? error.message : JSON.stringify(error)).toLowerCase()
   if (
     message.includes('rate limit') ||
     message.includes('too many requests') ||
@@ -217,8 +217,11 @@ async function withRetry<T>(
   context: { exchange: string; symbol?: string; rateLimitMs?: number }
 ): Promise<T> {
   let attempt = 0
-  const baseDelay = Math.max(FUNDING_RATE_BACKOFF_BASE_MS, context.rateLimitMs ?? 0)
+  const baseDelay = context.rateLimitMs !== undefined
+    ? Math.max(FUNDING_RATE_BACKOFF_BASE_MS, context.rateLimitMs)
+    : FUNDING_RATE_BACKOFF_BASE_MS
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (true) {
     try {
       return await action()
@@ -232,13 +235,14 @@ async function withRetry<T>(
       const jitter = Math.floor(delay * 0.2 * Math.random())
       const waitMs = delay + jitter
 
+      const errorMessage = error instanceof Error ? error.message : String(error)
       logger.warn(
         {
           exchange: context.exchange,
           symbol: context.symbol,
           attempt,
           waitMs,
-          err: error,
+          error: errorMessage,
         },
         'Funding rate request failed; backing off'
       )
@@ -260,14 +264,18 @@ function buildUnifiedSymbolResolver(exchange: CcxtExchange): UnifiedSymbolResolv
       return candidate.symbol
     }
 
-    const currentMarket = exchange.markets?.[current]
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    const markets = exchange.markets ?? {}
+    const currentMarket = markets[current]
     const currentScore = (currentMarket?.swap ? 2 : 0) + (currentMarket?.linear ? 1 : 0)
     const candidateScore = (candidate.swap ? 2 : 0) + (candidate.linear ? 1 : 0)
     return candidateScore > currentScore ? candidate.symbol : current
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   const knownMarkets = Object.values(exchange.markets ?? {})
   for (const candidate of knownMarkets) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!candidate?.symbol) {
       continue
     }
@@ -345,9 +353,12 @@ function ensureMarketInExchange(
   unifiedSymbol: string,
   market: MarketRow
 ): CcxtMarket | undefined {
-  const existing = exchange.markets?.[unifiedSymbol]
-  if (existing) {
-    return existing
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (exchange.markets) {
+    const existing = exchange.markets[unifiedSymbol]
+    if (existing) {
+      return existing
+    }
   }
 
   const normalizedExchangeSymbol = normalizeSymbol(market.exchange_symbol)
@@ -375,22 +386,18 @@ function ensureMarketInExchange(
     info: {},
   }
 
-  if (!exchange.markets) {
-    exchange.markets = {}
-  }
-
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  exchange.markets ??= {}
   exchange.markets[unifiedSymbol] = synthetic
 
   // CCXT expects markets_by_id entries to be arrays.
   // Storing a plain object here can break safeMarket/safeSymbol resolution.
-  if (!exchange.markets_by_id) {
-    exchange.markets_by_id = {}
-  }
+  exchange.markets_by_id ??= {}
   const byIdEntry = exchange.markets_by_id[market.exchange_symbol]
   if (Array.isArray(byIdEntry)) {
     // Keep only the swap market for funding-rate flows to avoid id ambiguity.
-    const preferred = byIdEntry.find(entry => entry.swap === true || entry.linear === true) ?? byIdEntry[0] ?? synthetic
-    exchange.markets_by_id[market.exchange_symbol] = [preferred]
+    const preferred = byIdEntry.find(entry => entry.swap === true || entry.linear === true) ?? byIdEntry[0]
+    exchange.markets_by_id[market.exchange_symbol] = preferred ? [preferred] : [synthetic]
   } else if (byIdEntry) {
     exchange.markets_by_id[market.exchange_symbol] = [byIdEntry]
   } else {
@@ -497,7 +504,13 @@ async function fetchFundingRateHistory(
   }
 
   const result = await withRetry(
-    () => exchange.fetchFundingRateHistory!(symbol, since, limit, params) as Promise<FundingRateHistory[]>,
+    async () => {
+      if (!exchange.fetchFundingRateHistory) {
+        return []
+      }
+      const boundFetchHistory = exchange.fetchFundingRateHistory.bind(exchange)
+      return boundFetchHistory(symbol, since, limit, params) as Promise<FundingRateHistory[]>
+    },
     exchange.rateLimit === undefined
       ? {
           exchange: context.exchange,
@@ -675,8 +688,10 @@ async function syncMarketFundingRates(
   const fetchConfig = FUNDING_RATE_FETCH_CONFIG[exchangeConfig.name]
   const marketInfo = (() => {
     try {
-      return exchange.market(unifiedSymbol)
+      const boundMarket = exchange.market.bind(exchange)
+      return boundMarket(unifiedSymbol)
     } catch {
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       return exchange.markets?.[unifiedSymbol]
     }
   })()
@@ -687,8 +702,9 @@ async function syncMarketFundingRates(
     const upperBoundMs = cursorEndMs
     let page = 1
     let lastOldest = Number.POSITIVE_INFINITY
+    const maxPages = 10000 // Safety limit to prevent infinite loops
 
-    while (true) {
+    while (page <= maxPages) {
       const params: Record<string, unknown> = {}
       if (fetchConfig.pageParam) {
         params[fetchConfig.pageParam] = page
@@ -809,14 +825,15 @@ async function syncMarketFundingRates(
 
 async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig): Promise<void> {
   const exchange = createCcxtExchange(exchangeConfig)
-  const hasFundingHistory = exchange.has?.fetchFundingRateHistory !== false && exchange.fetchFundingRateHistory
+  const hasFundingHistory = exchange.has?.fetchFundingRateHistory !== false && !!exchange.fetchFundingRateHistory
 
   if (!hasFundingHistory) {
     logger.warn({ exchange: exchangeConfig.name }, 'Exchange does not support funding rate history')
     return
   }
 
-  await exchange.loadMarkets()
+  const loadMarketsMethod = exchange.loadMarkets.bind(exchange)
+  await loadMarketsMethod()
   const resolveSymbol = buildUnifiedSymbolResolver(exchange)
   const allMarkets = await listMarketsByExchange(exchangeConfig.name, true)
   const now = new Date()

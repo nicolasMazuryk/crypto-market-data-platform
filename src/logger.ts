@@ -56,6 +56,8 @@ const errorFileStream = levelFilterStream(
 )
 
 // Set up console transport
+// In development: use pino-pretty for colorized output
+// In production: use stdout with JSON format (for CloudWatch)
 const consoleTransport = !isProduction
   ? pino.transport({
       target: 'pino-pretty',
@@ -67,7 +69,7 @@ const consoleTransport = !isProduction
         singleLine: false,
       },
     })
-  : undefined
+  : process.stdout // JSON logs to stdout in production for CloudWatch
 
 // Configure multistream: console + file outputs
 const streams: pino.StreamEntry[] = [
@@ -76,9 +78,8 @@ const streams: pino.StreamEntry[] = [
   { stream: errorFileStream, level: 'error' }, // Errors and fatal to error.log
 ]
 
-if (consoleTransport) {
-  streams.push({ stream: consoleTransport, level: 'trace' }) // Console in dev
-}
+// Always add console output (pretty in dev, JSON to stdout in production)
+streams.push({ stream: consoleTransport, level: 'trace' })
 
 const multistream = pino.multistream(streams)
 

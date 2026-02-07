@@ -28,8 +28,8 @@ export async function insertFundingRates(rows: FundingRateRow[]): Promise<void> 
       seen.set(key, row)
     } else {
       // Keep the one with latest created_at
-      const currentTime = row.created_at || new Date().toISOString()
-      const existingTime = existing.created_at || new Date().toISOString()
+      const currentTime = row.created_at ?? new Date().toISOString()
+      const existingTime = existing.created_at ?? new Date().toISOString()
 
       if (currentTime > existingTime) {
         seen.set(key, row)
