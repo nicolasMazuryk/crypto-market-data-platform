@@ -10,25 +10,21 @@ describe('extractListingDate', () => {
   it('parses seconds-based timestamps for exchange-specific fields', () => {
     const date = extractListingDate('binance', { onboardDate: 1700000000 })
 
-    expect(date?.toISOString()).toBe(
-      new Date(1700000000 * 1000).toISOString()
-    )
+    expect(date?.toISOString()).toBe(new Date(1700000000 * 1000).toISOString())
   })
 
   it('falls back to default fields when exchange-specific data is invalid', () => {
     const date = extractListingDate('binance', {
       onboardDate: 0,
-      listingTime: 1700000000000
+      listingTime: 1700000000000,
     })
 
-    expect(date?.toISOString()).toBe(
-      new Date(1700000000000).toISOString()
-    )
+    expect(date?.toISOString()).toBe(new Date(1700000000000).toISOString())
   })
 
   it('parses ISO date strings for OKX listing times', () => {
     const date = extractListingDate('okx', {
-      listTime: '2025-01-01T00:00:00Z'
+      listTime: '2025-01-01T00:00:00Z',
     })
 
     expect(date?.toISOString()).toBe('2025-01-01T00:00:00.000Z')
@@ -36,11 +32,9 @@ describe('extractListingDate', () => {
 
   it('uses default field names when exchange-specific ones are missing', () => {
     const date = extractListingDate('gateio', {
-      openTime: '1700000000'
+      openTime: '1700000000',
     })
 
-    expect(date?.toISOString()).toBe(
-      new Date(1700000000 * 1000).toISOString()
-    )
+    expect(date?.toISOString()).toBe(new Date(1700000000 * 1000).toISOString())
   })
 })

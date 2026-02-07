@@ -9,10 +9,7 @@ interface SymbolFormat {
 
 const DEFAULT_QUOTE = 'USDT'
 
-function inferSymbolFormat(
-  normalizedSymbol: string,
-  exchangeSymbol: string
-): SymbolFormat | null {
+function inferSymbolFormat(normalizedSymbol: string, exchangeSymbol: string): SymbolFormat | null {
   const normalized = normalizeSymbol(normalizedSymbol)
   if (!normalized.endsWith(DEFAULT_QUOTE)) {
     return null
@@ -29,10 +26,7 @@ function inferSymbolFormat(
     return null
   }
 
-  const quoteIndex = exchangeUpper.indexOf(
-    DEFAULT_QUOTE,
-    baseIndex + base.length
-  )
+  const quoteIndex = exchangeUpper.indexOf(DEFAULT_QUOTE, baseIndex + base.length)
   if (quoteIndex === -1) {
     return null
   }
@@ -40,14 +34,11 @@ function inferSymbolFormat(
   return {
     prefix: exchangeSymbol.slice(0, baseIndex),
     between: exchangeSymbol.slice(baseIndex + base.length, quoteIndex),
-    suffix: exchangeSymbol.slice(quoteIndex + DEFAULT_QUOTE.length)
+    suffix: exchangeSymbol.slice(quoteIndex + DEFAULT_QUOTE.length),
   }
 }
 
-function applySymbolFormat(
-  normalizedSymbol: string,
-  format: SymbolFormat
-): string {
+function applySymbolFormat(normalizedSymbol: string, format: SymbolFormat): string {
   if (!normalizedSymbol.endsWith(DEFAULT_QUOTE)) {
     return normalizedSymbol
   }
@@ -97,10 +88,7 @@ export interface ExchangeSymbolResolver {
   getExchangeSymbol(normalizedSymbol: string, rawSymbol?: string): string
 }
 
-export function createExchangeSymbolResolver(
-  exchange: ExchangeName,
-  activeMarkets: Market[]
-): ExchangeSymbolResolver {
+export function createExchangeSymbolResolver(exchange: ExchangeName, activeMarkets: Market[]): ExchangeSymbolResolver {
   const symbolMap = new Map<string, string>()
 
   for (const market of activeMarkets) {
@@ -126,6 +114,6 @@ export function createExchangeSymbolResolver(
       }
 
       return rawSymbol ?? normalized
-    }
+    },
   }
 }

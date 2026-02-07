@@ -34,26 +34,14 @@ export async function syncMarkets(): Promise<Market[]> {
     try {
       activeMarkets = await fetchActiveMarkets(exchangeConfig)
     } catch (error) {
-      logger.warn(
-        { err: error, exchange: exchangeConfig.name },
-        '[markets-sync] Failed to fetch active markets'
-      )
+      logger.warn({ err: error, exchange: exchangeConfig.name }, '[markets-sync] Failed to fetch active markets')
     }
 
     try {
-      const resolver = createExchangeSymbolResolver(
-        exchangeConfig.name,
-        activeMarkets
-      )
-      delistedMarkets = await loadDelistingsForExchange(
-        exchangeConfig.name,
-        resolver
-      )
+      const resolver = createExchangeSymbolResolver(exchangeConfig.name, activeMarkets)
+      delistedMarkets = await loadDelistingsForExchange(exchangeConfig.name, resolver)
     } catch (error) {
-      logger.warn(
-        { err: error, exchange: exchangeConfig.name },
-        '[markets-sync] Failed to load delistings'
-      )
+      logger.warn({ err: error, exchange: exchangeConfig.name }, '[markets-sync] Failed to load delistings')
     }
 
     const mergedMarkets = mergeMarkets(activeMarkets, delistedMarkets)

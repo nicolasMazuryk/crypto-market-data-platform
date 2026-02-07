@@ -43,10 +43,7 @@ export async function insertMarkets(rows: MarketRow[]): Promise<void> {
   })
 }
 
-export async function listMarketsByExchange(
-  exchange: string,
-  useFinal = false
-): Promise<MarketRow[]> {
+export async function listMarketsByExchange(exchange: string, useFinal = false): Promise<MarketRow[]> {
   const client = getClickHouseClient()
   const finalClause = useFinal ? ' FINAL' : ''
   const result = await client.query({

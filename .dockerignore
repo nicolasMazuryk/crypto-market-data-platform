@@ -1,0 +1,10 @@
+.git
+.gitignore
+.sst
+.context
+node_modules
+dist
+coverage
+.env
+.env.*
+README.md

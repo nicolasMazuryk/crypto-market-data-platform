@@ -53,19 +53,16 @@ export async function loadDelistingsForExchange(
 
   return Object.entries(delistings).map(([symbol, dateValue]) => {
     const normalizedSymbol = normalizeSymbol(symbol)
-    const delistingDate =
-      typeof dateValue === 'string' ? parseDelistingDate(dateValue) : null
+    const delistingDate = typeof dateValue === 'string' ? parseDelistingDate(dateValue) : null
 
     return {
       exchange,
       symbol: normalizedSymbol,
-      exchange_symbol: resolver
-        ? resolver.getExchangeSymbol(normalizedSymbol, symbol)
-        : symbol,
+      exchange_symbol: resolver ? resolver.getExchangeSymbol(normalizedSymbol, symbol) : symbol,
       type: 'perpetual',
       listing_date: null,
       delisting_date: delistingDate,
-      is_active: false
+      is_active: false,
     }
   })
 }

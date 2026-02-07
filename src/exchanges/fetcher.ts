@@ -36,20 +36,18 @@ function toMarketRecord(exchange: ExchangeConfig, market: CcxtMarket): Market {
     type: 'perpetual',
     listing_date: extractListingDate(exchange.name, market.info),
     delisting_date: null,
-    is_active: true
+    is_active: true,
   }
 }
 
-export async function fetchActiveMarkets(
-  exchangeConfig: ExchangeConfig
-): Promise<Market[]> {
+export async function fetchActiveMarkets(exchangeConfig: ExchangeConfig): Promise<Market[]> {
   const exchange = createCcxtExchange(exchangeConfig)
 
   await exchange.loadMarkets()
 
   const markets = Object.values(exchange.markets)
 
-  return markets.filter(isUsdtPerpetualMarket).map((market) => {
+  return markets.filter(isUsdtPerpetualMarket).map(market => {
     return toMarketRecord(exchangeConfig, market)
   })
 }

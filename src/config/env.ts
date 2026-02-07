@@ -1,14 +1,14 @@
 import { config as loadEnv } from 'dotenv'
 
 const envResult = loadEnv({ debug: false })
-if (envResult.error && envResult.error.code !== 'ENOENT') {
-  throw envResult.error
+if (envResult.error) {
+  const code = (envResult.error as NodeJS.ErrnoException).code
+  if (code !== 'ENOENT') {
+    throw envResult.error
+  }
 }
 
-export function requireEnv(
-  name: string,
-  options: { allowEmpty?: boolean } = {}
-): string {
+export function requireEnv(name: string, options: { allowEmpty?: boolean } = {}): string {
   const value = process.env[name]
   if (value === undefined) {
     throw new Error(`Missing required environment variable: ${name}`)
@@ -31,10 +31,7 @@ export function optionalEnv(name: string): string | undefined {
   return trimmed === '' ? undefined : trimmed
 }
 
-export function parseDateEnv(
-  name: string,
-  options: { required?: boolean } = {}
-): Date | null {
+export function parseDateEnv(name: string, options: { required?: boolean } = {}): Date | null {
   const raw = options.required ? requireEnv(name) : optionalEnv(name)
   if (!raw) {
     return null

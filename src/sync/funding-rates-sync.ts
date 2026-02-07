@@ -6,7 +6,6 @@ import {
   FUNDING_RATE_SYMBOL_CONCURRENCY,
   FUNDING_RATE_BACKOFF_BASE_MS,
   FUNDING_RATE_BACKOFF_MAX_MS,
-  FUNDING_RATE_MAX_PAGES,
   FUNDING_RATE_MAX_RETRIES,
   FUNDING_RATE_PAGE_SIZE,
 } from '../config/index.js'
@@ -19,11 +18,7 @@ import {
   validateSymbolsForExchange,
 } from '../db/queries/fundingRates.js'
 import { listMarketsByExchange } from '../db/queries/markets.js'
-import {
-  toClickHouseDateTime,
-  type FundingRateRow,
-  type MarketRow,
-} from '../db/types.js'
+import { toClickHouseDateTime, type FundingRateRow, type MarketRow } from '../db/types.js'
 import { createCcxtExchange } from '../exchanges/ccxt-client.js'
 import { EXCHANGE_CONFIGS } from '../exchanges/index.js'
 import type { CcxtExchange, CcxtMarket, ExchangeConfig, ExchangeName } from '../exchanges/types.js'
@@ -32,7 +27,7 @@ import { normalizeSymbol } from '../utils/symbol-normalizer.js'
 
 const DEFAULT_FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000
 
-type FundingRateHistory = {
+interface FundingRateHistory {
   symbol?: string
   timestamp?: number
   fundingRate?: number
@@ -41,7 +36,7 @@ type FundingRateHistory = {
 
 type FundingRateFetchMode = 'until' | 'beforeSince' | 'sinceUntilWindow' | 'page'
 
-type FundingRateFetchConfig = {
+interface FundingRateFetchConfig {
   mode: FundingRateFetchMode
   maxLimit: number
   pageParam?: string
@@ -57,7 +52,7 @@ const FUNDING_RATE_FETCH_CONFIG: Record<ExchangeName, FundingRateFetchConfig> = 
   kucoin: { mode: 'sinceUntilWindow', maxLimit: 100 },
 }
 
-type BatchStats = {
+interface BatchStats {
   fetched: number
   valid: number
   inserted: number
@@ -65,7 +60,7 @@ type BatchStats = {
   skippedInvalid: number
 }
 
-type MarketSyncStats = {
+interface MarketSyncStats {
   batches: number
   inserted: number
   skippedExisting: number
@@ -76,7 +71,7 @@ type MarketSyncStats = {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  return new Promise(resolve => setTimeout(resolve, ms))
 }
 
 /**
@@ -116,10 +111,7 @@ function getNumber(value: unknown): number | null {
   return null
 }
 
-function readNumeric(
-  info: Record<string, unknown> | undefined,
-  keys: string[]
-): number | null {
+function readNumeric(info: Record<string, unknown> | undefined, keys: string[]): number | null {
   if (!info) {
     return null
   }
@@ -144,20 +136,12 @@ function inferFundingIntervalMs(market: CcxtMarket | undefined): number {
   }
 
   const info = market.info
-  const hours = readNumeric(info, [
-    'fundingIntervalHours',
-    'funding_interval_hours',
-    'fundingRateIntervalHours',
-  ])
+  const hours = readNumeric(info, ['fundingIntervalHours', 'funding_interval_hours', 'fundingRateIntervalHours'])
   if (hours && hours > 0) {
     return hours * 60 * 60 * 1000
   }
 
-  const minutes = readNumeric(info, [
-    'fundingInterval',
-    'funding_interval',
-    'fundingRateInterval',
-  ])
+  const minutes = readNumeric(info, ['fundingInterval', 'funding_interval', 'fundingRateInterval'])
   if (minutes && minutes > 0) {
     return minutes * 60 * 1000
   }
@@ -194,8 +178,7 @@ function isRetryableError(error: unknown): boolean {
     return false
   }
 
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
   if (
     message.includes('rate limit') ||
     message.includes('too many requests') ||
@@ -214,22 +197,15 @@ function isRetryableError(error: unknown): boolean {
 }
 
 function isSkippableFundingRateError(exchange: ExchangeName, error: unknown): boolean {
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
 
   // Bitget may return this for symbols that were recently removed.
-  if (
-    exchange === 'bitget' &&
-    (message.includes('"code":"40309"') || message.includes('symbol has been removed'))
-  ) {
+  if (exchange === 'bitget' && (message.includes('"code":"40309"') || message.includes('symbol has been removed'))) {
     return true
   }
 
   // Gate occasionally rejects unavailable contracts through an auth-shaped error.
-  if (
-    exchange === 'gateio' &&
-    message.includes('missing required header: timestamp')
-  ) {
+  if (exchange === 'gateio' && message.includes('missing required header: timestamp')) {
     return true
   }
 
@@ -241,10 +217,7 @@ async function withRetry<T>(
   context: { exchange: string; symbol?: string; rateLimitMs?: number }
 ): Promise<T> {
   let attempt = 0
-  const baseDelay = Math.max(
-    FUNDING_RATE_BACKOFF_BASE_MS,
-    context.rateLimitMs ?? 0
-  )
+  const baseDelay = Math.max(FUNDING_RATE_BACKOFF_BASE_MS, context.rateLimitMs ?? 0)
 
   while (true) {
     try {
@@ -255,10 +228,7 @@ async function withRetry<T>(
       }
 
       attempt += 1
-      const delay = Math.min(
-        FUNDING_RATE_BACKOFF_MAX_MS,
-        baseDelay * 2 ** (attempt - 1)
-      )
+      const delay = Math.min(FUNDING_RATE_BACKOFF_MAX_MS, baseDelay * 2 ** (attempt - 1))
       const jitter = Math.floor(delay * 0.2 * Math.random())
       const waitMs = delay + jitter
 
@@ -285,18 +255,13 @@ function buildUnifiedSymbolResolver(exchange: CcxtExchange): UnifiedSymbolResolv
   const normalizedSymbolToUnified = new Map<string, string>()
   const normalizedIdToUnified = new Map<string, string>()
 
-  const choosePreferredSymbol = (
-    current: string | undefined,
-    candidate: CcxtMarket
-  ): string => {
+  const choosePreferredSymbol = (current: string | undefined, candidate: CcxtMarket): string => {
     if (!current) {
       return candidate.symbol
     }
 
     const currentMarket = exchange.markets?.[current]
-    const currentScore =
-      (currentMarket?.swap ? 2 : 0) +
-      (currentMarket?.linear ? 1 : 0)
+    const currentScore = (currentMarket?.swap ? 2 : 0) + (currentMarket?.linear ? 1 : 0)
     const candidateScore = (candidate.swap ? 2 : 0) + (candidate.linear ? 1 : 0)
     return candidateScore > currentScore ? candidate.symbol : current
   }
@@ -308,27 +273,18 @@ function buildUnifiedSymbolResolver(exchange: CcxtExchange): UnifiedSymbolResolv
     }
 
     const normalizedSymbol = normalizeSymbol(candidate.symbol)
-    const preferredBySymbol = choosePreferredSymbol(
-      normalizedSymbolToUnified.get(normalizedSymbol),
-      candidate
-    )
+    const preferredBySymbol = choosePreferredSymbol(normalizedSymbolToUnified.get(normalizedSymbol), candidate)
     normalizedSymbolToUnified.set(normalizedSymbol, preferredBySymbol)
 
     if (candidate.id) {
       const normalizedId = normalizeSymbol(candidate.id)
-      const preferredById = choosePreferredSymbol(
-        normalizedIdToUnified.get(normalizedId),
-        candidate
-      )
+      const preferredById = choosePreferredSymbol(normalizedIdToUnified.get(normalizedId), candidate)
       normalizedIdToUnified.set(normalizedId, preferredById)
     }
   }
 
   return (market: MarketRow): string | null => {
-    const candidates = [
-      normalizeSymbol(market.symbol),
-      normalizeSymbol(market.exchange_symbol),
-    ]
+    const candidates = [normalizeSymbol(market.symbol), normalizeSymbol(market.exchange_symbol)]
 
     for (const candidate of candidates) {
       if (!candidate) {
@@ -346,8 +302,7 @@ function buildUnifiedSymbolResolver(exchange: CcxtExchange): UnifiedSymbolResolv
       }
     }
 
-    const fallback =
-      normalizeSymbol(market.exchange_symbol) || normalizeSymbol(market.symbol)
+    const fallback = normalizeSymbol(market.exchange_symbol) || normalizeSymbol(market.symbol)
     if (!fallback.endsWith(DEFAULT_QUOTE)) {
       return null
     }
@@ -396,10 +351,9 @@ function ensureMarketInExchange(
   }
 
   const normalizedExchangeSymbol = normalizeSymbol(market.exchange_symbol)
-  const base =
-    normalizedExchangeSymbol.endsWith('USDT')
-      ? normalizedExchangeSymbol.slice(0, -'USDT'.length)
-      : normalizeSymbol(unifiedSymbol).replace(/USDT$/, '')
+  const base = normalizedExchangeSymbol.endsWith('USDT')
+    ? normalizedExchangeSymbol.slice(0, -'USDT'.length)
+    : normalizeSymbol(unifiedSymbol).replace(/USDT$/, '')
 
   const synthetic: CcxtMarket = {
     id: market.exchange_symbol,
@@ -433,10 +387,9 @@ function ensureMarketInExchange(
     exchange.markets_by_id = {}
   }
   const byIdEntry = exchange.markets_by_id[market.exchange_symbol]
-  if (Array.isArray(byIdEntry) && byIdEntry.length > 0) {
+  if (Array.isArray(byIdEntry)) {
     // Keep only the swap market for funding-rate flows to avoid id ambiguity.
-    const preferred =
-      byIdEntry.find((entry) => entry.swap === true || entry.linear === true) ?? byIdEntry[0]
+    const preferred = byIdEntry.find(entry => entry.swap === true || entry.linear === true) ?? byIdEntry[0] ?? synthetic
     exchange.markets_by_id[market.exchange_symbol] = [preferred]
   } else if (byIdEntry) {
     exchange.markets_by_id[market.exchange_symbol] = [byIdEntry]
@@ -447,10 +400,7 @@ function ensureMarketInExchange(
   return synthetic
 }
 
-function getEffectiveRange(
-  market: MarketRow,
-  now: Date
-): { start: Date; end: Date } | null {
+function getEffectiveRange(market: MarketRow, now: Date): { start: Date; end: Date } | null {
   const listing = parseClickHouseDateTime(market.listing_date)
   const delisting = parseClickHouseDateTime(market.delisting_date)
 
@@ -513,11 +463,7 @@ function buildBackwardFetchRequest(
   }
 }
 
-function extractBatchTimestamps(
-  batch: FundingRateHistory[],
-  market: MarketRow,
-  unifiedSymbol: string
-): number[] {
+function extractBatchTimestamps(batch: FundingRateHistory[], market: MarketRow, unifiedSymbol: string): number[] {
   const normalizedTarget = normalizeSymbol(market.symbol)
   const timestamps: number[] = []
 
@@ -552,11 +498,16 @@ async function fetchFundingRateHistory(
 
   const result = await withRetry(
     () => exchange.fetchFundingRateHistory!(symbol, since, limit, params) as Promise<FundingRateHistory[]>,
-    {
-      exchange: context.exchange,
-      symbol: context.symbol,
-      rateLimitMs: exchange.rateLimit,
-    }
+    exchange.rateLimit === undefined
+      ? {
+          exchange: context.exchange,
+          symbol: context.symbol,
+        }
+      : {
+          exchange: context.exchange,
+          symbol: context.symbol,
+          rateLimitMs: exchange.rateLimit,
+        }
   )
 
   return Array.isArray(result) ? result : []
@@ -706,10 +657,7 @@ async function syncMarketFundingRates(
   const startMs = range.start.getTime()
   let cursorEndMs = range.end.getTime()
 
-  const oldestStored = await getOldestFundingRateTime(
-    exchangeConfig.name,
-    market.symbol
-  )
+  const oldestStored = await getOldestFundingRateTime(exchangeConfig.name, market.symbol)
   const oldestStoredDate = parseClickHouseDateTime(oldestStored)
   if (oldestStoredDate) {
     const oldestStoredMs = oldestStoredDate.getTime()
@@ -740,20 +688,16 @@ async function syncMarketFundingRates(
     let page = 1
     let lastOldest = Number.POSITIVE_INFINITY
 
-    while (page <= FUNDING_RATE_MAX_PAGES) {
+    while (true) {
       const params: Record<string, unknown> = {}
       if (fetchConfig.pageParam) {
         params[fetchConfig.pageParam] = page
       }
 
-      const batch = await fetchFundingRateHistory(
-        exchange,
-        unifiedSymbol,
-        undefined,
-        pageSize,
-        params,
-        { exchange: exchangeConfig.name, symbol: market.symbol }
-      )
+      const batch = await fetchFundingRateHistory(exchange, unifiedSymbol, undefined, pageSize, params, {
+        exchange: exchangeConfig.name,
+        symbol: market.symbol,
+      })
 
       if (batch.length === 0) {
         break
@@ -805,22 +749,13 @@ async function syncMarketFundingRates(
     return stats
   }
 
-  while (cursorEndMs > startMs && stats.batches < FUNDING_RATE_MAX_PAGES) {
-    const request = buildBackwardFetchRequest(
-      fetchConfig,
-      cursorEndMs,
-      startMs,
-      intervalMs
-    )
+  while (cursorEndMs > startMs) {
+    const request = buildBackwardFetchRequest(fetchConfig, cursorEndMs, startMs, intervalMs)
 
-    const batch = await fetchFundingRateHistory(
-      exchange,
-      unifiedSymbol,
-      request.since,
-      request.limit,
-      request.params,
-      { exchange: exchangeConfig.name, symbol: market.symbol }
-    )
+    const batch = await fetchFundingRateHistory(exchange, unifiedSymbol, request.since, request.limit, request.params, {
+      exchange: exchangeConfig.name,
+      symbol: market.symbol,
+    })
 
     if (batch.length === 0) {
       break
@@ -872,18 +807,12 @@ async function syncMarketFundingRates(
   return stats
 }
 
-async function syncExchangeFundingRates(
-  exchangeConfig: ExchangeConfig
-): Promise<void> {
+async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig): Promise<void> {
   const exchange = createCcxtExchange(exchangeConfig)
-  const hasFundingHistory =
-    exchange.has?.fetchFundingRateHistory !== false && exchange.fetchFundingRateHistory
+  const hasFundingHistory = exchange.has?.fetchFundingRateHistory !== false && exchange.fetchFundingRateHistory
 
   if (!hasFundingHistory) {
-    logger.warn(
-      { exchange: exchangeConfig.name },
-      'Exchange does not support funding rate history'
-    )
+    logger.warn({ exchange: exchangeConfig.name }, 'Exchange does not support funding rate history')
     return
   }
 
@@ -891,106 +820,80 @@ async function syncExchangeFundingRates(
   const resolveSymbol = buildUnifiedSymbolResolver(exchange)
   const allMarkets = await listMarketsByExchange(exchangeConfig.name, true)
   const now = new Date()
-  
+
   // Filter markets based on listing_date and delisting_date relative to data period
   // Exclude markets that:
   // - Have listing_date after DATA_PERIOD_END (not listed during the period)
   // - Have delisting_date before DATA_PERIOD_START (delisted before period)
   const periodEnd = DATA_PERIOD_END ?? now
-  const markets = allMarkets.filter((market) => {
+  const markets = allMarkets.filter(market => {
     const listingDate = parseClickHouseDateTime(market.listing_date)
     const delistingDate = parseClickHouseDateTime(market.delisting_date)
-    
+
     // Exclude if listed after period end
     if (listingDate && listingDate > periodEnd) {
       return false
     }
-    
+
     // Exclude if delisted before period start
     if (delistingDate && delistingDate < DATA_PERIOD_START) {
       return false
     }
-    
+
     return true
   })
 
   const marketStats: MarketSyncStats[] = []
 
-  await runWithConcurrency(
-    markets,
-    FUNDING_RATE_SYMBOL_CONCURRENCY,
-    async (market) => {
-      try {
-        const stats = await syncMarketFundingRates(
-          exchangeConfig,
-          exchange,
-          market,
-          resolveSymbol,
-          now
-        )
+  await runWithConcurrency(markets, FUNDING_RATE_SYMBOL_CONCURRENCY, async market => {
+    try {
+      const stats = await syncMarketFundingRates(exchangeConfig, exchange, market, resolveSymbol, now)
 
-        marketStats.push(stats)
+      marketStats.push(stats)
 
+      logger.info(
+        {
+          exchange: exchangeConfig.name,
+          symbol: market.symbol,
+          fetched: stats.fetched,
+          inserted: stats.inserted,
+          skippedExisting: stats.skippedExisting,
+          skippedInvalid: stats.skippedInvalid,
+          batches: stats.batches,
+          resumedFromExisting: stats.resumedFromExisting,
+          completeToStart: stats.completeToStart,
+        },
+        'Funding rate sync complete for symbol'
+      )
+    } catch (error) {
+      if (isSkippableFundingRateError(exchangeConfig.name, error)) {
         logger.info(
           {
+            err: error,
             exchange: exchangeConfig.name,
             symbol: market.symbol,
-            fetched: stats.fetched,
-            inserted: stats.inserted,
-            skippedExisting: stats.skippedExisting,
-            skippedInvalid: stats.skippedInvalid,
-            batches: stats.batches,
-            resumedFromExisting: stats.resumedFromExisting,
-            completeToStart: stats.completeToStart,
           },
-          'Funding rate sync complete for symbol'
+          'Funding rate sync skipped for unavailable market'
         )
-      } catch (error) {
-        if (isSkippableFundingRateError(exchangeConfig.name, error)) {
-          logger.warn(
-            {
-              err: error,
-              exchange: exchangeConfig.name,
-              symbol: market.symbol,
-            },
-            'Funding rate sync skipped for unavailable market'
-          )
-        } else {
-          logger.warn(
-            {
-              err: error,
-              exchange: exchangeConfig.name,
-              symbol: market.symbol,
-            },
-            'Funding rate sync failed for market'
-          )
-        }
+      } else {
+        logger.warn(
+          {
+            err: error,
+            exchange: exchangeConfig.name,
+            symbol: market.symbol,
+          },
+          'Funding rate sync failed for market'
+        )
       }
     }
-  )
+  })
 
-  const totalInserted = marketStats.reduce(
-    (sum, value) => sum + value.inserted,
-    0
-  )
-  const totalSkippedExisting = marketStats.reduce(
-    (sum, value) => sum + value.skippedExisting,
-    0
-  )
-  const totalSkippedInvalid = marketStats.reduce(
-    (sum, value) => sum + value.skippedInvalid,
-    0
-  )
-  const totalFetched = marketStats.reduce(
-    (sum, value) => sum + value.fetched,
-    0
-  )
-  const resumedSymbols = marketStats.filter(
-    (value) => value.resumedFromExisting
-  ).length
-  const completeSymbols = marketStats.filter(
-    (value) => value.completeToStart
-  ).length
+  const totalInserted = marketStats.reduce((sum, value) => sum + value.inserted, 0)
+  const totalSkippedExisting = marketStats.reduce((sum, value) => sum + value.skippedExisting, 0)
+  const totalSkippedInvalid = marketStats.reduce((sum, value) => sum + value.skippedInvalid, 0)
+  const totalFetched = marketStats.reduce((sum, value) => sum + value.fetched, 0)
+  const resumedSymbols = marketStats.filter(value => value.resumedFromExisting).length
+  const completeSymbols = marketStats.filter(value => value.completeToStart).length
 
   logger.info(
     {
@@ -1025,7 +928,12 @@ async function runWithConcurrency<T>(
     while (index < items.length) {
       const current = index
       index += 1
-      await worker(items[current])
+      const item = items[current]
+      if (item === undefined) {
+        continue
+      }
+
+      await worker(item)
     }
   })
 
@@ -1053,7 +961,7 @@ export async function syncFundingRates(): Promise<void> {
 
   if (failed > 0) {
     const failedExchanges = EXCHANGE_CONFIGS.filter(
-      (_, i) => results[i].status === 'rejected'
+      (_, i) => results[i]?.status === 'rejected'
     ).map((c) => c.name)
 
     logger.warn(
@@ -1070,10 +978,7 @@ export async function syncFundingRates(): Promise<void> {
   try {
     const gaps = await listFundingRateCompletenessGaps()
     if (gaps.length > 0) {
-      logger.warn(
-        { count: gaps.length, sample: gaps.slice(0, 25) },
-        'Funding rate completeness gaps detected'
-      )
+      logger.warn({ count: gaps.length, sample: gaps.slice(0, 25) }, 'Funding rate completeness gaps detected')
     } else {
       logger.info('Funding rate completeness check passed')
     }
@@ -1086,11 +991,7 @@ export async function syncFundingRates(): Promise<void> {
   const dataPeriodEndStr = DATA_PERIOD_END ? toClickHouseDateTime(DATA_PERIOD_END) : null
   for (const exchangeConfig of EXCHANGE_CONFIGS) {
     try {
-      const validation = await validateSymbolsForExchange(
-        exchangeConfig.name,
-        dataPeriodStartStr,
-        dataPeriodEndStr
-      )
+      const validation = await validateSymbolsForExchange(exchangeConfig.name, dataPeriodStartStr, dataPeriodEndStr)
 
       if (!validation.isMatch) {
         logger.warn(
@@ -1115,10 +1016,7 @@ export async function syncFundingRates(): Promise<void> {
         )
       }
     } catch (error) {
-      logger.warn(
-        { err: error, exchange: exchangeConfig.name },
-        'Failed to validate symbols for exchange'
-      )
+      logger.warn({ err: error, exchange: exchangeConfig.name }, 'Failed to validate symbols for exchange')
     }
   }
 }

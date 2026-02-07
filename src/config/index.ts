@@ -1,12 +1,12 @@
-import { parseDateEnv, parseIntEnv } from './env.js'
+import { parseDateEnv, parseIntEnv, requireEnv } from './env.js'
 import type { ExchangeConfig } from '../exchanges/types.js'
 
-const parsedStart = parseDateEnv('DATA_PERIOD_START', { required: true })
-if (!parsedStart) {
-  throw new Error('DATA_PERIOD_START is required')
+const dataPeriodStart = parseDateEnv('DATA_PERIOD_START', { required: true })
+if (!dataPeriodStart) {
+  throw new Error('Missing required environment variable: DATA_PERIOD_START')
 }
 
-export const DATA_PERIOD_START = parsedStart
+export const DATA_PERIOD_START = dataPeriodStart
 export const DATA_PERIOD_END = parseDateEnv('DATA_PERIOD_END')
 
 export const FUNDING_RATE_MAX_RETRIES = parseIntEnv(
@@ -20,6 +20,9 @@ export const FUNDING_RATE_BACKOFF_MAX_MS = parseIntEnv(
 )
 export const FUNDING_RATE_PAGE_SIZE = parseIntEnv(
   'FUNDING_RATE_PAGE_SIZE'
+)
+export const EXCHANGE_SYNC_CONCURRENCY = parseIntEnv(
+  'EXCHANGE_SYNC_CONCURRENCY'
 )
 export const FUNDING_RATE_MAX_PAGES = parseIntEnv(
   'FUNDING_RATE_MAX_PAGES'
@@ -35,7 +38,8 @@ export const EXCHANGE_CONFIGS: ExchangeConfig[] = [
   { name: 'mexc', ccxtId: 'mexc', options: { defaultType: 'swap' } },
   { name: 'bitget', ccxtId: 'bitget', options: { defaultType: 'swap' } },
   { name: 'gateio', ccxtId: 'gateio', options: { defaultType: 'swap' } },
-  { name: 'kucoin', ccxtId: 'kucoinfutures' }
+  { name: 'kucoin', ccxtId: 'kucoinfutures' },
 ]
 
-export const DELISTINGS_DIR = 'src/markets/delistings'
+export const DELISTINGS_DIR = requireEnv('DELISTINGS_DIR')
+export const MIGRATIONS_DIR = requireEnv('MIGRATIONS_DIR')

@@ -4,12 +4,10 @@ import type { ExchangeConfig, ExchangeName, Market } from '../exchanges/types.js
 import type { ExchangeSymbolResolver } from '../exchanges/symbol-resolver.js'
 
 const exchangeConfigsRef = vi.hoisted(() => ({
-  configs: [] as ExchangeConfig[]
+  configs: [] as ExchangeConfig[],
 }))
 
-const fetchActiveMarketsMock = vi.hoisted(() =>
-  vi.fn<(config: ExchangeConfig) => Promise<Market[]>>()
-)
+const fetchActiveMarketsMock = vi.hoisted(() => vi.fn<(config: ExchangeConfig) => Promise<Market[]>>())
 const loadDelistingsMock = vi.hoisted(() =>
   vi.fn<(exchange: string, resolver?: ExchangeSymbolResolver) => Promise<Market[]>>()
 )
@@ -23,19 +21,19 @@ const loggerMock = vi.hoisted(() => ({
 }))
 
 vi.mock('../exchanges/index.js', () => ({
-  EXCHANGE_CONFIGS: exchangeConfigsRef.configs
+  EXCHANGE_CONFIGS: exchangeConfigsRef.configs,
 }))
 
 vi.mock('../exchanges/fetcher.js', () => ({
-  fetchActiveMarkets: fetchActiveMarketsMock
+  fetchActiveMarkets: fetchActiveMarketsMock,
 }))
 
 vi.mock('../exchanges/symbol-resolver.js', () => ({
-  createExchangeSymbolResolver: createExchangeSymbolResolverMock
+  createExchangeSymbolResolver: createExchangeSymbolResolverMock,
 }))
 
 vi.mock('./delistings-loader.js', () => ({
-  loadDelistingsForExchange: loadDelistingsMock
+  loadDelistingsForExchange: loadDelistingsMock,
 }))
 
 vi.mock('../logger.js', () => ({
@@ -62,7 +60,7 @@ describe('syncMarkets', () => {
   it('merges active and delisted markets, preferring active entries', async () => {
     exchangeConfigsRef.configs.push({
       name: 'binance',
-      ccxtId: 'binanceusdm'
+      ccxtId: 'binanceusdm',
     })
 
     const activeMarkets: Market[] = [
@@ -73,7 +71,7 @@ describe('syncMarkets', () => {
         type: 'perpetual',
         listing_date: null,
         delisting_date: null,
-        is_active: true
+        is_active: true,
       },
       {
         exchange: 'binance',
@@ -82,8 +80,8 @@ describe('syncMarkets', () => {
         type: 'perpetual',
         listing_date: null,
         delisting_date: null,
-        is_active: true
-      }
+        is_active: true,
+      },
     ]
 
     const delistedMarkets: Market[] = [
@@ -94,15 +92,15 @@ describe('syncMarkets', () => {
         type: 'perpetual',
         listing_date: null,
         delisting_date: new Date('2026-02-06T09:00:00.000Z'),
-        is_active: false
-      }
+        is_active: false,
+      },
     ]
 
     fetchActiveMarketsMock.mockResolvedValue(activeMarkets)
     loadDelistingsMock.mockResolvedValue(delistedMarkets)
     createExchangeSymbolResolverMock.mockReturnValue({
       exchange: 'binance',
-      getExchangeSymbol: (symbol: string) => symbol
+      getExchangeSymbol: (symbol: string) => symbol,
     })
 
     const merged = await syncMarkets()
@@ -112,10 +110,7 @@ describe('syncMarkets', () => {
       throw new Error('Expected exchange config')
     }
     expect(fetchActiveMarketsMock).toHaveBeenCalledWith(config)
-    expect(createExchangeSymbolResolverMock).toHaveBeenCalledWith(
-      'binance',
-      activeMarkets
-    )
+    expect(createExchangeSymbolResolverMock).toHaveBeenCalledWith('binance', activeMarkets)
     const resolverResult = createExchangeSymbolResolverMock.mock.results[0]
     if (resolverResult?.type !== 'return') {
       throw new Error('Expected exchange symbol resolver')
@@ -125,8 +120,8 @@ describe('syncMarkets', () => {
 
     expect(merged).toHaveLength(2)
 
-    const btc = merged.find((market) => market.symbol === 'BTCUSDT')
-    const eth = merged.find((market) => market.symbol === 'ETHUSDT')
+    const btc = merged.find(market => market.symbol === 'BTCUSDT')
+    const eth = merged.find(market => market.symbol === 'ETHUSDT')
 
     expect(btc?.is_active).toBe(true)
     expect(btc?.delisting_date).toBeNull()
@@ -134,10 +129,7 @@ describe('syncMarkets', () => {
   })
 
   it('continues syncing when active market fetch fails', async () => {
-    exchangeConfigsRef.configs.push(
-      { name: 'binance', ccxtId: 'binanceusdm' },
-      { name: 'bybit', ccxtId: 'bybit' }
-    )
+    exchangeConfigsRef.configs.push({ name: 'binance', ccxtId: 'binanceusdm' }, { name: 'bybit', ccxtId: 'bybit' })
 
     fetchActiveMarketsMock.mockImplementation((config: ExchangeConfig) => {
       if (config.name === 'binance') {
@@ -151,8 +143,8 @@ describe('syncMarkets', () => {
           type: 'perpetual',
           listing_date: null,
           delisting_date: null,
-          is_active: true
-        }
+          is_active: true,
+        },
       ])
     })
 
@@ -166,8 +158,8 @@ describe('syncMarkets', () => {
             type: 'perpetual',
             listing_date: null,
             delisting_date: new Date('2026-02-06T09:00:00.000Z'),
-            is_active: false
-          }
+            is_active: false,
+          },
         ])
       }
       return Promise.resolve([])
@@ -175,21 +167,18 @@ describe('syncMarkets', () => {
 
     createExchangeSymbolResolverMock.mockReturnValue({
       exchange: 'binance',
-      getExchangeSymbol: (symbol: string) => symbol
+      getExchangeSymbol: (symbol: string) => symbol,
     })
 
     const merged = await syncMarkets()
 
     expect(fetchActiveMarketsMock).toHaveBeenCalledTimes(2)
-    expect(createExchangeSymbolResolverMock).toHaveBeenCalledWith(
-      'binance',
-      []
-    )
+    expect(createExchangeSymbolResolverMock).toHaveBeenCalledWith('binance', [])
 
     expect(merged).toHaveLength(2)
 
-    const foo = merged.find((market) => market.symbol === 'FOOUSDT')
-    const sol = merged.find((market) => market.symbol === 'SOLUSDT')
+    const foo = merged.find(market => market.symbol === 'FOOUSDT')
+    const sol = merged.find(market => market.symbol === 'SOLUSDT')
 
     expect(foo?.is_active).toBe(false)
     expect(sol?.is_active).toBe(true)

@@ -13,24 +13,17 @@ export async function runMarketsSync(): Promise<void> {
     const periodEnd = DATA_PERIOD_END ? DATA_PERIOD_END.toISOString() : 'present'
 
     logger.info({ env: config.env }, 'Market sync starting')
-    logger.info(
-      { periodStart: DATA_PERIOD_START.toISOString(), periodEnd },
-      'Starting markets sync'
-    )
+    logger.info({ periodStart: DATA_PERIOD_START.toISOString(), periodEnd }, 'Starting markets sync')
 
     const markets = await syncMarkets()
     const now = new Date()
-    const rows: MarketRow[] = markets.map((market) => ({
+    const rows: MarketRow[] = markets.map(market => ({
       exchange: market.exchange,
       symbol: market.symbol,
       exchange_symbol: market.exchange_symbol,
       type: market.type,
-      listing_date: market.listing_date
-        ? toClickHouseDateTime(market.listing_date)
-        : null,
-      delisting_date: market.delisting_date
-        ? toClickHouseDateTime(market.delisting_date)
-        : null,
+      listing_date: market.listing_date ? toClickHouseDateTime(market.listing_date) : null,
+      delisting_date: market.delisting_date ? toClickHouseDateTime(market.delisting_date) : null,
       is_active: market.is_active,
       created_at: toClickHouseDateTime(now),
       updated_at: toClickHouseDateTime(now),
@@ -47,9 +40,10 @@ export async function runMarketsSync(): Promise<void> {
   }
 }
 
-const isMain = import.meta.url === pathToFileURL(process.argv[1]).href
+const entrypoint = process.argv[1]
+const isMain = entrypoint ? import.meta.url === pathToFileURL(entrypoint).href : false
 if (isMain) {
-  runMarketsSync().catch((error) => {
+  runMarketsSync().catch(error => {
     logger.error({ err: error }, 'markets-sync fatal error')
     process.exitCode = 1
   })

@@ -2,11 +2,10 @@ import { logger } from '../../logger.js'
 import { getClickHouseClient } from '../client.js'
 import type { FundingRateRow } from '../types.js'
 
-const FUNDING_RATE_COLUMNS =
-  'exchange, symbol, exchange_symbol, funding_time, funding_rate, mark_price, created_at'
+const FUNDING_RATE_COLUMNS = 'exchange, symbol, exchange_symbol, funding_time, funding_rate, mark_price, created_at'
 const FUNDING_RATE_TIME_COLUMNS = 'funding_time'
 
-export type FundingRateCompletenessGap = {
+export interface FundingRateCompletenessGap {
   exchange: string
   symbol: string
   expected: number
@@ -68,8 +67,8 @@ export async function listFundingRateTimesByExchangeSymbolRange(
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<{ funding_time: string }[]>()
-  return rows.map((row) => row.funding_time)
+  const rows = await result.json<{ funding_time: string }>()
+  return rows.map(row => row.funding_time)
 }
 
 export async function getFundingRateRangeStats(
@@ -86,9 +85,7 @@ export async function getFundingRateRangeStats(
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<
-    { count: string | number; min_time: string | null; max_time: string | null }[]
-  >()
+  const rows = await result.json<{ count: string | number; min_time: string | null; max_time: string | null }>()
   const row = rows[0]
   return {
     count: row ? Number(row.count) : 0,
@@ -97,10 +94,7 @@ export async function getFundingRateRangeStats(
   }
 }
 
-export async function getOldestFundingRateTime(
-  exchange: string,
-  symbol: string
-): Promise<string | null> {
+export async function getOldestFundingRateTime(exchange: string, symbol: string): Promise<string | null> {
   const client = getClickHouseClient()
   const result = await client.query({
     query:
@@ -109,7 +103,7 @@ export async function getOldestFundingRateTime(
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<{ oldest_time: string | null }[]>()
+  const rows = await result.json<{ oldest_time: string | null }>()
   return rows[0]?.oldest_time ?? null
 }
 
@@ -150,40 +144,41 @@ export async function listFundingRateCompletenessGaps(): Promise<FundingRateComp
     `
   }
 
-  const readRows = async (useFinal: boolean): Promise<
-    Array<{
+  const readRows = async (
+    useFinal: boolean
+  ): Promise<
+    {
       exchange: string
       symbol: string
       expected: number | string
       actual: number | string
-    }>
+    }[]
   > => {
     const result = await client.query({
       query: buildQuery(useFinal),
       format: 'JSONEachRow',
     })
 
-    const rows: Array<{
+    const rows: {
       exchange: string
       symbol: string
       expected: number | string
       actual: number | string
-    }> = await result.json()
+    }[] = await result.json()
     return rows
   }
 
-  let rows: Array<{
+  let rows: {
     exchange: string
     symbol: string
     expected: number | string
     actual: number | string
-  }>
+  }[]
 
   try {
     rows = await readRows(true)
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
     if (!message.includes("doesn't support final")) {
       throw error
     }
@@ -191,7 +186,7 @@ export async function listFundingRateCompletenessGaps(): Promise<FundingRateComp
     rows = await readRows(false)
   }
 
-  return rows.map((row) => ({
+  return rows.map(row => ({
     exchange: row.exchange,
     symbol: row.symbol,
     expected: Number(row.expected),
@@ -199,10 +194,7 @@ export async function listFundingRateCompletenessGaps(): Promise<FundingRateComp
   }))
 }
 
-export async function listFundingRatesByExchange(
-  exchange: string,
-  limit = 100
-): Promise<FundingRateRow[]> {
+export async function listFundingRatesByExchange(exchange: string, limit = 100): Promise<FundingRateRow[]> {
   const client = getClickHouseClient()
   const result = await client.query({
     query: `SELECT ${FUNDING_RATE_COLUMNS} FROM funding_rates WHERE exchange = {exchange: String} ORDER BY funding_time DESC LIMIT {limit: UInt32}`,
@@ -229,7 +221,7 @@ export async function listFundingRatesByExchangeSymbolRange(
   return result.json<FundingRateRow>()
 }
 
-export type SymbolValidationResult = {
+export interface SymbolValidationResult {
   exchange: string
   expectedSymbols: string[]
   actualSymbols: string[]
@@ -251,7 +243,7 @@ export async function getExpectedSymbolsForExchange(
 ): Promise<string[]> {
   const client = getClickHouseClient()
   const finalClause = useFinal ? ' FINAL' : ''
-  
+
   // Build query with listing_date check
   // Include markets where:
   // - listing_date IS NULL (unknown listing date, assume valid)
@@ -265,36 +257,33 @@ export async function getExpectedSymbolsForExchange(
     WHERE exchange = {exchange: String}
       AND (delisting_date IS NULL OR delisting_date >= {dataPeriodStart: DateTime})
   `
-  
+
   const queryParams: Record<string, unknown> = {
     exchange,
     dataPeriodStart,
   }
-  
+
   if (dataPeriodEnd) {
     query += ` AND (listing_date IS NULL OR listing_date <= {dataPeriodEnd: DateTime})`
     queryParams.dataPeriodEnd = dataPeriodEnd
   }
-  
+
   query += ` ORDER BY symbol`
-  
+
   const result = await client.query({
     query,
     query_params: queryParams,
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<{ symbol: string }[]>()
-  return rows.map((row) => row.symbol)
+  const rows = await result.json<{ symbol: string }>()
+  return rows.map(row => row.symbol)
 }
 
 /**
  * Gets distinct symbols from funding_rates table for an exchange.
  */
-export async function getActualSymbolsForExchange(
-  exchange: string,
-  useFinal = false
-): Promise<string[]> {
+export async function getActualSymbolsForExchange(exchange: string, useFinal = false): Promise<string[]> {
   const client = getClickHouseClient()
   const finalClause = useFinal ? ' FINAL' : ''
   const result = await client.query({
@@ -308,8 +297,8 @@ export async function getActualSymbolsForExchange(
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<{ symbol: string }[]>()
-  return rows.map((row) => row.symbol)
+  const rows = await result.json<{ symbol: string }>()
+  return rows.map(row => row.symbol)
 }
 
 /**
@@ -322,19 +311,14 @@ export async function validateSymbolsForExchange(
   dataPeriodEnd: string | null
 ): Promise<SymbolValidationResult> {
   const readResult = async (useFinal: boolean): Promise<SymbolValidationResult> => {
-    const expectedSymbols = await getExpectedSymbolsForExchange(
-      exchange,
-      dataPeriodStart,
-      dataPeriodEnd,
-      useFinal
-    )
+    const expectedSymbols = await getExpectedSymbolsForExchange(exchange, dataPeriodStart, dataPeriodEnd, useFinal)
     const actualSymbols = await getActualSymbolsForExchange(exchange, useFinal)
 
     const expectedSet = new Set(expectedSymbols)
     const actualSet = new Set(actualSymbols)
 
-    const missingSymbols = expectedSymbols.filter((s) => !actualSet.has(s))
-    const extraSymbols = actualSymbols.filter((s) => !expectedSet.has(s))
+    const missingSymbols = expectedSymbols.filter(s => !actualSet.has(s))
+    const extraSymbols = actualSymbols.filter(s => !expectedSet.has(s))
 
     return {
       exchange,
@@ -349,8 +333,7 @@ export async function validateSymbolsForExchange(
   try {
     return await readResult(true)
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
     if (!message.includes("doesn't support final")) {
       throw error
     }

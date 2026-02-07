@@ -13,7 +13,7 @@ describe('createExchangeSymbolResolver', () => {
         type: 'perpetual',
         listing_date: null,
         delisting_date: null,
-        is_active: true
+        is_active: true,
       },
       {
         exchange: 'mexc',
@@ -22,8 +22,8 @@ describe('createExchangeSymbolResolver', () => {
         type: 'perpetual',
         listing_date: null,
         delisting_date: null,
-        is_active: true
-      }
+        is_active: true,
+      },
     ]
 
     const resolver = createExchangeSymbolResolver('mexc', activeMarkets)
@@ -41,7 +41,7 @@ describe('createExchangeSymbolResolver', () => {
         type: 'perpetual',
         listing_date: null,
         delisting_date: null,
-        is_active: true
+        is_active: true,
       },
       {
         exchange: 'okx',
@@ -50,7 +50,7 @@ describe('createExchangeSymbolResolver', () => {
         type: 'perpetual',
         listing_date: null,
         delisting_date: null,
-        is_active: true
+        is_active: true,
       },
       {
         exchange: 'okx',
@@ -59,8 +59,8 @@ describe('createExchangeSymbolResolver', () => {
         type: 'perpetual',
         listing_date: null,
         delisting_date: null,
-        is_active: true
-      }
+        is_active: true,
+      },
     ]
 
     const resolver = createExchangeSymbolResolver('okx', activeMarkets)

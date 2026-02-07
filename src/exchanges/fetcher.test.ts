@@ -21,13 +21,13 @@ const { MockExchange, ccxtMock } = vi.hoisted(() => {
   return {
     MockExchange,
     ccxtMock: {
-      testexchange: MockExchange
-    }
+      testexchange: MockExchange,
+    },
   }
 })
 
 vi.mock('ccxt', () => ({
-  default: ccxtMock
+  default: ccxtMock,
 }))
 
 import { fetchActiveMarkets } from './fetcher.js'
@@ -47,7 +47,7 @@ describe('fetchActiveMarkets', () => {
         linear: true,
         settle: 'USDT',
         active: true,
-        info: { onboardDate: 1700000000000 }
+        info: { onboardDate: 1700000000000 },
       },
       ETHUSDT: {
         id: 'ETHUSDT',
@@ -55,7 +55,7 @@ describe('fetchActiveMarkets', () => {
         swap: true,
         linear: true,
         settle: 'USDT',
-        info: { onboardDate: 1700000001000 }
+        info: { onboardDate: 1700000001000 },
       },
       XRPUSDT: {
         id: 'XRPUSDT',
@@ -63,7 +63,7 @@ describe('fetchActiveMarkets', () => {
         swap: false,
         linear: true,
         settle: 'USDT',
-        active: true
+        active: true,
       },
       ADAUSDC: {
         id: 'ADAUSDC',
@@ -71,7 +71,7 @@ describe('fetchActiveMarkets', () => {
         swap: true,
         linear: true,
         settle: 'USDC',
-        active: true
+        active: true,
       },
       DOGEUSDT: {
         id: 'DOGEUSDT',
@@ -79,7 +79,7 @@ describe('fetchActiveMarkets', () => {
         swap: true,
         linear: false,
         settle: 'USDT',
-        active: true
+        active: true,
       },
       SOLUSDT: {
         id: 'SOLUSDT',
@@ -87,59 +87,53 @@ describe('fetchActiveMarkets', () => {
         swap: true,
         linear: true,
         settle: 'USDT',
-        active: false
-      }
+        active: false,
+      },
     }
 
     const exchangeConfig: ExchangeConfig = {
       name: 'binance',
       ccxtId: 'testexchange',
-      options: { defaultType: 'swap' }
+      options: { defaultType: 'swap' },
     }
 
     const markets = await fetchActiveMarkets(exchangeConfig)
 
     expect(MockExchange.lastConfig).toEqual({
       enableRateLimit: true,
-      options: { defaultType: 'swap' }
+      options: { defaultType: 'swap' },
     })
 
     expect(markets).toHaveLength(2)
 
-    const btc = markets.find((market) => market.symbol === 'BTCUSDT')
-    const eth = markets.find((market) => market.symbol === 'ETHUSDT')
+    const btc = markets.find(market => market.symbol === 'BTCUSDT')
+    const eth = markets.find(market => market.symbol === 'ETHUSDT')
 
     expect(btc).toMatchObject({
       exchange: 'binance',
       symbol: 'BTCUSDT',
       exchange_symbol: 'BTCUSDT',
       type: 'perpetual',
-      is_active: true
+      is_active: true,
     })
-    expect(btc?.listing_date?.toISOString()).toBe(
-      new Date(1700000000000).toISOString()
-    )
+    expect(btc?.listing_date?.toISOString()).toBe(new Date(1700000000000).toISOString())
 
     expect(eth).toMatchObject({
       exchange: 'binance',
       symbol: 'ETHUSDT',
       exchange_symbol: 'ETHUSDT',
       type: 'perpetual',
-      is_active: true
+      is_active: true,
     })
-    expect(eth?.listing_date?.toISOString()).toBe(
-      new Date(1700000001000).toISOString()
-    )
+    expect(eth?.listing_date?.toISOString()).toBe(new Date(1700000001000).toISOString())
   })
 
   it('throws when the CCXT exchange id is not supported', async () => {
     const exchangeConfig: ExchangeConfig = {
       name: 'binance',
-      ccxtId: 'missing'
+      ccxtId: 'missing',
     }
 
-    await expect(fetchActiveMarkets(exchangeConfig)).rejects.toThrow(
-      'Unsupported CCXT exchange id'
-    )
+    await expect(fetchActiveMarkets(exchangeConfig)).rejects.toThrow('Unsupported CCXT exchange id')
   })
 })

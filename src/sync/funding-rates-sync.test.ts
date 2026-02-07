@@ -67,10 +67,8 @@ vi.mock('../config/index.js', () => ({
   FUNDING_RATE_SYMBOL_CONCURRENCY: 2,
   FUNDING_RATE_BACKOFF_BASE_MS: 1,
   FUNDING_RATE_BACKOFF_MAX_MS: 10,
-  FUNDING_RATE_MAX_PAGES: 2,
   FUNDING_RATE_MAX_RETRIES: 1,
   FUNDING_RATE_PAGE_SIZE: 100,
-  FUNDING_RATE_WINDOW_DAYS: 1,
 }))
 
 vi.mock('../exchanges/index.js', () => ({
@@ -102,8 +100,7 @@ vi.mock('../db/queries/markets.js', () => ({
 vi.mock('../db/queries/fundingRates.js', () => ({
   getOldestFundingRateTime: oldestFundingRateTimeMock,
   listFundingRateCompletenessGaps: vi.fn(async () => []),
-  listFundingRateTimesByExchangeSymbolRange:
-    listFundingRateTimesByExchangeSymbolRangeMock,
+  listFundingRateTimesByExchangeSymbolRange: listFundingRateTimesByExchangeSymbolRangeMock,
   insertFundingRates: insertFundingRatesMock,
 }))
 
@@ -134,12 +131,7 @@ describe('funding rate sync', () => {
     const limit = 100
     const windowMs = limit * intervalMs // 100 * 8 hours = 800 hours
 
-    const request = buildBackwardFetchRequest(
-      { mode: 'until', maxLimit: 100 },
-      cursorEndMs,
-      startMs,
-      intervalMs
-    )
+    const request = buildBackwardFetchRequest({ mode: 'until', maxLimit: 100 }, cursorEndMs, startMs, intervalMs)
 
     // The since should be max(startMs, cursorEndMs - windowMs)
     // Since cursorEndMs - windowMs would be way before startMs, since should be startMs
@@ -155,9 +147,7 @@ describe('funding rate sync', () => {
   })
 
   it('resumes from oldest stored timestamp inside range', async () => {
-    oldestFundingRateTimeMock.mockResolvedValueOnce(
-      toClickHouseDateTime(new Date(Date.UTC(2025, 0, 1, 8, 0, 0)))
-    )
+    oldestFundingRateTimeMock.mockResolvedValueOnce(toClickHouseDateTime(new Date(Date.UTC(2025, 0, 1, 8, 0, 0))))
     listFundingRateTimesByExchangeSymbolRangeMock.mockResolvedValueOnce([])
 
     const { syncFundingRates } = await import('./funding-rates-sync.js')
@@ -165,9 +155,19 @@ describe('funding rate sync', () => {
     await syncFundingRates()
 
     expect(insertFundingRatesMock).toHaveBeenCalledTimes(1)
-    const rows = insertFundingRatesMock.mock.calls[0][0]
+    const firstCall = insertFundingRatesMock.mock.calls[0]
+    expect(firstCall).toBeDefined()
+    if (!firstCall) {
+      throw new Error('Expected first insert call to exist')
+    }
+    const rows = firstCall[0]
+    expect(rows[0]).toBeDefined()
+    const firstRow = rows[0]
+    if (!firstRow) {
+      throw new Error('Expected first inserted row to exist')
+    }
     expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({
+    expect(firstRow).toMatchObject({
       exchange: 'binance',
       symbol: 'BTCUSDT',
       exchange_symbol: 'BTCUSDT',
@@ -177,9 +177,7 @@ describe('funding rate sync', () => {
 
   it('inserts only missing funding rates', async () => {
     insertFundingRatesMock.mockClear()
-    oldestFundingRateTimeMock.mockResolvedValueOnce(
-      toClickHouseDateTime(new Date(Date.UTC(2024, 11, 31, 16, 0, 0)))
-    )
+    oldestFundingRateTimeMock.mockResolvedValueOnce(toClickHouseDateTime(new Date(Date.UTC(2024, 11, 31, 16, 0, 0))))
     listFundingRateTimesByExchangeSymbolRangeMock.mockResolvedValueOnce([])
 
     const { syncFundingRates } = await import('./funding-rates-sync.js')
@@ -187,9 +185,19 @@ describe('funding rate sync', () => {
     await syncFundingRates()
 
     expect(insertFundingRatesMock).toHaveBeenCalledTimes(1)
-    const rows = insertFundingRatesMock.mock.calls[0][0]
+    const firstCall = insertFundingRatesMock.mock.calls[0]
+    expect(firstCall).toBeDefined()
+    if (!firstCall) {
+      throw new Error('Expected first insert call to exist')
+    }
+    const rows = firstCall[0]
+    expect(rows[0]).toBeDefined()
+    const firstRow = rows[0]
+    if (!firstRow) {
+      throw new Error('Expected first inserted row to exist')
+    }
     expect(rows).toHaveLength(2)
-    expect(rows[0]).toMatchObject({
+    expect(firstRow).toMatchObject({
       exchange: 'binance',
       symbol: 'BTCUSDT',
       exchange_symbol: 'BTCUSDT',

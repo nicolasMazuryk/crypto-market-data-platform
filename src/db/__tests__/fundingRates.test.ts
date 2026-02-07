@@ -172,20 +172,10 @@ describe('funding_rates table', () => {
     const januaryStart = toClickHouseDateTime(new Date(Date.UTC(2025, 0, 1, 0, 0, 0)))
     const februaryStart = toClickHouseDateTime(new Date(Date.UTC(2025, 1, 1, 0, 0, 0)))
 
-    const times = await listFundingRateTimesByExchangeSymbolRange(
-      exchange,
-      symbol,
-      januaryStart,
-      februaryStart
-    )
+    const times = await listFundingRateTimesByExchangeSymbolRange(exchange, symbol, januaryStart, februaryStart)
     expect(times.length).toBe(1)
 
-    const stats = await getFundingRateRangeStats(
-      exchange,
-      symbol,
-      januaryStart,
-      februaryStart
-    )
+    const stats = await getFundingRateRangeStats(exchange, symbol, januaryStart, februaryStart)
     expect(stats.count).toBe(1)
     expect(stats.min_time).toBe(times[0])
     expect(stats.max_time).toBe(times[0])
@@ -222,9 +212,7 @@ describe('funding_rates table', () => {
 
     const oldest = await getOldestFundingRateTime(exchange, symbol)
     expect(oldest).toBeTruthy()
-    expect(new Date((oldest ?? '').replace(' ', 'T') + 'Z').getTime()).toBe(
-      older.getTime()
-    )
+    expect(new Date((oldest ?? '').replace(' ', 'T') + 'Z').getTime()).toBe(older.getTime())
   })
 
   it('detects completeness gaps', async () => {
@@ -257,9 +245,7 @@ describe('funding_rates table', () => {
     ])
 
     const gaps = await listFundingRateCompletenessGaps()
-    const match = gaps.find(
-      (entry) => entry.exchange === exchange && entry.symbol === symbol
-    )
+    const match = gaps.find(entry => entry.exchange === exchange && entry.symbol === symbol)
 
     expect(match).toBeTruthy()
     expect(match?.expected).toBe(3)

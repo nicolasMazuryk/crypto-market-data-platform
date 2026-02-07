@@ -22,7 +22,7 @@ export default tseslint.config(
   ...stylisticTypeChecked,
   eslintConfigPrettier,
   {
-    ignores: ["dist/", "node_modules/"],
+    ignores: ["dist/", "node_modules/", ".sst/", "infra/", "sst.config.ts", "sst-env.d.ts"],
   },
   {
     files: tsFiles,

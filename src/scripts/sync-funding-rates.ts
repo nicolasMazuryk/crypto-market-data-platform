@@ -10,10 +10,7 @@ async function main(): Promise<void> {
   try {
     const periodEnd = DATA_PERIOD_END ? DATA_PERIOD_END.toISOString() : 'present'
     logger.info({ env: config.env }, 'Funding rate sync starting')
-    logger.info(
-      { periodStart: DATA_PERIOD_START.toISOString(), periodEnd },
-      'Starting funding rate sync'
-    )
+    logger.info({ periodStart: DATA_PERIOD_START.toISOString(), periodEnd }, 'Starting funding rate sync')
 
     await syncFundingRates()
   } finally {
@@ -25,9 +22,10 @@ async function main(): Promise<void> {
   }
 }
 
-const isMain = import.meta.url === pathToFileURL(process.argv[1]).href
+const entrypoint = process.argv[1]
+const isMain = entrypoint ? import.meta.url === pathToFileURL(entrypoint).href : false
 if (isMain) {
-  main().catch((error) => {
+  main().catch(error => {
     logger.error({ err: error }, 'funding-rate-sync fatal error')
     process.exitCode = 1
   })

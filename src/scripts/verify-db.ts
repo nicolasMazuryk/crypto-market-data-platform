@@ -62,13 +62,12 @@ async function fetchColumns(table: string): Promise<ColumnDef[]> {
 async function fetchEngine(table: string): Promise<string | null> {
   const client = getClickHouseClient()
   const result = await client.query({
-    query:
-      'SELECT engine FROM system.tables WHERE database = {database: String} AND name = {table: String} LIMIT 1',
+    query: 'SELECT engine FROM system.tables WHERE database = {database: String} AND name = {table: String} LIMIT 1',
     query_params: { database, table },
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<Array<{ engine: string }>>()
+  const rows = await result.json<{ engine: string }>()
   return rows[0]?.engine ?? null
 }
 
@@ -124,9 +123,7 @@ async function verifySchema(): Promise<void> {
 
   const fundingEngine = await fetchEngine('funding_rates')
   if (fundingEngine !== 'ReplacingMergeTree') {
-    throw new Error(
-      `Expected funding_rates engine ReplacingMergeTree, got ${fundingEngine ?? 'unknown'}`
-    )
+    throw new Error(`Expected funding_rates engine ReplacingMergeTree, got ${fundingEngine ?? 'unknown'}`)
   }
 }
 
@@ -218,7 +215,7 @@ async function verifyFundingRateQueries(): Promise<void> {
   }
 
   const gaps = await listFundingRateCompletenessGaps()
-  const hasGap = gaps.some((entry) => entry.exchange === exchange && entry.symbol === symbol)
+  const hasGap = gaps.some(entry => entry.exchange === exchange && entry.symbol === symbol)
   if (hasGap) {
     throw new Error('Expected no completeness gap for contiguous funding rows')
   }

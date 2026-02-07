@@ -9,7 +9,7 @@ const DEFAULT_LISTING_FIELDS = [
   'createTime',
   'openTime',
   'startTime',
-  'firstOpenDate'
+  'firstOpenDate',
 ]
 
 // Candidate field names observed in exchange `market.info` payloads (best-effort).
@@ -20,7 +20,7 @@ const EXCHANGE_LISTING_FIELDS: Record<ExchangeName, string[]> = {
   mexc: ['listingTime', 'createTime', 'openTime'],
   bitget: ['listingTime', 'launchTime', 'openTime'],
   gateio: ['create_time', 'listing_time', 'open_time'],
-  kucoin: ['firstOpenDate', 'createdAt', 'openTime']
+  kucoin: ['firstOpenDate', 'createdAt', 'openTime'],
 }
 
 function uniqueFields(fields: string[]): string[] {
@@ -90,18 +90,12 @@ function toDateFromValue(value: unknown): Date | null {
   return null
 }
 
-export function extractListingDate(
-  exchange: ExchangeName,
-  info?: Record<string, unknown>
-): Date | null {
+export function extractListingDate(exchange: ExchangeName, info?: Record<string, unknown>): Date | null {
   if (!info) {
     return null
   }
 
-  const fields = uniqueFields([
-    ...EXCHANGE_LISTING_FIELDS[exchange],
-    ...DEFAULT_LISTING_FIELDS
-  ])
+  const fields = uniqueFields([...EXCHANGE_LISTING_FIELDS[exchange], ...DEFAULT_LISTING_FIELDS])
 
   for (const field of fields) {
     const value = getFieldValue(info, field)

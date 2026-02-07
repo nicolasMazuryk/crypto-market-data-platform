@@ -1,11 +1,4 @@
-export type ExchangeName =
-  | 'binance'
-  | 'bybit'
-  | 'okx'
-  | 'mexc'
-  | 'bitget'
-  | 'gateio'
-  | 'kucoin'
+export type ExchangeName = 'binance' | 'bybit' | 'okx' | 'mexc' | 'bitget' | 'gateio' | 'kucoin'
 
 export interface Market {
   exchange: ExchangeName
@@ -46,6 +39,6 @@ export interface CcxtExchange {
     since?: number,
     limit?: number,
     params?: Record<string, unknown>
-  ): Promise<Array<Record<string, unknown>>>
+  ): Promise<Record<string, unknown>[]>
   close?(): Promise<void>
 }
