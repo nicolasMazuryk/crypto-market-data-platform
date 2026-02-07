@@ -9,6 +9,16 @@ Collects active + delisted USDT-margined perpetual markets and stores them in Cl
 
 Funding rates should be collected backwards (newest -> oldest) and filtered to the period start.
 
+## Quick Start
+
+1. **Prerequisites**: Node.js 18+, Docker Desktop
+2. **Install dependencies**: `npm install`
+3. **Set up environment**: `cp .env.example .env`
+4. **Start ClickHouse**: `npm run db:up`
+5. **Wait 10s for DB to be ready**, then verify: `npm run db:verify`
+6. **Run market sync**: `npm run sync:markets`
+7. **Check data**: `npm run db:shell` → `SELECT count() FROM arbinet.markets;`
+
 ## Tech Stack
 
 ### Core
@@ -41,6 +51,9 @@ npm run lint             # Lint
 npm run lint:fix         # Lint + autofix
 npm run format           # Format
 npm run format:check     # Check formatting
+npm run logs:tail        # Tail combined logs
+npm run logs:errors      # Tail error logs only
+npm run logs:clean       # Remove all log files
 ```
 
 ### Local Database
@@ -93,6 +106,13 @@ Uses `.env` (see `.env.example`) for configuration. Stage-specific configs avail
 - `DELISTINGS_DIR` - Directory for delisting JSON files (e.g., `src/markets/delistings`)
 - `MIGRATIONS_DIR` - Directory for SQL migration files (e.g., `src/db/migrations`)
 
+### Funding Rate Sync Tuning
+- `FUNDING_RATE_MAX_RETRIES` - Retry attempts for failed requests (default: 5)
+- `FUNDING_RATE_BACKOFF_BASE_MS` - Initial backoff delay (default: 750ms)
+- `FUNDING_RATE_BACKOFF_MAX_MS` - Maximum backoff delay (default: 30s)
+- `FUNDING_RATE_PAGE_SIZE` - Records per API call (default: 100)
+- `FUNDING_RATE_SYMBOL_CONCURRENCY` - Parallel symbol fetches (default: 5)
+
 ### AWS Deployment (required for production)
 - `AWS_REGION` - AWS region (e.g., us-east-1)
 - `CLICKHOUSE_INSTANCE_TYPE` - EC2 instance type (e.g., t3.medium)
@@ -109,6 +129,13 @@ Uses `.env` (see `.env.example`) for configuration. Stage-specific configs avail
 - Keep symbol normalization consistent; store both `symbol` (normalized) and
   `exchange_symbol` (raw).
 - Run tests/lint/format before finishing work.
+
+## Testing Notes
+
+- Tests use in-memory ClickHouse mocks (no real DB needed)
+- Run `npm test` without starting `db:up`
+- Coverage reports in `coverage/` directory
+- Use `describe.concurrent` for parallel test suites
 
 ## Project Structure
 
@@ -223,8 +250,6 @@ Configured in `src/config/index.ts`:
 - Active markets: fetch from CCXT, then merge with delisted markets.
 - Delisted markets: load from JSON and reconcile symbols with active data.
 
-## Current Status
+## Development Notes
 
-- Delisting JSON collected: Binance, Bybit, OKX, MEXC, Bitget.
-- In progress: Gate.io, KuCoin delisting collection.
-- Next: funding rates ingestion.
+Progress tracked in GitHub Issues. See `infra/RUNBOOK.md` for operational procedures.
