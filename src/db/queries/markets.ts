@@ -1,3 +1,4 @@
+import { logger } from '../../logger.js'
 import { getClickHouseClient } from '../client.js'
 import type { MarketRow } from '../types.js'
 
@@ -9,10 +10,35 @@ export async function insertMarkets(rows: MarketRow[]): Promise<void> {
     return
   }
 
+  // Deduplicate within batch, keeping latest updated_at
+  const seen = new Map<string, MarketRow>()
+
+  for (const row of rows) {
+    const key = `${row.exchange}:${row.symbol}`
+    const existing = seen.get(key)
+
+    if (!existing) {
+      seen.set(key, row)
+    } else {
+      // Keep the one with latest updated_at
+      const currentTime = row.updated_at || new Date().toISOString()
+      const existingTime = existing.updated_at || new Date().toISOString()
+
+      if (currentTime > existingTime) {
+        seen.set(key, row)
+        logger.warn(
+          { exchange: row.exchange, symbol: row.symbol },
+          'Replacing duplicate market in batch with newer version'
+        )
+      }
+    }
+  }
+
+  const uniqueRows = Array.from(seen.values())
   const client = getClickHouseClient()
   await client.insert({
     table: 'markets',
-    values: rows,
+    values: uniqueRows,
     format: 'JSONEachRow',
   })
 }

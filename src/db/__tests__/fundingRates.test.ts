@@ -265,4 +265,31 @@ describe('funding_rates table', () => {
     expect(match?.expected).toBe(3)
     expect(match?.actual).toBe(2)
   })
+
+  it('prevents duplicates within batch', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const exchange = `dedup_${runId}`
+    const symbol = `SYM_${runId}`
+    const now = new Date(Date.UTC(2025, 0, 15, 0, 0, 0))
+
+    const row: FundingRateRow = {
+      exchange,
+      symbol,
+      exchange_symbol: symbol,
+      funding_time: toClickHouseDateTime(now),
+      funding_rate: '0.00050000',
+      mark_price: '123.45000000',
+      created_at: toClickHouseDateTime(now),
+    }
+
+    // Insert batch with duplicates
+    await insertFundingRates([row, row, row])
+
+    // Query to verify only one record exists
+    const rows = await listFundingRatesByExchange(exchange, 10)
+    const matches = rows.filter(
+      (item) => item.symbol === symbol && item.funding_time === toClickHouseDateTime(now)
+    )
+    expect(matches.length).toBe(1)
+  })
 })

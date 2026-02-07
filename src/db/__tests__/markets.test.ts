@@ -121,4 +121,24 @@ describe('markets table', () => {
     expect(latest).toBeTruthy()
     expect(latest?.is_active).toBe(false)
   })
+
+  it('prevents duplicates within batch', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const row: MarketRow = {
+      exchange: `test_${runId}`,
+      symbol: `SYM_${runId}`,
+      exchange_symbol: `SYM_${runId}`,
+      type: 'swap',
+      listing_date: toClickHouseDateTime(new Date()),
+      delisting_date: null,
+      is_active: true,
+    }
+
+    // Insert batch with duplicates
+    await insertMarkets([row, row, row])
+
+    // Query with FINAL to force deduplication
+    const rows = await listMarketsByExchange(`test_${runId}`, true)
+    expect(rows.length).toBe(1)
+  })
 })

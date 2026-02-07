@@ -1,6 +1,21 @@
--- ReplacingMergeTree deduplicates rows with the same ORDER BY key (exchange, symbol, funding_time).
--- This allows safe re-runs of the sync process without creating duplicate funding rate records.
--- The latest version (by created_at) is kept during merges, enabling idempotent backfill operations.
+-- Funding rates table using ReplacingMergeTree for automatic deduplication
+--
+-- UNIQUENESS SEMANTICS:
+-- - (exchange, symbol, funding_time) forms a logical unique key
+-- - ClickHouse does NOT enforce uniqueness at INSERT time
+-- - Deduplication occurs during background merge operations
+-- - Row with highest created_at is kept during merges
+-- - Use FINAL clause in SELECT queries to force immediate deduplication
+--
+-- DUPLICATE PREVENTION:
+-- 1. Application-level in-batch deduplication in insertFundingRates()
+-- 2. ReplacingMergeTree eventual deduplication (background)
+-- 3. Query-time FINAL clause for consistent reads
+--
+-- PARTITIONING: Data partitioned by month (toYYYYMM(funding_time))
+--
+-- Note: Duplicates can temporarily exist until merges complete!
+
 CREATE TABLE IF NOT EXISTS arbinet.funding_rates
 (
     exchange LowCardinality(String),

@@ -1,3 +1,4 @@
+import { logger } from '../../logger.js'
 import { getClickHouseClient } from '../client.js'
 import type { FundingRateRow } from '../types.js'
 
@@ -17,10 +18,39 @@ export async function insertFundingRates(rows: FundingRateRow[]): Promise<void> 
     return
   }
 
+  // Deduplicate within batch, keeping latest created_at
+  const seen = new Map<string, FundingRateRow>()
+
+  for (const row of rows) {
+    const key = `${row.exchange}:${row.symbol}:${row.funding_time}`
+    const existing = seen.get(key)
+
+    if (!existing) {
+      seen.set(key, row)
+    } else {
+      // Keep the one with latest created_at
+      const currentTime = row.created_at || new Date().toISOString()
+      const existingTime = existing.created_at || new Date().toISOString()
+
+      if (currentTime > existingTime) {
+        seen.set(key, row)
+        logger.warn(
+          {
+            exchange: row.exchange,
+            symbol: row.symbol,
+            funding_time: row.funding_time,
+          },
+          'Replacing duplicate funding rate in batch with newer version'
+        )
+      }
+    }
+  }
+
+  const uniqueRows = Array.from(seen.values())
   const client = getClickHouseClient()
   await client.insert({
     table: 'funding_rates',
-    values: rows,
+    values: uniqueRows,
     format: 'JSONEachRow',
   })
 }
