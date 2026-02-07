@@ -35,7 +35,7 @@ load_env_file "$ENV_FILE"
 REGION="${AWS_REGION}"
 
 echo "Starting migration task for stage: $STAGE (region: $REGION)"
-start_output="$(bash infra/sst-with-env.sh "$STAGE" shell -- node --input-type=module -e "import { Resource } from 'sst'; import { task } from 'sst/aws/task'; const fundingRateMaxPages = (process.env.FUNDING_RATE_MAX_PAGES ?? '').trim() || '250'; const result = await task.run(Resource.MigrationRunner, { FUNDING_RATE_MAX_PAGES: fundingRateMaxPages }); console.log(result.arn)")"
+start_output="$(bash infra/sst-with-env.sh "$STAGE" shell -- node --input-type=module -e "import { Resource } from 'sst'; import { task } from 'sst/aws/task'; const result = await task.run(Resource.MigrationRunner); console.log(result.arn)")"
 echo "$start_output"
 
 task_arn="$(printf '%s\n' "$start_output" | grep -Eo 'arn:aws:ecs:[^[:space:]]+' | tail -n 1)"

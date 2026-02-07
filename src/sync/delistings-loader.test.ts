@@ -13,7 +13,6 @@ function ensureRequiredConfigEnv(): void {
   process.env.FUNDING_RATE_BACKOFF_BASE_MS = '750'
   process.env.FUNDING_RATE_BACKOFF_MAX_MS = '30000'
   process.env.FUNDING_RATE_PAGE_SIZE = '100'
-  process.env.EXCHANGE_SYNC_CONCURRENCY = '1'
   process.env.FUNDING_RATE_SYMBOL_CONCURRENCY = '5'
   process.env.DELISTINGS_DIR = 'src/markets/delistings'
   process.env.MIGRATIONS_DIR = 'src/db/migrations'

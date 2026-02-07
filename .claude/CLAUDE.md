@@ -93,9 +93,6 @@ Uses `.env` (see `.env.example`) for configuration. Stage-specific configs avail
 - `DELISTINGS_DIR` - Directory for delisting JSON files (e.g., `src/markets/delistings`)
 - `MIGRATIONS_DIR` - Directory for SQL migration files (e.g., `src/db/migrations`)
 
-### Sync Configuration
-- `EXCHANGE_SYNC_CONCURRENCY` - Parallel exchange sync limit (default: 3)
-
 ### AWS Deployment (required for production)
 - `AWS_REGION` - AWS region (e.g., us-east-1)
 - `CLICKHOUSE_INSTANCE_TYPE` - EC2 instance type (e.g., t3.medium)
