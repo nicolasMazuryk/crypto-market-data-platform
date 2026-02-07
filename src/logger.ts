@@ -7,6 +7,29 @@ import { config } from './config.js'
 const isProduction = config.env === 'production'
 const logsDir = 'logs'
 
+// Pino levels: 10 trace, 20 debug, 30 info, 40 warn, 50 error, 60 fatal
+const PINO_LEVEL_WARN = 40
+const PINO_LEVEL_ERROR = 50
+
+/** Wraps a pino destination and only forwards log lines whose level passes the predicate */
+function levelFilterStream(
+  dest: pino.DestinationStream,
+  predicate: (level: number) => boolean
+): pino.DestinationStream {
+  return {
+    write(data: string) {
+      try {
+        const obj = JSON.parse(data.trim()) as { level?: number }
+        if (typeof obj.level === 'number' && predicate(obj.level)) {
+          dest.write(data)
+        }
+      } catch {
+        dest.write(data)
+      }
+    },
+  }
+}
+
 // Create logs directory if it doesn't exist
 if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true })
@@ -17,10 +40,20 @@ const combinedFileStream = pino.destination({
   dest: path.join(logsDir, 'combined.log'),
   mkdir: true,
 })
-const errorFileStream = pino.destination({
-  dest: path.join(logsDir, 'error.log'),
-  mkdir: true,
-})
+const warnFileStream = levelFilterStream(
+  pino.destination({
+    dest: path.join(logsDir, 'warn.log'),
+    mkdir: true,
+  }),
+  (level) => level === PINO_LEVEL_WARN
+)
+const errorFileStream = levelFilterStream(
+  pino.destination({
+    dest: path.join(logsDir, 'error.log'),
+    mkdir: true,
+  }),
+  (level) => level >= PINO_LEVEL_ERROR
+)
 
 // Set up console transport
 const consoleTransport = !isProduction
@@ -37,13 +70,14 @@ const consoleTransport = !isProduction
   : undefined
 
 // Configure multistream: console + file outputs
-const streams = [
-  { stream: combinedFileStream }, // All levels to combined.log
-  { stream: errorFileStream, level: 'error' }, // Errors to error.log
+const streams: pino.StreamEntry[] = [
+  { stream: combinedFileStream, level: 'trace' }, // All levels to combined.log
+  { stream: warnFileStream, level: 'warn' }, // Warnings only to warn.log
+  { stream: errorFileStream, level: 'error' }, // Errors and fatal to error.log
 ]
 
 if (consoleTransport) {
-  streams.push({ stream: consoleTransport }) // Console in dev
+  streams.push({ stream: consoleTransport, level: 'trace' }) // Console in dev
 }
 
 const multistream = pino.multistream(streams)

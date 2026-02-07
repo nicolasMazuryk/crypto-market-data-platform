@@ -947,7 +947,7 @@ async function syncExchangeFundingRates(
         )
       } catch (error) {
         if (isSkippableFundingRateError(exchangeConfig.name, error)) {
-          logger.info(
+          logger.warn(
             {
               err: error,
               exchange: exchangeConfig.name,
@@ -1035,15 +1035,36 @@ async function runWithConcurrency<T>(
 export async function syncFundingRates(): Promise<void> {
   await assertClickHouseHealthy()
 
-  for (const exchangeConfig of EXCHANGE_CONFIGS) {
-    try {
-      await syncExchangeFundingRates(exchangeConfig)
-    } catch (error) {
-      logger.error(
-        { err: error, exchange: exchangeConfig.name },
-        'Funding rate sync failed for exchange'
-      )
-    }
+  const results = await Promise.allSettled(
+    EXCHANGE_CONFIGS.map((exchangeConfig) =>
+      syncExchangeFundingRates(exchangeConfig).catch((error: unknown) => {
+        logger.error(
+          { err: error, exchange: exchangeConfig.name },
+          'Funding rate sync failed for exchange'
+        )
+        throw error
+      })
+    )
+  )
+
+  // Log summary of parallel execution
+  const succeeded = results.filter((r) => r.status === 'fulfilled').length
+  const failed = results.filter((r) => r.status === 'rejected').length
+
+  if (failed > 0) {
+    const failedExchanges = EXCHANGE_CONFIGS.filter(
+      (_, i) => results[i].status === 'rejected'
+    ).map((c) => c.name)
+
+    logger.warn(
+      { succeeded, failed, failedExchanges },
+      'Funding rate sync completed with some failures'
+    )
+  } else {
+    logger.info(
+      { succeeded, exchanges: EXCHANGE_CONFIGS.length },
+      'Funding rate sync completed successfully for all exchanges'
+    )
   }
 
   try {
