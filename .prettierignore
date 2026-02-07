@@ -1,4 +1,9 @@
 node_modules
 dist
+.idea/
+.sst/
+.context
 *.log
 .DS_Store
+coverage/
+package-lock.json
