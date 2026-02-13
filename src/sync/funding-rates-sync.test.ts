@@ -123,28 +123,95 @@ describe('funding rate sync', () => {
     })
   })
 
-  it('builds until mode request with since parameter to limit range', async () => {
+  it('builds until mode request using maxLimit and one-hour window cap', async () => {
     const { buildBackwardFetchRequest } = await import('./funding-rates-sync.js')
 
-    const cursorEndMs = 1_770_249_600_000 // 2025-01-01 00:00:00 UTC
-    const startMs = 1_770_163_200_000 // 2024-12-31 00:00:00 UTC
+    const cursorEndMs = 1_770_249_600_000
+    const startMs = 1_764_000_000_000
     const intervalMs = 8 * 60 * 60 * 1000 // 8 hours
-    const limit = 100
-    const windowMs = limit * intervalMs // 100 * 8 hours = 800 hours
+    const limit = 1000
+    const windowMs = limit * 60 * 60 * 1000 // one-hour cap, not 8h
 
-    const request = buildBackwardFetchRequest({ mode: 'until', maxLimit: 100 }, cursorEndMs, startMs, intervalMs)
+    const request = buildBackwardFetchRequest({ mode: 'until', maxLimit: 1000 }, cursorEndMs, startMs, intervalMs)
 
-    // The since should be max(startMs, cursorEndMs - windowMs)
-    // Since cursorEndMs - windowMs would be way before startMs, since should be startMs
     const expectedSince = Math.max(startMs, cursorEndMs - windowMs)
 
     expect(request).toEqual({
       since: expectedSince,
-      limit: 100,
+      limit: 1000,
       params: { until: cursorEndMs - 1 },
     })
     expect(request.since).toBeGreaterThanOrEqual(startMs)
     expect(request.since).toBeLessThanOrEqual(cursorEndMs)
+  })
+
+  it('caps 4h interval windows to one-hour sizing to avoid truncation', async () => {
+    const { buildBackwardFetchRequest } = await import('./funding-rates-sync.js')
+
+    const cursorEndMs = Date.UTC(2025, 0, 10, 0, 0, 0)
+    const startMs = Date.UTC(2024, 10, 1, 0, 0, 0)
+    const request = buildBackwardFetchRequest(
+      { mode: 'until', maxLimit: 1000 },
+      cursorEndMs,
+      startMs,
+      4 * 60 * 60 * 1000
+    )
+
+    const oneHourMs = 60 * 60 * 1000
+    expect(request.limit).toBe(1000)
+    expect(request.since).toBe(cursorEndMs - 1000 * oneHourMs)
+    const recordsInWindow = (cursorEndMs - (request.since ?? cursorEndMs)) / (4 * oneHourMs)
+    expect(recordsInWindow).toBeLessThan(request.limit ?? 0)
+  })
+
+  it('builds sinceUntilWindow request using maxLimit and one-hour window cap', async () => {
+    const { buildBackwardFetchRequest } = await import('./funding-rates-sync.js')
+
+    const cursorEndMs = Date.UTC(2025, 0, 10, 0, 0, 0)
+    const startMs = Date.UTC(2024, 10, 1, 0, 0, 0)
+    const request = buildBackwardFetchRequest(
+      { mode: 'sinceUntilWindow', maxLimit: 1000 },
+      cursorEndMs,
+      startMs,
+      8 * 60 * 60 * 1000
+    )
+
+    expect(request).toEqual({
+      since: cursorEndMs - 1000 * 60 * 60 * 1000,
+      limit: 1000,
+      params: { until: cursorEndMs - 1 },
+    })
+  })
+
+  it('keeps page and beforeSince modes on page-sized limits', async () => {
+    const { buildBackwardFetchRequest } = await import('./funding-rates-sync.js')
+
+    const cursorEndMs = Date.UTC(2025, 0, 10, 0, 0, 0)
+    const startMs = Date.UTC(2024, 10, 1, 0, 0, 0)
+
+    const beforeSinceRequest = buildBackwardFetchRequest(
+      { mode: 'beforeSince', maxLimit: 200 },
+      cursorEndMs,
+      startMs,
+      8 * 60 * 60 * 1000
+    )
+    const pageRequest = buildBackwardFetchRequest(
+      { mode: 'page', maxLimit: 200 },
+      cursorEndMs,
+      startMs,
+      8 * 60 * 60 * 1000
+    )
+
+    expect(beforeSinceRequest).toEqual({
+      since: undefined,
+      limit: 100,
+      params: { after: cursorEndMs - 1 },
+    })
+    expect(pageRequest).toEqual({
+      since: undefined,
+      limit: 100,
+      params: {},
+    })
   })
 
   it('resumes from oldest stored timestamp inside range', async () => {

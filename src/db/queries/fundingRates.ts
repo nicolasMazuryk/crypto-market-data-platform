@@ -12,6 +12,14 @@ export interface FundingRateCompletenessGap {
   actual: number
 }
 
+export interface FundingRateTimeGap {
+  exchange: string
+  symbol: string
+  prev_time: string
+  curr_time: string
+  gap_hours: number
+}
+
 export async function insertFundingRates(rows: FundingRateRow[]): Promise<void> {
   if (rows.length === 0) {
     return
@@ -191,6 +199,92 @@ export async function listFundingRateCompletenessGaps(): Promise<FundingRateComp
     symbol: row.symbol,
     expected: Number(row.expected),
     actual: Number(row.actual),
+  }))
+}
+
+export async function listFundingRateTimeGaps(): Promise<FundingRateTimeGap[]> {
+  const client = getClickHouseClient()
+  const buildQuery = (useFinal: boolean): string => {
+    const source = useFinal ? 'funding_rates FINAL' : 'funding_rates'
+    return `
+      SELECT
+        exchange,
+        symbol,
+        prev_time,
+        curr_time,
+        dateDiff('hour', prev_time, curr_time) AS gap_hours
+      FROM (
+        SELECT
+          exchange,
+          symbol,
+          lagInFrame(funding_time) OVER (
+            PARTITION BY exchange, symbol
+            ORDER BY funding_time ASC
+          ) AS prev_time,
+          funding_time AS curr_time,
+          row_number() OVER (
+            PARTITION BY exchange, symbol
+            ORDER BY funding_time ASC
+          ) AS sequence
+        FROM ${source}
+      )
+      WHERE sequence > 1
+        AND dateDiff('hour', prev_time, curr_time) > 8
+      ORDER BY exchange ASC, symbol ASC, curr_time ASC
+    `
+  }
+
+  const readRows = async (
+    useFinal: boolean
+  ): Promise<
+    {
+      exchange: string
+      symbol: string
+      prev_time: string
+      curr_time: string
+      gap_hours: number | string
+    }[]
+  > => {
+    const result = await client.query({
+      query: buildQuery(useFinal),
+      format: 'JSONEachRow',
+    })
+
+    const rows: {
+      exchange: string
+      symbol: string
+      prev_time: string
+      curr_time: string
+      gap_hours: number | string
+    }[] = await result.json()
+    return rows
+  }
+
+  let rows: {
+    exchange: string
+    symbol: string
+    prev_time: string
+    curr_time: string
+    gap_hours: number | string
+  }[]
+
+  try {
+    rows = await readRows(true)
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+    if (!message.includes("doesn't support final")) {
+      throw error
+    }
+
+    rows = await readRows(false)
+  }
+
+  return rows.map(row => ({
+    exchange: row.exchange,
+    symbol: row.symbol,
+    prev_time: row.prev_time,
+    curr_time: row.curr_time,
+    gap_hours: Number(row.gap_hours),
   }))
 }
 

@@ -9,6 +9,7 @@ import {
   insertFundingRates,
   getFundingRateRangeStats,
   listFundingRateCompletenessGaps,
+  listFundingRateTimeGaps,
   listFundingRatesByExchange,
   listFundingRatesByExchangeSymbolRange,
   listFundingRateTimesByExchangeSymbolRange,
@@ -250,6 +251,67 @@ describe('funding_rates table', () => {
     expect(match).toBeTruthy()
     expect(match?.expected).toBe(3)
     expect(match?.actual).toBe(2)
+  })
+
+  it('lists each time gap occurrence larger than 8 hours', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const exchange = `timegap_${runId}`
+    const symbol = `SYM_${runId}`
+
+    const t1 = new Date(Date.UTC(2025, 0, 1, 0, 0, 0))
+    const t2 = new Date(Date.UTC(2025, 0, 1, 8, 0, 0))
+    const t3 = new Date(Date.UTC(2025, 0, 1, 20, 0, 0))
+    const t4 = new Date(Date.UTC(2025, 0, 2, 16, 0, 0))
+
+    await insertFundingRates([
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(t1),
+        funding_rate: '0.00010000',
+        mark_price: '100.00000000',
+        created_at: toClickHouseDateTime(t1),
+      },
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(t2),
+        funding_rate: '0.00020000',
+        mark_price: '101.00000000',
+        created_at: toClickHouseDateTime(t2),
+      },
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(t3),
+        funding_rate: '0.00030000',
+        mark_price: '102.00000000',
+        created_at: toClickHouseDateTime(t3),
+      },
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(t4),
+        funding_rate: '0.00040000',
+        mark_price: '103.00000000',
+        created_at: toClickHouseDateTime(t4),
+      },
+    ])
+
+    const allGaps = await listFundingRateTimeGaps()
+    const symbolGaps = allGaps.filter(entry => entry.exchange === exchange && entry.symbol === symbol)
+
+    expect(symbolGaps.length).toBe(2)
+    expect(symbolGaps[0]?.prev_time).toBe(toClickHouseDateTime(t2))
+    expect(symbolGaps[0]?.curr_time).toBe(toClickHouseDateTime(t3))
+    expect(symbolGaps[0]?.gap_hours).toBe(12)
+    expect(symbolGaps[1]?.prev_time).toBe(toClickHouseDateTime(t3))
+    expect(symbolGaps[1]?.curr_time).toBe(toClickHouseDateTime(t4))
+    expect(symbolGaps[1]?.gap_hours).toBe(20)
   })
 
   it('prevents duplicates within batch', async () => {

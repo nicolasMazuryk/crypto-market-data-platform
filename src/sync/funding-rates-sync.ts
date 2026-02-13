@@ -26,6 +26,7 @@ import { logger } from '../logger.js'
 import { normalizeSymbol } from '../utils/symbol-normalizer.js'
 
 const DEFAULT_FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000
+const MIN_FUNDING_INTERVAL_MS = 1 * 60 * 60 * 1000
 
 interface FundingRateHistory {
   symbol?: string
@@ -436,13 +437,14 @@ function buildBackwardFetchRequest(
   limit: number | undefined
   params: Record<string, unknown>
 } {
-  const limit = getPageSize(fetchConfig)
+  const pageSize = getPageSize(fetchConfig)
 
   switch (fetchConfig.mode) {
     case 'until': {
+      const limit = Math.max(1, fetchConfig.maxLimit)
       // Calculate a reasonable window to prevent fetching records that are too far back
       // This ensures we don't get records way earlier than expected when using 'until' mode
-      const windowMs = limit * intervalMs
+      const windowMs = limit * Math.min(intervalMs, MIN_FUNDING_INTERVAL_MS)
       const since = Math.max(startMs, cursorEndMs - windowMs)
       return {
         since,
@@ -453,11 +455,12 @@ function buildBackwardFetchRequest(
     case 'beforeSince':
       return {
         since: undefined,
-        limit,
+        limit: pageSize,
         params: { after: Math.max(cursorEndMs - 1, 0) },
       }
     case 'sinceUntilWindow': {
-      const windowMs = limit * intervalMs
+      const limit = Math.max(1, fetchConfig.maxLimit)
+      const windowMs = limit * Math.min(intervalMs, MIN_FUNDING_INTERVAL_MS)
       const since = Math.max(startMs, cursorEndMs - windowMs)
       return {
         since,
@@ -466,7 +469,7 @@ function buildBackwardFetchRequest(
       }
     }
     case 'page':
-      return { since: undefined, limit, params: {} }
+      return { since: undefined, limit: pageSize, params: {} }
   }
 }
 
