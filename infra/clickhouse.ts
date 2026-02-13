@@ -151,6 +151,8 @@ export const clickhouseInstance = new aws.ec2.Instance('ClickHouseServer', {
   tags: {
     Name: $interpolate`${$app.name}-${$app.stage}-clickhouse`,
   },
+}, {
+  deleteBeforeReplace: true,
 })
 
 new aws.ec2.VolumeAttachment('ClickHouseVolumeAttachment', {
@@ -158,6 +160,8 @@ new aws.ec2.VolumeAttachment('ClickHouseVolumeAttachment', {
   volumeId: clickhouseVolume.id,
   instanceId: clickhouseInstance.id,
   stopInstanceBeforeDetaching: true,
+}, {
+  deleteBeforeReplace: true,
 })
 
 export const clickhouseIp = new aws.ec2.Eip('ClickHouseIp', {
