@@ -218,9 +218,10 @@ async function withRetry<T>(
   context: { exchange: string; symbol?: string; rateLimitMs?: number }
 ): Promise<T> {
   let attempt = 0
-  const baseDelay = context.rateLimitMs !== undefined
-    ? Math.max(FUNDING_RATE_BACKOFF_BASE_MS, context.rateLimitMs)
-    : FUNDING_RATE_BACKOFF_BASE_MS
+  const baseDelay =
+    context.rateLimitMs !== undefined
+      ? Math.max(FUNDING_RATE_BACKOFF_BASE_MS, context.rateLimitMs)
+      : FUNDING_RATE_BACKOFF_BASE_MS
 
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   while (true) {
@@ -964,30 +965,22 @@ export async function syncFundingRates(): Promise<void> {
   await assertClickHouseHealthy()
 
   const results = await Promise.allSettled(
-    EXCHANGE_CONFIGS.map((exchangeConfig) =>
+    EXCHANGE_CONFIGS.map(exchangeConfig =>
       syncExchangeFundingRates(exchangeConfig).catch((error: unknown) => {
-        logger.error(
-          { err: error, exchange: exchangeConfig.name },
-          'Funding rate sync failed for exchange'
-        )
+        logger.error({ err: error, exchange: exchangeConfig.name }, 'Funding rate sync failed for exchange')
         throw error
       })
     )
   )
 
   // Log summary of parallel execution
-  const succeeded = results.filter((r) => r.status === 'fulfilled').length
-  const failed = results.filter((r) => r.status === 'rejected').length
+  const succeeded = results.filter(r => r.status === 'fulfilled').length
+  const failed = results.filter(r => r.status === 'rejected').length
 
   if (failed > 0) {
-    const failedExchanges = EXCHANGE_CONFIGS.filter(
-      (_, i) => results[i]?.status === 'rejected'
-    ).map((c) => c.name)
+    const failedExchanges = EXCHANGE_CONFIGS.filter((_, i) => results[i]?.status === 'rejected').map(c => c.name)
 
-    logger.warn(
-      { succeeded, failed, failedExchanges },
-      'Funding rate sync completed with some failures'
-    )
+    logger.warn({ succeeded, failed, failedExchanges }, 'Funding rate sync completed with some failures')
   } else {
     logger.info(
       { succeeded, exchanges: EXCHANGE_CONFIGS.length },

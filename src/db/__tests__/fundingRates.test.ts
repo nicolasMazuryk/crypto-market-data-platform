@@ -335,9 +335,7 @@ describe('funding_rates table', () => {
 
     // Query to verify only one record exists
     const rows = await listFundingRatesByExchange(exchange, 10)
-    const matches = rows.filter(
-      (item) => item.symbol === symbol && item.funding_time === toClickHouseDateTime(now)
-    )
+    const matches = rows.filter(item => item.symbol === symbol && item.funding_time === toClickHouseDateTime(now))
     expect(matches.length).toBe(1)
   })
 })

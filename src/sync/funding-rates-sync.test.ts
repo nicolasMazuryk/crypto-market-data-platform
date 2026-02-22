@@ -84,17 +84,19 @@ vi.mock('../db/health.js', () => ({
 }))
 
 vi.mock('../db/queries/markets.js', () => ({
-  listMarketsByExchange: vi.fn(() => Promise.resolve([
-    {
-      exchange: 'binance',
-      symbol: 'BTCUSDT',
-      exchange_symbol: 'BTCUSDT',
-      type: 'perpetual',
-      listing_date: toClickHouseDateTime(new Date('2024-12-31T00:00:00Z')),
-      delisting_date: null,
-      is_active: true,
-    },
-  ])),
+  listMarketsByExchange: vi.fn(() =>
+    Promise.resolve([
+      {
+        exchange: 'binance',
+        symbol: 'BTCUSDT',
+        exchange_symbol: 'BTCUSDT',
+        type: 'perpetual',
+        listing_date: toClickHouseDateTime(new Date('2024-12-31T00:00:00Z')),
+        delisting_date: null,
+        is_active: true,
+      },
+    ])
+  ),
 }))
 
 vi.mock('../db/queries/fundingRates.js', () => ({
@@ -102,7 +104,16 @@ vi.mock('../db/queries/fundingRates.js', () => ({
   listFundingRateCompletenessGaps: vi.fn(() => Promise.resolve([])),
   listFundingRateTimesByExchangeSymbolRange: listFundingRateTimesByExchangeSymbolRangeMock,
   insertFundingRates: insertFundingRatesMock,
-  validateSymbolsForExchange: vi.fn(() => Promise.resolve({ isMatch: true, expectedSymbols: [], actualSymbols: [], missingSymbols: [], extraSymbols: [], exchange: '' })),
+  validateSymbolsForExchange: vi.fn(() =>
+    Promise.resolve({
+      isMatch: true,
+      expectedSymbols: [],
+      actualSymbols: [],
+      missingSymbols: [],
+      extraSymbols: [],
+      exchange: '',
+    })
+  ),
 }))
 
 describe('funding rate sync', () => {

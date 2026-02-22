@@ -45,14 +45,14 @@ const warnFileStream = levelFilterStream(
     dest: path.join(logsDir, 'warn.log'),
     mkdir: true,
   }),
-  (level) => level === PINO_LEVEL_WARN
+  level => level === PINO_LEVEL_WARN
 )
 const errorFileStream = levelFilterStream(
   pino.destination({
     dest: path.join(logsDir, 'error.log'),
     mkdir: true,
   }),
-  (level) => level >= PINO_LEVEL_ERROR
+  level => level >= PINO_LEVEL_ERROR
 )
 
 // Set up console transport
@@ -92,5 +92,5 @@ export const logger = pino(
     },
     messageKey: 'message',
   },
-  multistream,
+  multistream
 )
