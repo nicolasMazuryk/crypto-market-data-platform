@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WEBHOOK_URL="{{ slack_webhook_url | default('') }}"
+HOST=$(hostname)
+ERRORS=()
+
+# Check ClickHouse
+if ! curl -sf http://localhost:{{ clickhouse_http_port }}/ping > /dev/null 2>&1; then
+  ERRORS+=("ClickHouse is not responding")
+fi
+
+# Check Docker
+if ! systemctl is-active --quiet docker; then
+  ERRORS+=("Docker is not running")
+fi
+
+# Check disk usage
+DISK_USAGE=$(df /data --output=pcent 2>/dev/null | tail -1 | tr -d ' %')
+if [[ -n "$DISK_USAGE" ]] && (( DISK_USAGE > 80 )); then
+  ERRORS+=("Disk usage at ${DISK_USAGE}%")
+fi
+
+# Check scheduled worker timers are active (quote sync is manual-only)
+for timer in worker-market-sync worker-funding-rates; do
+  if ! systemctl is-active --quiet "${timer}.timer"; then
+    ERRORS+=("Timer ${timer}.timer is not active")
+  fi
+done
+
+# Report
+{% raw %}
+if [[ ${#ERRORS[@]} -eq 0 ]]; then
+{% endraw %}
+  echo "All health checks passed"
+  exit 0
+fi
+
+MSG=$(printf -- '- %s\n' "${ERRORS[@]}")
+echo "Health check failures:"
+echo "$MSG"
+
+if [[ -z "$WEBHOOK_URL" ]]; then
+  echo "No SLACK_WEBHOOK_URL configured, skipping notification"
+  exit 1
+fi
+
+curl -sf -X POST "$WEBHOOK_URL" \
+  -H 'Content-Type: application/json' \
+  -d @- <<EOF
+{
+  "text": ":warning: *Health check failed on ${HOST}*\n${MSG}"
+}
+EOF
+
+exit 1

@@ -1,0 +1,14 @@
+---
+- name: Full server provisioning
+  hosts: servers
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+
+  roles:
+    - base
+    - docker
+    - hardening
+    - app
+    - workers
+    - monitoring

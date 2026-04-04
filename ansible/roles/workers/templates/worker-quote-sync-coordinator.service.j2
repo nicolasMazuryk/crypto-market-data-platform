@@ -1,0 +1,10 @@
+[Unit]
+Description=Quote sync coordinator ({{ quotes_sync_worker_count }} workers)
+After=docker.service
+Requires=docker.service
+OnFailure=worker-failure-notify@%n.service
+
+[Service]
+Type=oneshot
+ExecStart={{ app_dir }}/quote-sync-coordinator.sh
+TimeoutStartSec=7200

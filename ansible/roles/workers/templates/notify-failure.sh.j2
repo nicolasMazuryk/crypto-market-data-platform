@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+UNIT="$1"
+WEBHOOK_URL="{{ slack_webhook_url | default('') }}"
+
+if [[ -z "$WEBHOOK_URL" ]]; then
+  echo "No SLACK_WEBHOOK_URL configured, skipping notification"
+  exit 0
+fi
+
+HOST=$(hostname)
+LOGS=$(journalctl -u "$UNIT" --no-pager -n 20 --output=cat 2>/dev/null || echo "Failed to read logs")
+
+curl -sf -X POST "$WEBHOOK_URL" \
+  -H 'Content-Type: application/json' \
+  -d @- <<EOF
+{
+  "text": ":x: *Worker failure on ${HOST}*\nUnit: \`${UNIT}\`\n\`\`\`${LOGS}\`\`\`"
+}
+EOF

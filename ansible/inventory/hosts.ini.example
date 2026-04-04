@@ -1,0 +1,7 @@
+[servers]
+; Replace with actual IP from: cd terraform && terraform output -raw server_ip
+arbinet ansible_host=REPLACE_WITH_SERVER_IP
+
+[servers:vars]
+ansible_user=nicolas
+ansible_ssh_private_key_file=~/.ssh/nicolas

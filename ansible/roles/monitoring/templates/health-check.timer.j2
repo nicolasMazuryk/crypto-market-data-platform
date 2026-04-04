@@ -1,0 +1,9 @@
+[Unit]
+Description=Arbinet health check timer (every 5 min)
+
+[Timer]
+OnCalendar={{ health_check_schedule }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

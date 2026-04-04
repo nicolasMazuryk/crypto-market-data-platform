@@ -1,0 +1,10 @@
+[Unit]
+Description=Market sync timer (every 6h at :01)
+
+[Timer]
+OnCalendar={{ market_sync_schedule }}
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=Market sync worker
+After=docker.service
+Requires=docker.service
+OnFailure=worker-failure-notify@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker compose -f {{ docker_compose_file }} run --rm worker-market-sync
+TimeoutStartSec=600

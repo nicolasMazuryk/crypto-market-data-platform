@@ -1,0 +1,6 @@
+[Unit]
+Description=Send Slack notification on worker failure (%i)
+
+[Service]
+Type=oneshot
+ExecStart={{ app_dir }}/notify-failure.sh %i

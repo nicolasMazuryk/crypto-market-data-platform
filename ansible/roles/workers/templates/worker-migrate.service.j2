@@ -1,0 +1,10 @@
+[Unit]
+Description=Database migration worker
+After=docker.service
+Requires=docker.service
+OnFailure=worker-failure-notify@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker compose -f {{ docker_compose_file }} run --rm worker-migrate
+TimeoutStartSec=300

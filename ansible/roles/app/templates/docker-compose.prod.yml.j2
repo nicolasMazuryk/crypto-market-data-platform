@@ -1,0 +1,53 @@
+services:
+  clickhouse:
+    image: {{ clickhouse_image }}
+    container_name: arbinet-clickhouse
+    restart: always
+    ports:
+      - "127.0.0.1:{{ clickhouse_http_port }}:8123"
+      - "127.0.0.1:{{ clickhouse_native_port }}:9000"
+    volumes:
+      - {{ clickhouse_data_dir }}:/var/lib/clickhouse
+      - {{ repo_dir }}/src/db/migrations:/docker-entrypoint-initdb.d:ro
+    environment:
+      CLICKHOUSE_DB: {{ clickhouse_database }}
+      CLICKHOUSE_USER: {{ clickhouse_user }}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  worker-market-sync:
+    image: {{ app_name }}:latest
+    env_file: {{ app_dir }}/.env
+    command: ["node", "dist/scripts/sync-markets.js"]
+    network_mode: host
+    profiles: ["worker"]
+
+  worker-funding-rates:
+    image: {{ app_name }}:latest
+    env_file: {{ app_dir }}/.env
+    command: ["node", "dist/scripts/sync-funding-rates.js"]
+    network_mode: host
+    profiles: ["worker"]
+
+  worker-migrate:
+    image: {{ app_name }}:latest
+    env_file: {{ app_dir }}/.env
+    command: ["node", "dist/db/migrate.js"]
+    network_mode: host
+    profiles: ["worker"]
+
+  worker-quote-sync:
+    image: {{ app_name }}:latest
+    env_file: {{ app_dir }}/.env
+    command: ["node", "dist/scripts/sync-quotes.js"]
+    network_mode: host
+    profiles: ["worker"]

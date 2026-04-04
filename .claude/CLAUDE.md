@@ -23,22 +23,18 @@ Funding rates should be collected backwards (newest -> oldest) and filtered to t
 
 ### Core
 - TypeScript 5.7 (ESM) + tsx
-- ClickHouse (Docker Compose for local, EC2 for production)
+- ClickHouse (Docker Compose for local, Hetzner server for production)
 - CCXT (exchange REST API)
 - Vitest (testing)
 - ESLint + Prettier
 - Pino logger
 
 ### Infrastructure & Deployment
-- SST (Serverless Stack) for AWS deployment
-- Pulumi for infrastructure as code
-- Docker for containerization
-- AWS Services:
-  - ECS Fargate (scheduled workers)
-  - EC2 (ClickHouse database)
-  - EventBridge (cron scheduling)
-  - CloudWatch (logging and monitoring)
-  - SNS + Lambda (Slack alerting)
+- Terraform (Hetzner Cloud provider)
+- Ansible (server provisioning and deployment)
+- Docker Compose (ClickHouse persistent, workers one-shot)
+- systemd timers (worker scheduling)
+- Hetzner Cloud (single server)
 
 ## Commands
 
@@ -73,20 +69,24 @@ npm run sync:markets         # Run market sync locally
 npm run sync:funding-rates   # Run funding rates sync locally
 ```
 
-### AWS Deployment
+### Infrastructure & Deployment
 ```bash
-npm run deploy:dev           # Deploy to dev environment
-npm run deploy:prod          # Deploy to prod environment
-npm run deploy:migrate:dev   # Run migrations on dev
-npm run deploy:migrate:prod  # Run migrations on prod
-npm run deploy:migrate       # Run migrations (uses current stage)
-npm run deploy:remove:dev    # Remove dev environment
-npm run deploy:remove:prod   # Remove prod environment
+npm run infra:init           # Initialize Terraform
+npm run infra:plan           # Preview infrastructure changes
+npm run infra:apply          # Apply infrastructure changes
+npm run setup                # Full server provisioning (Ansible)
+npm run deploy               # Deploy latest code (git pull + build + restart)
+npm run deploy:migrate       # Run database migrations on server
+npm run remote:ssh           # SSH into server
+npm run remote:status        # Show Docker containers + timer status
+npm run remote:logs:markets  # Tail market sync logs
+npm run remote:logs:funding  # Tail funding rates logs
+npm run remote:logs:quotes   # Tail quote sync logs
 ```
 
 ## Environment
 
-Uses `.env` (see `.env.example`) for configuration. Stage-specific configs available in `.env.dev` and `.env.prod`.
+Uses `.env` (see `.env.example`) for local configuration. Production `.env` is templated by Ansible on the server.
 
 ### Core Application
 - `NODE_ENV` - Environment (development/production)
@@ -113,14 +113,7 @@ Uses `.env` (see `.env.example`) for configuration. Stage-specific configs avail
 - `FUNDING_RATE_PAGE_SIZE` - Records per API call (default: 100)
 - `FUNDING_RATE_SYMBOL_CONCURRENCY` - Parallel symbol fetches (default: 5)
 
-### AWS Deployment (required for production)
-- `AWS_REGION` - AWS region (e.g., us-east-1)
-- `CLICKHOUSE_INSTANCE_TYPE` - EC2 instance type (e.g., t3.medium)
-- `CLICKHOUSE_VOLUME_SIZE_GB` - EBS volume size
-- `CLICKHOUSE_ALLOWED_CIDR` - IP range for database access (restrict in production)
-- `MARKET_SYNC_SCHEDULE` - Cron schedule for market sync worker
-- `FUNDING_RATES_SCHEDULE` - Cron schedule for funding rates worker
-- `WORKER_LOG_LEVEL` - Log level for ECS workers
+### Alerting
 - `SLACK_WEBHOOK_URL` - Slack webhook for alerts
 
 ## Development Workflow
@@ -152,25 +145,34 @@ src/
 ├── index.ts                 # App entry (markets sync -> ClickHouse)
 └── logger.ts                # Pino logger
 
-infra/
-├── clickhouse.ts            # EC2 instance for ClickHouse
-├── cluster.ts               # ECS cluster configuration
-├── monitoring.ts            # CloudWatch alarms + SNS alerts
-├── network.ts               # VPC configuration
-├── slack-notifier/          # Lambda for Slack notifications
-├── workers/                 # ECS task definitions
-│   ├── funding-rates.ts     # Funding rates sync worker
-│   ├── market-sync.ts       # Market sync worker
-│   ├── migration-runner.ts  # Database migration worker
-│   └── shared.ts            # Shared worker configuration
-├── deploy-migrate.sh        # Migration deployment script
-├── deploy-remove.sh         # Environment teardown script
-├── sst-with-env.sh          # SST environment loader
-└── RUNBOOK.md               # Operational procedures
+terraform/
+├── main.tf                  # Provider + terraform block
+├── variables.tf             # Input variables
+├── server.tf                # Hetzner server + cloud-init
+├── volume.tf                # Hetzner volume + attachment
+├── firewall.tf              # SSH-only firewall
+├── network.tf               # Private network
+├── ssh.tf                   # SSH key
+├── outputs.tf               # server_ip, volume_linux_device
+└── cloud-init.yml.tpl       # Cloud-init template
+
+ansible/
+├── ansible.cfg              # SSH settings, inventory path
+├── inventory/hosts.ini      # Server IP (from TF output)
+├── group_vars/all.yml       # Shared variables
+├── playbooks/
+│   ├── setup.yml            # Full provisioning
+│   └── deploy.yml           # Fast redeploy
+└── roles/
+    ├── base/                # Packages, timezone, volume mount
+    ├── docker/              # Docker Engine + Compose
+    ├── hardening/           # UFW firewall rules
+    ├── app/                 # Clone repo, build image, deploy
+    ├── workers/             # systemd service + timer units
+    └── monitoring/          # Health check script + timer
 
 docker/
-└── clickhouse/
-    └── user-data.sh         # EC2 instance initialization script
+└── docker-compose.yml       # Local development compose
 ```
 
 ## Database Schema
@@ -252,4 +254,4 @@ Configured in `src/config/index.ts`:
 
 ## Development Notes
 
-Progress tracked in GitHub Issues. See `infra/RUNBOOK.md` for operational procedures.
+Progress tracked in GitHub Issues. See `RUNBOOK.md` for operational procedures.

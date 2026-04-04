@@ -1,0 +1,6 @@
+[Unit]
+Description=Arbinet health check
+
+[Service]
+Type=oneshot
+ExecStart={{ app_dir }}/health-check.sh

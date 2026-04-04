@@ -55,6 +55,18 @@ export async function listMarketsByExchange(exchange: string, useFinal = false):
   return result.json<MarketRow>()
 }
 
+export async function listExchangesBySymbol(symbol: string, useFinal = false): Promise<MarketRow[]> {
+  const client = getClickHouseClient()
+  const finalClause = useFinal ? ' FINAL' : ''
+  const result = await client.query({
+    query: `SELECT ${MARKET_COLUMNS} FROM markets${finalClause} WHERE symbol = {symbol: String} ORDER BY exchange`,
+    query_params: { symbol },
+    format: 'JSONEachRow',
+  })
+
+  return result.json<MarketRow>()
+}
+
 export async function getMarketByExchangeSymbol(
   exchange: string,
   symbol: string,

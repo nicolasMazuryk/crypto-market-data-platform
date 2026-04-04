@@ -153,7 +153,8 @@ async function verifyMarketQueries(): Promise<void> {
     updated_at: toClickHouseDateTime(now),
   }
 
-  await insertMarkets([firstRow, secondRow])
+  await insertMarkets([firstRow])
+  await insertMarkets([secondRow])
 
   const latest = await getMarketByExchangeSymbol(exchange, symbol, true)
   if (!latest) {

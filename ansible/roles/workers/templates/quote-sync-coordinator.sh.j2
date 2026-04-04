@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+WORKER_COUNT="{{ quotes_sync_worker_count }}"
+COMPOSE_FILE="{{ docker_compose_file }}"
+STALE_RECOVERY_MINUTES="{{ quotes_sync_stale_recovery_minutes }}"
+
+echo "Starting quote-sync coordinator: ${WORKER_COUNT} worker(s)"
+
+PIDS=()
+
+for i in $(seq 0 $((WORKER_COUNT - 1))); do
+  echo "Launching worker ${i}/${WORKER_COUNT}"
+  /usr/bin/docker compose -f "${COMPOSE_FILE}" run --rm \
+    -e WORKER_INDEX="${i}" \
+    -e WORKER_COUNT="${WORKER_COUNT}" \
+    -e STALE_RECOVERY_MINUTES="${STALE_RECOVERY_MINUTES}" \
+    worker-quote-sync &
+  PIDS+=($!)
+done
+
+echo "All ${WORKER_COUNT} workers launched, waiting for completion..."
+
+FAILURES=0
+for i in "${!PIDS[@]}"; do
+  pid="${PIDS[$i]}"
+  if wait "${pid}"; then
+    echo "Worker ${i} completed successfully"
+  else
+    code=$?
+    echo "Worker ${i} failed with exit code ${code}"
+    FAILURES=$((FAILURES + 1))
+  fi
+done
+
+if [ "${FAILURES}" -gt 0 ]; then
+  echo "ERROR: ${FAILURES}/${WORKER_COUNT} worker(s) failed"
+  exit 1
+fi
+
+echo "All ${WORKER_COUNT} worker(s) completed successfully"

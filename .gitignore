@@ -1,7 +1,7 @@
 node_modules/
 dist/
+output/
 .idea/
-.sst/
 *.log
 logs/
 .DS_Store
@@ -10,5 +10,17 @@ logs/
 coverage/
 package-lock.json
 
+data/
+
 tasks/
 src/markets/snapshots/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfvars
+terraform/.terraform.lock.hcl
+
+# Ansible
+ansible/inventory/hosts.ini

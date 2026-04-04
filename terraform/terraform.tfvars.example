@@ -1,0 +1,2 @@
+hcloud_token   = "CHANGE_ME_HCLOUD_TOKEN"
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICIljEw49E8vw0nrc6zzdsooLDFAsE5HSs/AxMspZiY5 nicolasmazuryk@gmail.com"
