@@ -39,7 +39,7 @@ export async function deleteOrderbooksByExchangeSymbolDate(
       'ALTER TABLE orderbooks DELETE WHERE exchange = {exchange: String} AND symbol = {symbol: String} AND toDate(ts) = {date: Date}',
     query_params: { exchange, symbol, date },
     clickhouse_settings: {
-      mutations_sync: 1,
+      mutations_sync: '1',
     },
   })
 }
