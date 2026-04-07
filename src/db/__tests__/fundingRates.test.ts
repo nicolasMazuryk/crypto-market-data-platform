@@ -1,10 +1,12 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { randomUUID } from 'crypto'
 
 import { config } from '../../config.js'
 import { closeClickHouseClient, getClickHouseClient } from '../client.js'
+import { createClickHouseFixtureCleanupRegistry } from '../fixtureCleanup.js'
 import { pingClickHouse } from '../health.js'
 import {
+  getLatestFundingRateTime,
   getOldestFundingRateTime,
   insertFundingRates,
   getFundingRateRangeStats,
@@ -32,6 +34,13 @@ const expectedColumns: ColumnDef[] = [
   { name: 'mark_price', type: 'Nullable(Decimal(18, 8))' },
   { name: 'created_at', type: 'DateTime' },
 ]
+
+const cleanupRegistry = createClickHouseFixtureCleanupRegistry()
+
+function trackFundingRateExchange(exchange: string): string {
+  cleanupRegistry.track('funding_rates', exchange)
+  return exchange
+}
 
 async function fetchColumns(table: string): Promise<ColumnDef[]> {
   const client = getClickHouseClient()
@@ -63,8 +72,16 @@ describe('funding_rates table', () => {
     }
   })
 
+  afterEach(async () => {
+    await cleanupRegistry.cleanup()
+  })
+
   afterAll(async () => {
-    await closeClickHouseClient()
+    try {
+      await cleanupRegistry.cleanup()
+    } finally {
+      await closeClickHouseClient()
+    }
   })
 
   it('has expected schema', async () => {
@@ -75,7 +92,7 @@ describe('funding_rates table', () => {
 
   it('inserts and queries funding rates by exchange', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `fund_${runId}`
+    const exchange = trackFundingRateExchange(`fund_${runId}`)
     const symbol = `SYM_${runId}`
     const now = new Date()
 
@@ -98,7 +115,7 @@ describe('funding_rates table', () => {
 
   it('filters by symbol and time range (partitioned by month)', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `range_${runId}`
+    const exchange = trackFundingRateExchange(`range_${runId}`)
     const symbol = `SYM_${runId}`
 
     const january = new Date(Date.UTC(2025, 0, 20, 0, 0, 0))
@@ -141,7 +158,7 @@ describe('funding_rates table', () => {
 
   it('lists funding rate times and range stats', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `times_${runId}`
+    const exchange = trackFundingRateExchange(`times_${runId}`)
     const symbol = `SYM_${runId}`
 
     const january = new Date(Date.UTC(2025, 0, 10, 0, 0, 0))
@@ -184,7 +201,7 @@ describe('funding_rates table', () => {
 
   it('returns oldest funding rate timestamp per symbol', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `oldest_${runId}`
+    const exchange = trackFundingRateExchange(`oldest_${runId}`)
     const symbol = `SYM_${runId}`
 
     const older = new Date(Date.UTC(2025, 0, 5, 0, 0, 0))
@@ -216,9 +233,43 @@ describe('funding_rates table', () => {
     expect(new Date((oldest ?? '').replace(' ', 'T') + 'Z').getTime()).toBe(older.getTime())
   })
 
+  it('returns latest funding rate timestamp per symbol', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const exchange = trackFundingRateExchange(`latest_${runId}`)
+    const symbol = `SYM_${runId}`
+
+    const older = new Date(Date.UTC(2025, 0, 5, 0, 0, 0))
+    const newer = new Date(Date.UTC(2025, 0, 6, 0, 0, 0))
+
+    await insertFundingRates([
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(older),
+        funding_rate: '0.00010000',
+        mark_price: '100.00000000',
+        created_at: toClickHouseDateTime(older),
+      },
+      {
+        exchange,
+        symbol,
+        exchange_symbol: symbol,
+        funding_time: toClickHouseDateTime(newer),
+        funding_rate: '0.00020000',
+        mark_price: '101.00000000',
+        created_at: toClickHouseDateTime(newer),
+      },
+    ])
+
+    const latest = await getLatestFundingRateTime(exchange, symbol)
+    expect(latest).toBeTruthy()
+    expect(new Date((latest ?? '').replace(' ', 'T') + 'Z').getTime()).toBe(newer.getTime())
+  })
+
   it('detects completeness gaps', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `gap_${runId}`
+    const exchange = trackFundingRateExchange(`gap_${runId}`)
     const symbol = `SYM_${runId}`
 
     const t1 = new Date(Date.UTC(2025, 0, 1, 0, 0, 0))
@@ -255,7 +306,7 @@ describe('funding_rates table', () => {
 
   it('lists each time gap occurrence larger than 8 hours', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `timegap_${runId}`
+    const exchange = trackFundingRateExchange(`timegap_${runId}`)
     const symbol = `SYM_${runId}`
 
     const t1 = new Date(Date.UTC(2025, 0, 1, 0, 0, 0))
@@ -316,7 +367,7 @@ describe('funding_rates table', () => {
 
   it('prevents duplicates within batch', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `dedup_${runId}`
+    const exchange = trackFundingRateExchange(`dedup_${runId}`)
     const symbol = `SYM_${runId}`
     const now = new Date(Date.UTC(2025, 0, 15, 0, 0, 0))
 

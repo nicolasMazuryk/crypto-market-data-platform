@@ -27,6 +27,18 @@ export async function insertOrderbooks(rows: OrderbookRow[]): Promise<void> {
   }
 }
 
+export async function deleteOrderbooksByExchange(exchange: string): Promise<void> {
+  const client = getClickHouseClient()
+
+  await client.command({
+    query: 'ALTER TABLE orderbooks DELETE WHERE exchange = {exchange: String}',
+    query_params: { exchange },
+    clickhouse_settings: {
+      mutations_sync: '1',
+    },
+  })
+}
+
 export async function deleteOrderbooksByExchangeSymbolDate(
   exchange: string,
   symbol: string,

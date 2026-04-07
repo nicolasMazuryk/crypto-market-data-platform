@@ -11,11 +11,17 @@ fi
 
 HOST=$(hostname)
 LOGS=$(journalctl -u "$UNIT" --no-pager -n 20 --output=cat 2>/dev/null || echo "Failed to read logs")
+PAYLOAD=$(HOST="$HOST" UNIT="$UNIT" LOGS="$LOGS" python3 - <<'PY'
+import json
+import os
 
-curl -sf -X POST "$WEBHOOK_URL" \
+text = f":x: *Worker failure on {os.environ['HOST']}*\nUnit: `{os.environ['UNIT']}`\n```{os.environ['LOGS']}```"
+print(json.dumps({"text": text}))
+PY
+)
+
+if ! curl -sf -X POST "$WEBHOOK_URL" \
   -H 'Content-Type: application/json' \
-  -d @- <<EOF
-{
-  "text": ":x: *Worker failure on ${HOST}*\nUnit: \`${UNIT}\`\n\`\`\`${LOGS}\`\`\`"
-}
-EOF
+  -d "$PAYLOAD"; then
+  echo "Failed to deliver Slack notification for ${UNIT}" >&2
+fi

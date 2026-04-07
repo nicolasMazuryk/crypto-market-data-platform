@@ -1,8 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { randomUUID } from 'crypto'
 
 import { config } from '../../config.js'
 import { closeClickHouseClient, getClickHouseClient } from '../client.js'
+import { createClickHouseFixtureCleanupRegistry } from '../fixtureCleanup.js'
 import { pingClickHouse } from '../health.js'
 import { getMarketByExchangeSymbol, insertMarkets, listMarketsByExchange } from '../queries/markets.js'
 import { toClickHouseDateTime, type MarketRow } from '../types.js'
@@ -25,6 +26,13 @@ const expectedColumns: ColumnDef[] = [
   { name: 'created_at', type: 'DateTime' },
   { name: 'updated_at', type: 'DateTime' },
 ]
+
+const cleanupRegistry = createClickHouseFixtureCleanupRegistry()
+
+function trackMarketExchange(exchange: string): string {
+  cleanupRegistry.track('markets', exchange)
+  return exchange
+}
 
 async function fetchColumns(table: string): Promise<ColumnDef[]> {
   const client = getClickHouseClient()
@@ -56,8 +64,16 @@ describe('markets table', () => {
     }
   })
 
+  afterEach(async () => {
+    await cleanupRegistry.cleanup()
+  })
+
   afterAll(async () => {
-    await closeClickHouseClient()
+    try {
+      await cleanupRegistry.cleanup()
+    } finally {
+      await closeClickHouseClient()
+    }
   })
 
   it('has expected schema', async () => {
@@ -68,7 +84,7 @@ describe('markets table', () => {
 
   it('inserts and queries markets by exchange', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `test_${runId}`
+    const exchange = trackMarketExchange(`test_${runId}`)
     const symbol = `SYM_${runId}`
     const now = new Date()
 
@@ -91,7 +107,7 @@ describe('markets table', () => {
 
   it('deduplicates with ReplacingMergeTree', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `replace_${runId}`
+    const exchange = trackMarketExchange(`replace_${runId}`)
     const symbol = `DEDUP_${runId}`
     const now = new Date()
     const earlier = new Date(now.getTime() - 60_000)
@@ -124,8 +140,9 @@ describe('markets table', () => {
 
   it('prevents duplicates within batch', async () => {
     const runId = randomUUID().slice(0, 8)
+    const exchange = trackMarketExchange(`test_${runId}`)
     const row: MarketRow = {
-      exchange: `test_${runId}`,
+      exchange,
       symbol: `SYM_${runId}`,
       exchange_symbol: `SYM_${runId}`,
       type: 'swap',
@@ -138,7 +155,7 @@ describe('markets table', () => {
     await insertMarkets([row, row, row])
 
     // Query with FINAL to force deduplication
-    const rows = await listMarketsByExchange(`test_${runId}`, true)
+    const rows = await listMarketsByExchange(exchange, true)
     expect(rows.length).toBe(1)
   })
 })

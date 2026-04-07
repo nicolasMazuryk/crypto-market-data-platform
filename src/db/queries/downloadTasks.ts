@@ -37,10 +37,7 @@ function parseClickHouseDateTime(value: string | undefined): number | null {
 function nextUpdatedAt(existing: DownloadTaskRow | null): string {
   const nowMs = Date.now()
   const previousUpdatedAtMs = parseClickHouseDateTime(existing?.updated_at)
-  const effectiveMs =
-    previousUpdatedAtMs === null
-      ? nowMs
-      : Math.max(nowMs, previousUpdatedAtMs + 1000)
+  const effectiveMs = previousUpdatedAtMs === null ? nowMs : Math.max(nowMs, previousUpdatedAtMs + 1000)
 
   return toClickHouseDateTime(new Date(effectiveMs))
 }
@@ -101,6 +98,17 @@ export async function insertDownloadTasks(rows: DownloadTaskRow[]): Promise<void
     table: 'download_tasks',
     values: uniqueRows,
     format: 'JSONEachRow',
+  })
+}
+
+export async function deleteDownloadTasksByExchange(exchange: string): Promise<void> {
+  const client = getClickHouseClient()
+  await client.command({
+    query: 'ALTER TABLE download_tasks DELETE WHERE exchange = {exchange: String}',
+    query_params: { exchange },
+    clickhouse_settings: {
+      mutations_sync: '1',
+    },
   })
 }
 
@@ -185,13 +193,15 @@ export async function updateTaskStatus(
     date,
     status,
     error_message: hasOwn(fields, 'error_message')
-      ? fields.error_message ?? null
+      ? (fields.error_message ?? null)
       : status === 'failed'
-        ? existing?.error_message ?? null
+        ? (existing?.error_message ?? null)
         : null,
-    file_size_bytes: hasOwn(fields, 'file_size_bytes') ? fields.file_size_bytes ?? null : existing?.file_size_bytes ?? null,
-    rows_written: hasOwn(fields, 'rows_written') ? fields.rows_written ?? null : existing?.rows_written ?? null,
-    quality_score: hasOwn(fields, 'quality_score') ? fields.quality_score ?? null : existing?.quality_score ?? null,
+    file_size_bytes: hasOwn(fields, 'file_size_bytes')
+      ? (fields.file_size_bytes ?? null)
+      : (existing?.file_size_bytes ?? null),
+    rows_written: hasOwn(fields, 'rows_written') ? (fields.rows_written ?? null) : (existing?.rows_written ?? null),
+    quality_score: hasOwn(fields, 'quality_score') ? (fields.quality_score ?? null) : (existing?.quality_score ?? null),
     created_at: existing?.created_at ?? now,
     updated_at: now,
   }

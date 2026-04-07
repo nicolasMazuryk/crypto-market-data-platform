@@ -1,4 +1,5 @@
 import ccxt from 'ccxt'
+import unzipper from 'unzipper'
 
 import {
   DATA_PERIOD_END,
@@ -8,9 +9,11 @@ import {
   FUNDING_RATE_BACKOFF_MAX_MS,
   FUNDING_RATE_MAX_RETRIES,
   FUNDING_RATE_PAGE_SIZE,
+  type FundingRateSyncMode,
 } from '../config/index.js'
 import { assertClickHouseHealthy } from '../db/health.js'
 import {
+  getLatestFundingRateTime,
   getOldestFundingRateTime,
   insertFundingRates,
   listFundingRateCompletenessGaps,
@@ -27,6 +30,7 @@ import { normalizeSymbol } from '../utils/symbol-normalizer.js'
 
 const DEFAULT_FUNDING_INTERVAL_MS = 8 * 60 * 60 * 1000
 const MIN_FUNDING_INTERVAL_MS = 1 * 60 * 60 * 1000
+const BINANCE_PUBLIC_DATA_BASE_URL = 'https://data.binance.vision/data/futures/um/monthly/fundingRate'
 
 interface FundingRateHistory {
   symbol?: string
@@ -69,6 +73,7 @@ interface MarketSyncStats {
   fetched: number
   resumedFromExisting: boolean
   completeToStart: boolean
+  skipReason: 'none' | 'backfillRequired' | 'unsupportedMarket' | 'unresolvedSymbol'
 }
 
 function sleep(ms: number): Promise<void> {
@@ -210,7 +215,142 @@ function isSkippableFundingRateError(exchange: ExchangeName, error: unknown): bo
     return true
   }
 
+  if (exchange === 'bybit' && message.includes('only support linear and inverse market')) {
+    return true
+  }
+
   return false
+}
+
+function createMarketSyncStats(): MarketSyncStats {
+  return {
+    batches: 0,
+    inserted: 0,
+    skippedExisting: 0,
+    skippedInvalid: 0,
+    fetched: 0,
+    resumedFromExisting: false,
+    completeToStart: false,
+    skipReason: 'none',
+  }
+}
+
+function monthStartUtc(timestampMs: number): number {
+  const date = new Date(timestampMs)
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1, 0, 0, 0, 0)
+}
+
+function nextMonthStartUtc(timestampMs: number): number {
+  const date = new Date(timestampMs)
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1, 0, 0, 0, 0)
+}
+
+function listMonthStarts(startMs: number, endMs: number): number[] {
+  if (endMs <= startMs) {
+    return []
+  }
+
+  const months: number[] = []
+  let cursor = monthStartUtc(startMs)
+
+  while (cursor < endMs) {
+    months.push(cursor)
+    cursor = nextMonthStartUtc(cursor)
+  }
+
+  return months
+}
+
+function buildBinanceFundingArchiveUrl(exchangeSymbol: string, monthStartMs: number): string {
+  const date = new Date(monthStartMs)
+  const year = String(date.getUTCFullYear())
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+  return `${BINANCE_PUBLIC_DATA_BASE_URL}/${exchangeSymbol}/${exchangeSymbol}-fundingRate-${year}-${month}.zip`
+}
+
+function parseBinanceFundingArchiveCsv(csvText: string, unifiedSymbol: string): FundingRateHistory[] {
+  const lines = csvText
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+
+  if (lines.length <= 1) {
+    return []
+  }
+
+  const rows: FundingRateHistory[] = []
+  for (const line of lines.slice(1)) {
+    const [calcTime, , lastFundingRate] = line.split(',')
+    const timestamp = getNumber(calcTime)
+    const fundingRate = getNumber(lastFundingRate)
+    if (timestamp === null || fundingRate === null) {
+      continue
+    }
+
+    rows.push({
+      symbol: unifiedSymbol,
+      timestamp,
+      fundingRate,
+      info: {},
+    })
+  }
+
+  return rows
+}
+
+async function fetchBinanceFundingRateHistoryFromArchive(
+  exchangeSymbol: string,
+  unifiedSymbol: string,
+  startMs: number,
+  endMs: number
+): Promise<FundingRateHistory[]> {
+  const months = listMonthStarts(startMs, endMs)
+  const rows: FundingRateHistory[] = []
+
+  for (const monthStart of months) {
+    const archiveUrl = buildBinanceFundingArchiveUrl(exchangeSymbol, monthStart)
+    const response = await fetch(archiveUrl)
+
+    if (response.status === 404) {
+      continue
+    }
+
+    if (!response.ok) {
+      throw new ccxt.ExchangeNotAvailable(`binance public archive ${archiveUrl} ${response.status} ${response.statusText}`)
+    }
+
+    const zipBuffer = Buffer.from(await response.arrayBuffer())
+    const directory = await unzipper.Open.buffer(zipBuffer)
+    const file = directory.files[0]
+    if (!file) {
+      continue
+    }
+
+    const csvText = (await file.buffer()).toString('utf8')
+    rows.push(...parseBinanceFundingArchiveCsv(csvText, unifiedSymbol))
+  }
+
+  return rows.filter(row => {
+    const timestamp = getNumber(row.timestamp)
+    return timestamp !== null && timestamp >= startMs && timestamp < endMs
+  })
+}
+
+function getLoadedMarket(exchange: CcxtExchange, unifiedSymbol: string): CcxtMarket | undefined {
+  try {
+    const boundMarket = exchange.market.bind(exchange)
+    return boundMarket(unifiedSymbol)
+  } catch {
+    return exchange.markets?.[unifiedSymbol]
+  }
+}
+
+function isFundingEligibleMarket(market: CcxtMarket | undefined): boolean {
+  if (!market) {
+    return false
+  }
+
+  return market.swap === true || market.future === true || market.contract === true || market.linear === true || market.inverse === true
 }
 
 async function withRetry<T>(
@@ -638,20 +778,14 @@ async function syncMarketFundingRates(
   exchange: CcxtExchange,
   market: MarketRow,
   resolveSymbol: UnifiedSymbolResolver,
-  now: Date
+  now: Date,
+  syncMode: FundingRateSyncMode
 ): Promise<MarketSyncStats> {
-  const stats: MarketSyncStats = {
-    batches: 0,
-    inserted: 0,
-    skippedExisting: 0,
-    skippedInvalid: 0,
-    fetched: 0,
-    resumedFromExisting: false,
-    completeToStart: false,
-  }
+  const stats = createMarketSyncStats()
 
   const unifiedSymbol = resolveSymbol(market)
   if (!unifiedSymbol) {
+    stats.skipReason = 'unresolvedSymbol'
     logger.warn(
       {
         exchange: exchangeConfig.name,
@@ -663,24 +797,64 @@ async function syncMarketFundingRates(
     return stats
   }
 
-  ensureMarketInExchange(exchange, unifiedSymbol, market)
-
   const range = getEffectiveRange(market, now)
   if (!range) {
     stats.completeToStart = true
     return stats
   }
 
-  const startMs = range.start.getTime()
+  let startMs = range.start.getTime()
   let cursorEndMs = range.end.getTime()
 
-  const oldestStored = await getOldestFundingRateTime(exchangeConfig.name, market.symbol)
-  const oldestStoredDate = parseClickHouseDateTime(oldestStored)
-  if (oldestStoredDate) {
-    const oldestStoredMs = oldestStoredDate.getTime()
-    if (oldestStoredMs > startMs && oldestStoredMs < cursorEndMs) {
-      cursorEndMs = oldestStoredMs
-      stats.resumedFromExisting = true
+  let loadedMarket = getLoadedMarket(exchange, unifiedSymbol)
+  if (loadedMarket && !isFundingEligibleMarket(loadedMarket)) {
+    stats.skipReason = 'unsupportedMarket'
+    logger.info(
+      {
+        exchange: exchangeConfig.name,
+        symbol: market.symbol,
+        exchange_symbol: market.exchange_symbol,
+      },
+      'Skipping funding rate sync for unsupported market'
+    )
+    return stats
+  }
+
+  if (syncMode === 'incremental') {
+    const latestStored = await getLatestFundingRateTime(exchangeConfig.name, market.symbol)
+    const latestStoredDate = parseClickHouseDateTime(latestStored)
+    if (!latestStoredDate || latestStoredDate.getTime() < startMs) {
+      stats.skipReason = 'backfillRequired'
+      logger.info(
+        {
+          exchange: exchangeConfig.name,
+          symbol: market.symbol,
+          latestStored,
+        },
+        'Skipping funding rate sync until backfill seeds the historical window'
+      )
+      return stats
+    }
+
+    startMs = Math.max(startMs, latestStoredDate.getTime() + 1000)
+    stats.resumedFromExisting = true
+
+    if (!loadedMarket) {
+      loadedMarket = ensureMarketInExchange(exchange, unifiedSymbol, market)
+    }
+  } else {
+    if (!loadedMarket) {
+      loadedMarket = ensureMarketInExchange(exchange, unifiedSymbol, market)
+    }
+
+    const oldestStored = await getOldestFundingRateTime(exchangeConfig.name, market.symbol)
+    const oldestStoredDate = parseClickHouseDateTime(oldestStored)
+    if (oldestStoredDate) {
+      const oldestStoredMs = oldestStoredDate.getTime()
+      if (oldestStoredMs > startMs && oldestStoredMs < cursorEndMs) {
+        cursorEndMs = oldestStoredMs
+        stats.resumedFromExisting = true
+      }
     }
   }
 
@@ -690,16 +864,43 @@ async function syncMarketFundingRates(
   }
 
   const fetchConfig = FUNDING_RATE_FETCH_CONFIG[exchangeConfig.name]
-  const marketInfo = (() => {
-    try {
-      const boundMarket = exchange.market.bind(exchange)
-      return boundMarket(unifiedSymbol)
-    } catch {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-      return exchange.markets?.[unifiedSymbol]
-    }
-  })()
+  const marketInfo = loadedMarket ?? getLoadedMarket(exchange, unifiedSymbol)
   const intervalMs = inferFundingIntervalMs(marketInfo)
+
+  if (exchangeConfig.name === 'binance') {
+    const batch = await fetchBinanceFundingRateHistoryFromArchive(market.exchange_symbol, unifiedSymbol, startMs, cursorEndMs)
+    if (batch.length === 0) {
+      if (syncMode === 'backfill') {
+        stats.completeToStart = true
+      }
+
+      return stats
+    }
+
+    stats.batches = 1
+    stats.fetched = batch.length
+
+    const batchStats = await processFundingRateBatch(
+      exchangeConfig.name,
+      market,
+      unifiedSymbol,
+      batch,
+      startMs,
+      cursorEndMs,
+      now
+    )
+
+    stats.inserted = batchStats.inserted
+    stats.skippedExisting = batchStats.skippedExisting
+    stats.skippedInvalid = batchStats.skippedInvalid
+
+    const timestamps = extractBatchTimestamps(batch, market, unifiedSymbol)
+    if (syncMode === 'backfill' && timestamps.length > 0 && Math.min(...timestamps) <= startMs) {
+      stats.completeToStart = true
+    }
+
+    return stats
+  }
 
   if (fetchConfig.mode === 'page') {
     const pageSize = getPageSize(fetchConfig)
@@ -827,7 +1028,7 @@ async function syncMarketFundingRates(
   return stats
 }
 
-async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig): Promise<void> {
+async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig, syncMode: FundingRateSyncMode): Promise<void> {
   const exchange = createCcxtExchange(exchangeConfig)
   const hasFundingHistory = exchange.has?.fetchFundingRateHistory !== false && !!exchange.fetchFundingRateHistory
 
@@ -848,6 +1049,10 @@ async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig): Promise
   // - Have delisting_date before DATA_PERIOD_START (delisted before period)
   const periodEnd = DATA_PERIOD_END ?? now
   const markets = allMarkets.filter(market => {
+    if (market.type !== 'perpetual') {
+      return false
+    }
+
     const listingDate = parseClickHouseDateTime(market.listing_date)
     const delistingDate = parseClickHouseDateTime(market.delisting_date)
 
@@ -868,7 +1073,7 @@ async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig): Promise
 
   await runWithConcurrency(markets, FUNDING_RATE_SYMBOL_CONCURRENCY, async market => {
     try {
-      const stats = await syncMarketFundingRates(exchangeConfig, exchange, market, resolveSymbol, now)
+      const stats = await syncMarketFundingRates(exchangeConfig, exchange, market, resolveSymbol, now, syncMode)
 
       marketStats.push(stats)
 
@@ -883,11 +1088,15 @@ async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig): Promise
           batches: stats.batches,
           resumedFromExisting: stats.resumedFromExisting,
           completeToStart: stats.completeToStart,
+          skipReason: stats.skipReason,
         },
         'Funding rate sync complete for symbol'
       )
     } catch (error) {
       if (isSkippableFundingRateError(exchangeConfig.name, error)) {
+        const stats = createMarketSyncStats()
+        stats.skipReason = 'unsupportedMarket'
+        marketStats.push(stats)
         logger.info(
           {
             err: error,
@@ -915,9 +1124,13 @@ async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig): Promise
   const totalFetched = marketStats.reduce((sum, value) => sum + value.fetched, 0)
   const resumedSymbols = marketStats.filter(value => value.resumedFromExisting).length
   const completeSymbols = marketStats.filter(value => value.completeToStart).length
+  const backfillRequiredSymbols = marketStats.filter(value => value.skipReason === 'backfillRequired').length
+  const unsupportedSymbols = marketStats.filter(value => value.skipReason === 'unsupportedMarket').length
+  const unresolvedSymbols = marketStats.filter(value => value.skipReason === 'unresolvedSymbol').length
 
   logger.info(
     {
+      mode: syncMode,
       exchange: exchangeConfig.name,
       markets: markets.length,
       fetched: totalFetched,
@@ -926,6 +1139,9 @@ async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig): Promise
       skippedInvalid: totalSkippedInvalid,
       resumedSymbols,
       completeSymbols,
+      backfillRequiredSymbols,
+      unsupportedSymbols,
+      unresolvedSymbols,
     },
     'Funding rate sync complete for exchange'
   )
@@ -961,13 +1177,13 @@ async function runWithConcurrency<T>(
   await Promise.all(workers)
 }
 
-export async function syncFundingRates(): Promise<void> {
+export async function syncFundingRates(syncMode: FundingRateSyncMode = 'incremental'): Promise<void> {
   await assertClickHouseHealthy()
 
   const results = await Promise.allSettled(
     EXCHANGE_CONFIGS.map(exchangeConfig =>
-      syncExchangeFundingRates(exchangeConfig).catch((error: unknown) => {
-        logger.error({ err: error, exchange: exchangeConfig.name }, 'Funding rate sync failed for exchange')
+      syncExchangeFundingRates(exchangeConfig, syncMode).catch((error: unknown) => {
+        logger.error({ err: error, exchange: exchangeConfig.name, mode: syncMode }, 'Funding rate sync failed for exchange')
         throw error
       })
     )
@@ -980,12 +1196,17 @@ export async function syncFundingRates(): Promise<void> {
   if (failed > 0) {
     const failedExchanges = EXCHANGE_CONFIGS.filter((_, i) => results[i]?.status === 'rejected').map(c => c.name)
 
-    logger.warn({ succeeded, failed, failedExchanges }, 'Funding rate sync completed with some failures')
+    logger.warn({ succeeded, failed, failedExchanges, mode: syncMode }, 'Funding rate sync completed with some failures')
   } else {
     logger.info(
-      { succeeded, exchanges: EXCHANGE_CONFIGS.length },
+      { succeeded, exchanges: EXCHANGE_CONFIGS.length, mode: syncMode },
       'Funding rate sync completed successfully for all exchanges'
     )
+  }
+
+  if (syncMode !== 'backfill') {
+    logger.info({ mode: syncMode }, 'Skipping historical funding rate validation for incremental sync')
+    return
   }
 
   try {
@@ -1040,5 +1261,6 @@ export {
   ensureMarketInExchange,
   getEffectiveRange,
   inferFundingIntervalMs,
+  isFundingEligibleMarket,
   isSkippableFundingRateError,
 }

@@ -1,15 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { toClickHouseDateTime } from '../db/types.js'
 import type { MarketRow } from '../db/types.js'
 
 const {
   mockExchange,
+  fetchFundingRateHistoryMock,
   insertFundingRatesMock,
+  latestFundingRateTimeMock,
   oldestFundingRateTimeMock,
   listFundingRateTimesByExchangeSymbolRangeMock,
 } = vi.hoisted(() => {
+  const fetchFundingRateHistoryMock = vi.fn()
   const insertFundingRatesMock = vi.fn()
+  const latestFundingRateTimeMock = vi.fn()
   const oldestFundingRateTimeMock = vi.fn()
   const listFundingRateTimesByExchangeSymbolRangeMock = vi.fn()
 
@@ -19,43 +23,35 @@ const {
       'BTC/USDT:USDT': {
         id: 'BTCUSDT',
         symbol: 'BTC/USDT:USDT',
+        contract: true,
+        swap: true,
+        linear: true,
         info: { fundingIntervalHours: 8 },
       },
-    },
+    } as Record<string, unknown>,
     markets_by_id: {
       BTCUSDT: {
         id: 'BTCUSDT',
         symbol: 'BTC/USDT:USDT',
+        contract: true,
+        swap: true,
+        linear: true,
         info: { fundingIntervalHours: 8 },
       },
-    },
+    } as Record<string, unknown>,
     market: vi.fn((symbol: string) => {
       return (mockExchange as { markets: Record<string, unknown> }).markets[symbol]
     }),
     has: { fetchFundingRateHistory: true },
     rateLimit: 10,
-    fetchFundingRateHistory: vi.fn(() => {
-      const base = Date.UTC(2025, 0, 1, 0, 0, 0)
-      return [
-        {
-          symbol: 'BTC/USDT:USDT',
-          timestamp: base,
-          fundingRate: 0.0001,
-          info: {},
-        },
-        {
-          symbol: 'BTC/USDT:USDT',
-          timestamp: base + 8 * 60 * 60 * 1000,
-          fundingRate: 0.0002,
-          info: {},
-        },
-      ]
-    }),
+    fetchFundingRateHistory: fetchFundingRateHistoryMock,
   }
 
   return {
     mockExchange,
+    fetchFundingRateHistoryMock,
     insertFundingRatesMock,
+    latestFundingRateTimeMock,
     oldestFundingRateTimeMock,
     listFundingRateTimesByExchangeSymbolRangeMock,
   }
@@ -69,10 +65,11 @@ vi.mock('../config/index.js', () => ({
   FUNDING_RATE_BACKOFF_MAX_MS: 10,
   FUNDING_RATE_MAX_RETRIES: 1,
   FUNDING_RATE_PAGE_SIZE: 100,
+  FUNDING_RATE_SYNC_MODE: 'incremental',
 }))
 
 vi.mock('../exchanges/index.js', () => ({
-  EXCHANGE_CONFIGS: [{ name: 'binance', ccxtId: 'binanceusdm' }],
+  EXCHANGE_CONFIGS: [{ name: 'gateio', ccxtId: 'gateio' }],
 }))
 
 vi.mock('../exchanges/ccxt-client.js', () => ({
@@ -87,7 +84,7 @@ vi.mock('../db/queries/markets.js', () => ({
   listMarketsByExchange: vi.fn(() =>
     Promise.resolve([
       {
-        exchange: 'binance',
+        exchange: 'gateio',
         symbol: 'BTCUSDT',
         exchange_symbol: 'BTCUSDT',
         type: 'perpetual',
@@ -100,6 +97,7 @@ vi.mock('../db/queries/markets.js', () => ({
 }))
 
 vi.mock('../db/queries/fundingRates.js', () => ({
+  getLatestFundingRateTime: latestFundingRateTimeMock,
   getOldestFundingRateTime: oldestFundingRateTimeMock,
   listFundingRateCompletenessGaps: vi.fn(() => Promise.resolve([])),
   listFundingRateTimesByExchangeSymbolRange: listFundingRateTimesByExchangeSymbolRangeMock,
@@ -117,6 +115,54 @@ vi.mock('../db/queries/fundingRates.js', () => ({
 }))
 
 describe('funding rate sync', () => {
+  beforeEach(() => {
+    insertFundingRatesMock.mockClear()
+    latestFundingRateTimeMock.mockReset()
+    oldestFundingRateTimeMock.mockReset()
+    listFundingRateTimesByExchangeSymbolRangeMock.mockReset()
+    fetchFundingRateHistoryMock.mockReset()
+    mockExchange.markets = {
+      'BTC/USDT:USDT': {
+        id: 'BTCUSDT',
+        symbol: 'BTC/USDT:USDT',
+        contract: true,
+        swap: true,
+        linear: true,
+        info: { fundingIntervalHours: 8 },
+      },
+    }
+    mockExchange.markets_by_id = {
+      BTCUSDT: {
+        id: 'BTCUSDT',
+        symbol: 'BTC/USDT:USDT',
+        contract: true,
+        swap: true,
+        linear: true,
+        info: { fundingIntervalHours: 8 },
+      },
+    }
+    fetchFundingRateHistoryMock.mockResolvedValue([
+      {
+        symbol: 'BTC/USDT:USDT',
+        timestamp: Date.UTC(2025, 0, 1, 0, 0, 0),
+        fundingRate: 0.0001,
+        info: {},
+      },
+      {
+        symbol: 'BTC/USDT:USDT',
+        timestamp: Date.UTC(2025, 0, 1, 8, 0, 0),
+        fundingRate: 0.0002,
+        info: {},
+      },
+      {
+        symbol: 'BTC/USDT:USDT',
+        timestamp: Date.UTC(2025, 0, 1, 16, 0, 0),
+        fundingRate: 0.0003,
+        info: {},
+      },
+    ])
+  })
+
   it('builds okx backward request using after cursor', async () => {
     const { buildBackwardFetchRequest } = await import('./funding-rates-sync.js')
 
@@ -225,29 +271,59 @@ describe('funding rate sync', () => {
     })
   })
 
-  it('resumes from oldest stored timestamp inside range', async () => {
+  it('resumes backfill from oldest stored timestamp inside range', async () => {
     oldestFundingRateTimeMock.mockResolvedValueOnce(toClickHouseDateTime(new Date(Date.UTC(2025, 0, 1, 8, 0, 0))))
     listFundingRateTimesByExchangeSymbolRangeMock.mockResolvedValueOnce([])
 
     const { syncFundingRates } = await import('./funding-rates-sync.js')
 
-    await syncFundingRates()
+    await syncFundingRates('backfill')
 
     expect(insertFundingRatesMock).toHaveBeenCalledTimes(1)
     const firstCall = insertFundingRatesMock.mock.calls[0] as unknown[]
     const rows = firstCall[0] as { exchange: string; symbol: string; exchange_symbol: string; funding_rate: string }[]
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
-      exchange: 'binance',
+      exchange: 'gateio',
       symbol: 'BTCUSDT',
       exchange_symbol: 'BTCUSDT',
       funding_rate: '0.00010000',
     })
   })
 
-  it('inserts only missing funding rates', async () => {
-    insertFundingRatesMock.mockClear()
+  it('inserts only missing funding rates during backfill', async () => {
     oldestFundingRateTimeMock.mockResolvedValueOnce(toClickHouseDateTime(new Date(Date.UTC(2024, 11, 31, 16, 0, 0))))
+    listFundingRateTimesByExchangeSymbolRangeMock.mockResolvedValueOnce([])
+
+    const { syncFundingRates } = await import('./funding-rates-sync.js')
+
+    await syncFundingRates('backfill')
+
+    expect(insertFundingRatesMock).toHaveBeenCalledTimes(1)
+    const firstCall = insertFundingRatesMock.mock.calls[0] as unknown[]
+    const rows = firstCall[0] as { exchange: string; symbol: string; exchange_symbol: string; funding_rate: string }[]
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toMatchObject({
+      exchange: 'gateio',
+      symbol: 'BTCUSDT',
+      exchange_symbol: 'BTCUSDT',
+      funding_rate: '0.00010000',
+    })
+  })
+
+  it('skips incremental sync until a symbol is backfilled', async () => {
+    latestFundingRateTimeMock.mockResolvedValueOnce(null)
+
+    const { syncFundingRates } = await import('./funding-rates-sync.js')
+
+    await syncFundingRates()
+
+    expect(fetchFundingRateHistoryMock).not.toHaveBeenCalled()
+    expect(insertFundingRatesMock).not.toHaveBeenCalled()
+  })
+
+  it('fetches only newer funding windows during incremental sync', async () => {
+    latestFundingRateTimeMock.mockResolvedValueOnce(toClickHouseDateTime(new Date(Date.UTC(2025, 0, 1, 8, 0, 0))))
     listFundingRateTimesByExchangeSymbolRangeMock.mockResolvedValueOnce([])
 
     const { syncFundingRates } = await import('./funding-rates-sync.js')
@@ -256,13 +332,33 @@ describe('funding rate sync', () => {
 
     expect(insertFundingRatesMock).toHaveBeenCalledTimes(1)
     const firstCall = insertFundingRatesMock.mock.calls[0] as unknown[]
-    const rows = firstCall[0] as { exchange: string; symbol: string; exchange_symbol: string; funding_rate: string }[]
-    expect(rows).toHaveLength(2)
+    const rows = firstCall[0] as { funding_time: string; funding_rate: string }[]
+    expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
-      exchange: 'binance',
-      symbol: 'BTCUSDT',
-      exchange_symbol: 'BTCUSDT',
-      funding_rate: '0.00010000',
+      funding_time: toClickHouseDateTime(new Date(Date.UTC(2025, 0, 1, 16, 0, 0))),
+      funding_rate: '0.00030000',
+    })
+  })
+
+  it('continues incremental sync for symbols with stored rows after the market drops out of loadMarkets', async () => {
+    mockExchange.markets = {}
+    mockExchange.markets_by_id = {}
+    latestFundingRateTimeMock.mockResolvedValueOnce(toClickHouseDateTime(new Date(Date.UTC(2025, 0, 1, 8, 0, 0))))
+    listFundingRateTimesByExchangeSymbolRangeMock.mockResolvedValueOnce([])
+
+    const { syncFundingRates } = await import('./funding-rates-sync.js')
+
+    await syncFundingRates()
+
+    expect(fetchFundingRateHistoryMock).toHaveBeenCalledTimes(1)
+    expect(fetchFundingRateHistoryMock.mock.calls[0]?.[0]).toBe('BTC/USDT:USDT')
+    expect(insertFundingRatesMock).toHaveBeenCalledTimes(1)
+    expect(mockExchange.markets['BTC/USDT:USDT']).toMatchObject({
+      id: 'BTCUSDT',
+      symbol: 'BTC/USDT:USDT',
+      contract: true,
+      swap: true,
+      linear: true,
     })
   })
 

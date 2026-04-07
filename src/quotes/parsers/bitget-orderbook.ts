@@ -31,14 +31,26 @@ function toTimestampMs(value: unknown): number | null {
   return parsed < 1_000_000_000_000 ? Math.round(parsed * 1000) : Math.round(parsed)
 }
 
+export function parseBitgetPrice(value: unknown): number | null {
+  const parsed = toFiniteNumber(toNumericString(value))
+  if (parsed === null || parsed <= 0) {
+    return null
+  }
+
+  return parsed
+}
+
 function rowToEvent(row: BitgetSheetRow): QuoteEvent | null {
   const timestampMs = toTimestampMs(row.timestamp)
   if (timestampMs === null) {
     return null
   }
 
-  const bid = toFiniteNumber(toNumericString(row.bid_price))
-  const ask = toFiniteNumber(toNumericString(row.ask_price))
+  const bid = parseBitgetPrice(row.bid_price)
+  const ask = parseBitgetPrice(row.ask_price)
+  if (bid === null && ask === null) {
+    return null
+  }
 
   return {
     timestampMs,

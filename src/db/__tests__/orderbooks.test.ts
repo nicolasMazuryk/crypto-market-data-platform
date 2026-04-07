@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 
 import { config } from '../../config.js'
 import { closeClickHouseClient, getClickHouseClient } from '../client.js'
+import { createClickHouseFixtureCleanupRegistry } from '../fixtureCleanup.js'
 import { pingClickHouse } from '../health.js'
 import {
   countOrderbooks,
@@ -38,6 +39,13 @@ const expectedColumns: ColumnDef[] = [
   { name: 'confidence_score', type: 'LowCardinality(String)' },
   { name: 'missing_reason', type: 'Nullable(String)' },
 ]
+
+const cleanupRegistry = createClickHouseFixtureCleanupRegistry()
+
+function trackOrderbookExchange(exchange: string): string {
+  cleanupRegistry.track('orderbooks', exchange)
+  return exchange
+}
 
 async function fetchColumns(table: string): Promise<ColumnDef[]> {
   const client = getClickHouseClient()
@@ -117,8 +125,16 @@ describe('orderbooks table', () => {
     })
   })
 
+  afterEach(async () => {
+    await cleanupRegistry.cleanup()
+  })
+
   afterAll(async () => {
-    await closeClickHouseClient()
+    try {
+      await cleanupRegistry.cleanup()
+    } finally {
+      await closeClickHouseClient()
+    }
   })
 
   it('has expected schema', async () => {
@@ -129,7 +145,7 @@ describe('orderbooks table', () => {
 
   it('inserts and queries orderbook rows by time range', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `ob_${runId}`
+    const exchange = trackOrderbookExchange(`ob_${runId}`)
     const symbol = `SYM_${runId}`
 
     const t1 = new Date(Date.UTC(2026, 0, 1, 0, 0, 0))
@@ -151,7 +167,7 @@ describe('orderbooks table', () => {
 
   it('deletes rows by exchange/symbol/date', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `del_${runId}`
+    const exchange = trackOrderbookExchange(`del_${runId}`)
     const symbol = `SYM_${runId}`
 
     await insertOrderbooks([
@@ -167,7 +183,7 @@ describe('orderbooks table', () => {
 
   it('lists distinct exchange/symbol pairs', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `pair_${runId}`
+    const exchange = trackOrderbookExchange(`pair_${runId}`)
     const symbol = `SYM_${runId}`
 
     await insertOrderbooks([baseRow(exchange, symbol, new Date(Date.UTC(2026, 0, 3, 0, 0, 0)))])
@@ -178,7 +194,7 @@ describe('orderbooks table', () => {
 
   it('counts rows for an exchange/symbol', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `count_${runId}`
+    const exchange = trackOrderbookExchange(`count_${runId}`)
     const symbol = `SYM_${runId}`
 
     await insertOrderbooks([

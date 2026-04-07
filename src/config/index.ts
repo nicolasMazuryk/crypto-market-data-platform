@@ -1,5 +1,17 @@
-import { parseDateEnv, parseIntEnv, requireEnv } from './env.js'
+import { optionalEnv, parseDateEnv, parseIntEnv, requireEnv } from './env.js'
 import type { ExchangeConfig } from '../exchanges/types.js'
+
+export type FundingRateSyncMode = 'incremental' | 'backfill'
+
+function parseFundingRateSyncMode(): FundingRateSyncMode {
+  const value = optionalEnv('FUNDING_RATE_SYNC_MODE') ?? 'incremental'
+
+  if (value === 'incremental' || value === 'backfill') {
+    return value
+  }
+
+  throw new Error(`Invalid FUNDING_RATE_SYNC_MODE: ${value}`)
+}
 
 const dataPeriodStart = parseDateEnv('DATA_PERIOD_START', { required: true })
 if (!dataPeriodStart) {
@@ -14,6 +26,7 @@ export const FUNDING_RATE_BACKOFF_BASE_MS = parseIntEnv('FUNDING_RATE_BACKOFF_BA
 export const FUNDING_RATE_BACKOFF_MAX_MS = parseIntEnv('FUNDING_RATE_BACKOFF_MAX_MS')
 export const FUNDING_RATE_PAGE_SIZE = parseIntEnv('FUNDING_RATE_PAGE_SIZE')
 export const FUNDING_RATE_SYMBOL_CONCURRENCY = parseIntEnv('FUNDING_RATE_SYMBOL_CONCURRENCY')
+export const FUNDING_RATE_SYNC_MODE = parseFundingRateSyncMode()
 
 export const EXCHANGE_CONFIGS: ExchangeConfig[] = [
   { name: 'binance', ccxtId: 'binanceusdm' },

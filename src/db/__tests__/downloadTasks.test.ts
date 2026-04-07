@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { config } from '../../config.js'
 import { closeClickHouseClient, getClickHouseClient } from '../client.js'
+import { createClickHouseFixtureCleanupRegistry } from '../fixtureCleanup.js'
 import { pingClickHouse } from '../health.js'
 import {
   countTasksByStatus,
@@ -34,6 +35,13 @@ const expectedColumns: ColumnDef[] = [
   { name: 'created_at', type: 'DateTime' },
   { name: 'updated_at', type: 'DateTime' },
 ]
+
+const cleanupRegistry = createClickHouseFixtureCleanupRegistry()
+
+function trackDownloadTaskExchange(exchange: string): string {
+  cleanupRegistry.track('download_tasks', exchange)
+  return exchange
+}
 
 async function fetchColumns(table: string): Promise<ColumnDef[]> {
   const client = getClickHouseClient()
@@ -86,8 +94,16 @@ describe('download_tasks table', () => {
     })
   })
 
+  afterEach(async () => {
+    await cleanupRegistry.cleanup()
+  })
+
   afterAll(async () => {
-    await closeClickHouseClient()
+    try {
+      await cleanupRegistry.cleanup()
+    } finally {
+      await closeClickHouseClient()
+    }
   })
 
   it('has expected schema', async () => {
@@ -98,7 +114,7 @@ describe('download_tasks table', () => {
 
   it('inserts and lists pending tasks', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `task_${runId}`
+    const exchange = trackDownloadTaskExchange(`task_${runId}`)
     const row: DownloadTaskRow = {
       exchange,
       symbol: `SYM_${runId}`,
@@ -120,7 +136,7 @@ describe('download_tasks table', () => {
 
   it('updates task status and lists failed tasks', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `status_${runId}`
+    const exchange = trackDownloadTaskExchange(`status_${runId}`)
     const symbol = `SYM_${runId}`
     const date = '2026-01-02'
 
@@ -152,7 +168,7 @@ describe('download_tasks table', () => {
 
   it('forces strictly increasing updated_at for rapid status transitions', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `monotonic_${runId}`
+    const exchange = trackDownloadTaskExchange(`monotonic_${runId}`)
     const symbol = `SYM_${runId}`
     const date = '2026-01-05'
     const fixedNow = Date.parse('2026-01-05T12:00:00.000Z')
@@ -203,7 +219,7 @@ describe('download_tasks table', () => {
 
   it('deduplicates duplicate rows in a single insert batch', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `dedup_${runId}`
+    const exchange = trackDownloadTaskExchange(`dedup_${runId}`)
     const row: DownloadTaskRow = {
       exchange,
       symbol: `SYM_${runId}`,
@@ -225,14 +241,23 @@ describe('download_tasks table', () => {
 
   it('hash partitioning: non-overlapping, complete coverage', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchanges = ['ex1', 'ex2', 'ex3', 'ex4'].map(e => `${e}_${runId}`)
+    const exchanges = ['ex1', 'ex2', 'ex3', 'ex4'].map(e => trackDownloadTaskExchange(`${e}_${runId}`))
     const symbols = ['SYM_A', 'SYM_B', 'SYM_C', 'SYM_D', 'SYM_E']
     const date = '2026-03-01'
 
     const rows: DownloadTaskRow[] = []
     for (const exchange of exchanges) {
       for (const symbol of symbols) {
-        rows.push({ exchange, symbol, date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null })
+        rows.push({
+          exchange,
+          symbol,
+          date,
+          status: 'pending',
+          error_message: null,
+          file_size_bytes: null,
+          rows_written: null,
+          quality_score: null,
+        })
       }
     }
     await insertDownloadTasks(rows)
@@ -260,10 +285,16 @@ describe('download_tasks table', () => {
 
   it('hash partitioning: deterministic across calls', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `det_${runId}`
+    const exchange = trackDownloadTaskExchange(`det_${runId}`)
     const rows: DownloadTaskRow[] = ['A', 'B', 'C', 'D', 'E'].map(s => ({
-      exchange, symbol: `SYM_${s}`, date: '2026-03-02', status: 'pending' as const,
-      error_message: null, file_size_bytes: null, rows_written: null, quality_score: null,
+      exchange,
+      symbol: `SYM_${s}`,
+      date: '2026-03-02',
+      status: 'pending' as const,
+      error_message: null,
+      file_size_bytes: null,
+      rows_written: null,
+      quality_score: null,
     }))
     await insertDownloadTasks(rows)
 
@@ -274,10 +305,16 @@ describe('download_tasks table', () => {
 
   it('hash partitioning: single worker gets all tasks', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `single_${runId}`
+    const exchange = trackDownloadTaskExchange(`single_${runId}`)
     const rows: DownloadTaskRow[] = ['A', 'B', 'C', 'D', 'E'].map(s => ({
-      exchange, symbol: `SYM_${s}`, date: '2026-03-03', status: 'pending' as const,
-      error_message: null, file_size_bytes: null, rows_written: null, quality_score: null,
+      exchange,
+      symbol: `SYM_${s}`,
+      date: '2026-03-03',
+      status: 'pending' as const,
+      error_message: null,
+      file_size_bytes: null,
+      rows_written: null,
+      quality_score: null,
     }))
     await insertDownloadTasks(rows)
 
@@ -288,15 +325,60 @@ describe('download_tasks table', () => {
 
   it('hash partitioning: only returns pending tasks, not completed/failed', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `status_filter_${runId}`
+    const exchange = trackDownloadTaskExchange(`status_filter_${runId}`)
     const date = '2026-03-04'
 
     await insertDownloadTasks([
-      { exchange, symbol: 'SYM_P1', date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
-      { exchange, symbol: 'SYM_P2', date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
-      { exchange, symbol: 'SYM_P3', date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
-      { exchange, symbol: 'SYM_C', date, status: 'completed', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
-      { exchange, symbol: 'SYM_F', date, status: 'failed', error_message: 'x', file_size_bytes: null, rows_written: null, quality_score: null },
+      {
+        exchange,
+        symbol: 'SYM_P1',
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange,
+        symbol: 'SYM_P2',
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange,
+        symbol: 'SYM_P3',
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange,
+        symbol: 'SYM_C',
+        date,
+        status: 'completed',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange,
+        symbol: 'SYM_F',
+        date,
+        status: 'failed',
+        error_message: 'x',
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
     ])
 
     const [p0, p1] = await Promise.all([
@@ -311,20 +393,44 @@ describe('download_tasks table', () => {
 
   it('hash partitioning: works with exchange filter', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exA = `exchA_${runId}`
-    const exB = `exchB_${runId}`
+    const exA = trackDownloadTaskExchange(`exchA_${runId}`)
+    const exB = trackDownloadTaskExchange(`exchB_${runId}`)
     const date = '2026-03-05'
 
     await insertDownloadTasks([
-      { exchange: exA, symbol: 'SYM_1', date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
-      { exchange: exA, symbol: 'SYM_2', date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
-      { exchange: exB, symbol: 'SYM_3', date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
+      {
+        exchange: exA,
+        symbol: 'SYM_1',
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exA,
+        symbol: 'SYM_2',
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exB,
+        symbol: 'SYM_3',
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
     ])
 
-    const [p0, p1] = await Promise.all([
-      listPendingTasks(exA, undefined, 0, 2),
-      listPendingTasks(exA, undefined, 1, 2),
-    ])
+    const [p0, p1] = await Promise.all([listPendingTasks(exA, undefined, 0, 2), listPendingTasks(exA, undefined, 1, 2)])
 
     const all = [...p0, ...p1]
     expect(all.every(t => t.exchange === exA)).toBe(true)
@@ -333,13 +439,19 @@ describe('download_tasks table', () => {
 
   it('hash partitioning: works with limit', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `limit_${runId}`
+    const exchange = trackDownloadTaskExchange(`limit_${runId}`)
     const date = '2026-03-06'
 
     await insertDownloadTasks(
       ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].map(s => ({
-        exchange, symbol: `SYM_${s}`, date, status: 'pending' as const,
-        error_message: null, file_size_bytes: null, rows_written: null, quality_score: null,
+        exchange,
+        symbol: `SYM_${s}`,
+        date,
+        status: 'pending' as const,
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
       }))
     )
 
@@ -350,16 +462,25 @@ describe('download_tasks table', () => {
 
   it('stale recovery: resets downloading tasks older than threshold', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `stale_reset_${runId}`
+    const exchange = trackDownloadTaskExchange(`stale_reset_${runId}`)
     const symbol = `SYM_${runId}`
     const date = '2026-03-07'
     const twoHoursAgo = toClickHouseDateTime(new Date(Date.now() - 7_200_000))
 
-    await insertDownloadTasks([{
-      exchange, symbol, date, status: 'downloading',
-      error_message: null, file_size_bytes: null, rows_written: null, quality_score: null,
-      created_at: twoHoursAgo, updated_at: twoHoursAgo,
-    }])
+    await insertDownloadTasks([
+      {
+        exchange,
+        symbol,
+        date,
+        status: 'downloading',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+        created_at: twoHoursAgo,
+        updated_at: twoHoursAgo,
+      },
+    ])
 
     const count = await resetStaleTasks(60)
     expect(count).toBeGreaterThan(0)
@@ -373,11 +494,22 @@ describe('download_tasks table', () => {
 
   it('stale recovery: does NOT reset recent downloading tasks', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `stale_keep_${runId}`
+    const exchange = trackDownloadTaskExchange(`stale_keep_${runId}`)
     const symbol = `SYM_${runId}`
     const date = '2026-03-08'
 
-    await insertDownloadTasks([{ exchange, symbol, date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null }])
+    await insertDownloadTasks([
+      {
+        exchange,
+        symbol,
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+    ])
     await updateTaskStatus(exchange, symbol, date, 'downloading')
 
     await resetStaleTasks(60)
@@ -394,13 +526,40 @@ describe('download_tasks table', () => {
 
   it('stale recovery: does NOT touch completed/failed/pending tasks', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `stale_skip_${runId}`
+    const exchange = trackDownloadTaskExchange(`stale_skip_${runId}`)
     const date = '2026-03-09'
 
     await insertDownloadTasks([
-      { exchange, symbol: 'SYM_COMPLETED', date, status: 'completed', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
-      { exchange, symbol: 'SYM_FAILED', date, status: 'failed', error_message: 'err', file_size_bytes: null, rows_written: null, quality_score: null },
-      { exchange, symbol: 'SYM_PENDING', date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
+      {
+        exchange,
+        symbol: 'SYM_COMPLETED',
+        date,
+        status: 'completed',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange,
+        symbol: 'SYM_FAILED',
+        date,
+        status: 'failed',
+        error_message: 'err',
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange,
+        symbol: 'SYM_PENDING',
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
     ])
 
     await resetStaleTasks(0)
@@ -420,14 +579,45 @@ describe('download_tasks table', () => {
 
   it('stale recovery: returns correct count', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `stale_count_${runId}`
+    const exchange = trackDownloadTaskExchange(`stale_count_${runId}`)
     const date = '2026-03-10'
     const twoHoursAgo = toClickHouseDateTime(new Date(Date.now() - 7_200_000))
 
     await insertDownloadTasks([
-      { exchange, symbol: 'SYM_D1', date, status: 'downloading', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null, created_at: twoHoursAgo, updated_at: twoHoursAgo },
-      { exchange, symbol: 'SYM_D2', date, status: 'processing', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null, created_at: twoHoursAgo, updated_at: twoHoursAgo },
-      { exchange, symbol: 'SYM_P1', date, status: 'pending', error_message: null, file_size_bytes: null, rows_written: null, quality_score: null },
+      {
+        exchange,
+        symbol: 'SYM_D1',
+        date,
+        status: 'downloading',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+        created_at: twoHoursAgo,
+        updated_at: twoHoursAgo,
+      },
+      {
+        exchange,
+        symbol: 'SYM_D2',
+        date,
+        status: 'processing',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+        created_at: twoHoursAgo,
+        updated_at: twoHoursAgo,
+      },
+      {
+        exchange,
+        symbol: 'SYM_P1',
+        date,
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
     ])
 
     const count = await resetStaleTasks(60)
@@ -436,7 +626,7 @@ describe('download_tasks table', () => {
 
   it('counts tasks grouped by status', async () => {
     const runId = randomUUID().slice(0, 8)
-    const exchange = `count_${runId}`
+    const exchange = trackDownloadTaskExchange(`count_${runId}`)
 
     await insertDownloadTasks([
       {

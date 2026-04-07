@@ -43,6 +43,17 @@ export async function insertMarkets(rows: MarketRow[]): Promise<void> {
   })
 }
 
+export async function deleteMarketsByExchange(exchange: string): Promise<void> {
+  const client = getClickHouseClient()
+  await client.command({
+    query: 'ALTER TABLE markets DELETE WHERE exchange = {exchange: String}',
+    query_params: { exchange },
+    clickhouse_settings: {
+      mutations_sync: '1',
+    },
+  })
+}
+
 export async function listMarketsByExchange(exchange: string, useFinal = false): Promise<MarketRow[]> {
   const client = getClickHouseClient()
   const finalClause = useFinal ? ' FINAL' : ''

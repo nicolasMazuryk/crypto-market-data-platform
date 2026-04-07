@@ -62,6 +62,17 @@ export async function insertFundingRates(rows: FundingRateRow[]): Promise<void> 
   })
 }
 
+export async function deleteFundingRatesByExchange(exchange: string): Promise<void> {
+  const client = getClickHouseClient()
+  await client.command({
+    query: 'ALTER TABLE funding_rates DELETE WHERE exchange = {exchange: String}',
+    query_params: { exchange },
+    clickhouse_settings: {
+      mutations_sync: '1',
+    },
+  })
+}
+
 export async function listFundingRateTimesByExchangeSymbolRange(
   exchange: string,
   symbol: string,
@@ -113,6 +124,19 @@ export async function getOldestFundingRateTime(exchange: string, symbol: string)
 
   const rows = await result.json<{ oldest_time: string | null }>()
   return rows[0]?.oldest_time ?? null
+}
+
+export async function getLatestFundingRateTime(exchange: string, symbol: string): Promise<string | null> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query:
+      'SELECT max(funding_time) as latest_time FROM funding_rates WHERE exchange = {exchange: String} AND symbol = {symbol: String}',
+    query_params: { exchange, symbol },
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{ latest_time: string | null }>()
+  return rows[0]?.latest_time ?? null
 }
 
 export async function listFundingRateCompletenessGaps(): Promise<FundingRateCompletenessGap[]> {

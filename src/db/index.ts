@@ -1,4 +1,5 @@
 export * from './client.js'
+export * from './fixtureCleanup.js'
 export * from './types.js'
 export * from './health.js'
 export * as marketQueries from './queries/markets.js'

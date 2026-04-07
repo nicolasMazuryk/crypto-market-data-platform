@@ -4,7 +4,7 @@
 
 Single Hetzner CPX62 server (16 vCPU / 32 GB) running:
 - **ClickHouse** — persistent Docker container, data on attached Hetzner volume (`/data`)
-- **Workers** — one-shot Docker containers; market sync and funding rates run on systemd timers; quote sync is started manually via a coordinator service
+- **Workers** — one-shot Docker containers; market sync and incremental funding sync run on systemd timers; quote sync and funding backfill are started manually
 - **Monitoring** — health check script on a 3-minute systemd timer
 
 All services run on one server. ClickHouse is only accessible via localhost (SSH tunnel for remote access).
@@ -81,7 +81,7 @@ Shows running Docker containers and active systemd timers.
 ```bash
 npm run remote:logs:markets    # Market sync logs
 npm run remote:logs:funding    # Funding rates logs
-npm run remote:logs:quotes     # Legacy single-worker quote sync logs
+npm run remote:logs:quotes     # Quote sync coordinator logs
 ```
 
 Or SSH in and use journalctl directly:
@@ -90,6 +90,7 @@ Or SSH in and use journalctl directly:
 sudo journalctl -u worker-market-sync -n 100 --no-pager
 sudo journalctl -u worker-funding-rates -n 100 --no-pager
 sudo journalctl -u worker-quote-sync-coordinator -n 100 --no-pager
+sudo journalctl -u worker-funding-rates-backfill -n 100 --no-pager
 ```
 
 ## Run Quote Sync (Coordinator, Recommended)
@@ -100,6 +101,14 @@ npm run remote:quote-sync
 
 This starts `worker-quote-sync-coordinator` and streams its logs. The coordinator launches multiple quote workers in parallel.
 
+## Run Funding Backfill (Manual)
+
+```bash
+npm run remote:funding-backfill
+```
+
+This starts `worker-funding-rates-backfill`, which runs the historical backfill path. The hourly `worker-funding-rates` timer stays on incremental mode only.
+
 ## Manually Trigger a Worker/Job
 
 ```bash
@@ -107,11 +116,10 @@ npm run remote:ssh
 # Then on the server:
 sudo systemctl start worker-market-sync
 sudo systemctl start worker-funding-rates
+sudo systemctl start worker-funding-rates-backfill
 sudo systemctl start worker-quote-sync-coordinator
 sudo systemctl start worker-migrate
 ```
-
-Legacy note: `worker-quote-sync` is a single-worker unit kept for backward compatibility and should not be used for regular quote runs.
 
 ## Check Timer Status
 

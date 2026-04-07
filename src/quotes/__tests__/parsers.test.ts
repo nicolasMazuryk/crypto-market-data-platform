@@ -5,6 +5,7 @@ import { gzipSync } from 'node:zlib'
 
 import { describe, expect, it } from 'vitest'
 
+import { parseBitgetPrice } from '../parsers/bitget-orderbook.js'
 import { createTradeQuoteEvent, splitCsvLine } from '../parsers/csv.js'
 import { gateOrderbookParser } from '../parsers/gate-orderbook.js'
 import { getParser } from '../parsers/index.js'
@@ -53,6 +54,13 @@ describe('parser utilities', () => {
     expect(getParser('bybit-orderbook').confidenceScore).toBe('high')
     expect(getParser('binance-trades').sourceType).toBe('trades')
     expect(getParser('binance-trades').confidenceScore).toBe('low')
+  })
+
+  it('treats Bitget sentinel and non-positive prices as missing', () => {
+    expect(parseBitgetPrice('-999999')).toBeNull()
+    expect(parseBitgetPrice(0)).toBeNull()
+    expect(parseBitgetPrice('-1')).toBeNull()
+    expect(parseBitgetPrice('0.5673')).toBe(0.5673)
   })
 
   it('handles gate orderbook make/take deltas after the initial set', async () => {

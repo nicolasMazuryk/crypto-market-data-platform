@@ -36,11 +36,12 @@
     "remote:status": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'docker ps && systemctl list-timers worker-*'",
     "remote:logs:markets": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo journalctl -u worker-market-sync -f'",
     "remote:logs:funding": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo journalctl -u worker-funding-rates -f'",
-    "remote:logs:quotes": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo journalctl -u worker-quote-sync -f'",
+    "remote:logs:quotes": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo journalctl -u worker-quote-sync-coordinator -f'",
     "logs:tail": "tail -f logs/combined.log",
     "logs:errors": "tail -f logs/error.log",
     "logs:clean": "rm -rf logs/*.log",
-    "remote:quote-sync": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo systemctl start worker-quote-sync-coordinator && sudo journalctl -u worker-quote-sync-coordinator --no-pager -f'"
+    "remote:quote-sync": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo systemctl start worker-quote-sync-coordinator && sudo journalctl -u worker-quote-sync-coordinator --no-pager -f'",
+    "remote:funding-backfill": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo systemctl start worker-funding-rates-backfill && sudo journalctl -u worker-funding-rates-backfill --no-pager -f'"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

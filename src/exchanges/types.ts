@@ -21,6 +21,9 @@ export interface CcxtMarket {
   symbol: string
   info?: Record<string, unknown>
   active?: boolean
+  contract?: boolean
+  future?: boolean
+  inverse?: boolean
   swap?: boolean
   linear?: boolean
   settle?: string

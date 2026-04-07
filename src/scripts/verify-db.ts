@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 import { config } from '../config.js'
 import { logger } from '../logger.js'
 import { closeClickHouseClient, getClickHouseClient } from '../db/client.js'
+import { createClickHouseFixtureCleanupRegistry } from '../db/fixtureCleanup.js'
 import { assertClickHouseHealthy } from '../db/health.js'
 import {
   getOldestFundingRateTime,
@@ -42,6 +43,8 @@ const expectedFundingRateColumns: ColumnDef[] = [
   { name: 'mark_price', type: 'Nullable(Decimal(18, 8))' },
   { name: 'created_at', type: 'DateTime' },
 ]
+
+const cleanupRegistry = createClickHouseFixtureCleanupRegistry()
 
 function logStep(message: string): void {
   logger.info({ step: message }, 'ClickHouse verify step')
@@ -134,6 +137,8 @@ async function verifyMarketQueries(): Promise<void> {
   const now = new Date()
   const earlier = new Date(now.getTime() - 60_000)
 
+  cleanupRegistry.track('markets', exchange)
+
   const firstRow: MarketRow = {
     exchange,
     symbol,
@@ -170,6 +175,8 @@ async function verifyFundingRateQueries(): Promise<void> {
   const runId = randomUUID().slice(0, 8)
   const exchange = `verify_${runId}`
   const symbol = `VER_${runId}`
+
+  cleanupRegistry.track('funding_rates', exchange)
 
   const first = new Date(Date.UTC(2025, 0, 15, 0, 0, 0))
   const second = new Date(Date.UTC(2025, 0, 15, 8, 0, 0))
@@ -247,6 +254,13 @@ try {
   logger.error({ err: error }, 'ClickHouse verification failed')
   process.exitCode = 1
 } finally {
+  try {
+    await cleanupRegistry.cleanup()
+  } catch (error) {
+    logger.error({ err: error }, 'ClickHouse fixture cleanup failed')
+    process.exitCode = 1
+  }
+
   try {
     await closeClickHouseClient()
   } catch (error) {
