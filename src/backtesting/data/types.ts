@@ -7,7 +7,7 @@ export interface FundingEvent {
   funding_rate: number
 }
 
-export type SkipReason = 'EMPTY_WINDOW' | 'NULL_PRICES' | 'MISSING_SECONDS' | 'PRICE_ANOMALY'
+export type SkipReason = 'EMPTY_WINDOW' | 'NULL_PRICES' | 'MISSING_SECONDS' | 'PRICE_ANOMALY' | 'STALE_DATA'
 
 export class OHLCWindow {
   private readonly rows: OrderbookRow[]

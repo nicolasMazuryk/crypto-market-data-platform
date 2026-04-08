@@ -33,6 +33,17 @@ export function validateEventData(
     }
   }
 
+  // Check for stale data: consecutive rows with gaps > max_gap_seconds
+  for (let i = 1; i < rows.length; i++) {
+    const prevRow = rows[i - 1]
+    const currRow = rows[i]
+    if (!prevRow || !currRow) break
+    if ((new Date(currRow.ts).getTime() - new Date(prevRow.ts).getTime()) / 1000 > config.max_gap_seconds) {
+      skipReasons.push('STALE_DATA')
+      break
+    }
+  }
+
   // Check for price anomaly across the full window
   let minPrice = Infinity
   let maxPrice = -Infinity

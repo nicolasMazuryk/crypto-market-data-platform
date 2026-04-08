@@ -36,7 +36,7 @@ export async function queryFundingEvents(
     exchange: r.exchange,
     symbol: r.symbol,
     funding_time: new Date(r.funding_time.includes('T') ? r.funding_time : `${r.funding_time.replace(' ', 'T')}Z`),
-    funding_rate: Number(r.funding_rate),
+    funding_rate: r.funding_rate,
   }))
 }
 
@@ -79,7 +79,7 @@ export async function queryCrossExchangeFundingEvents(
   const rows = await result.json<{ funding_time: string; funding_rate_a: number; funding_rate_b: number }>()
   return rows.map(r => ({
     funding_time: new Date(r.funding_time.includes('T') ? r.funding_time : `${r.funding_time.replace(' ', 'T')}Z`),
-    funding_rate_a: Number(r.funding_rate_a),
-    funding_rate_b: Number(r.funding_rate_b),
+    funding_rate_a: r.funding_rate_a,
+    funding_rate_b: r.funding_rate_b,
   }))
 }
