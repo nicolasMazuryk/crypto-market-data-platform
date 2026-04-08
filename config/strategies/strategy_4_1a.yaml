@@ -1,0 +1,13 @@
+# Strategy 4.1a: Negative Funding Ladder LONG - No Funding Applied
+# Ladder of limit buys to catch the drop, funding NOT received
+
+strategy_id: "strategy_4_1a"
+direction: "long"
+funding_threshold: 0.006      # 0.6%
+entry_offset_seconds: 5       # Setup at T_funding - 5s
+ladder_count: 5
+ladder_top_mult: 0.4
+ladder_bottom_mult: 1.5
+take_profit: 0.002            # 0.2% above P_avg
+deadline_seconds: 60
+include_funding: false

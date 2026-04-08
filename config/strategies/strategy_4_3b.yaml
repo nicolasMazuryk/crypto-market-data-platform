@@ -1,0 +1,11 @@
+# Strategy 4.3b: Limit LONG with SL/TP - Funding Applied
+
+strategy_id: "strategy_4_3b"
+direction: "long"
+funding_threshold: 0.006      # 0.6%
+entry_offset_seconds: 2
+entry_mult: 0.75
+sl_mult: 1.5
+take_profit: 0.003            # 0.3%
+deadline_seconds: 60
+include_funding: true

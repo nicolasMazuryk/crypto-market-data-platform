@@ -41,7 +41,8 @@
     "logs:errors": "tail -f logs/error.log",
     "logs:clean": "rm -rf logs/*.log",
     "remote:quote-sync": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo systemctl start worker-quote-sync-coordinator && sudo journalctl -u worker-quote-sync-coordinator --no-pager -f'",
-    "remote:funding-backfill": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo systemctl start worker-funding-rates-backfill && sudo journalctl -u worker-funding-rates-backfill --no-pager -f'"
+    "remote:funding-backfill": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo systemctl start worker-funding-rates-backfill && sudo journalctl -u worker-funding-rates-backfill --no-pager -f'",
+    "backtest": "tsx src/scripts/run-backtest.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -66,6 +67,7 @@
     "dotenv": "^17.2.3",
     "pino": "^10.3.0",
     "unzipper": "^0.12.3",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "yaml": "^2.8.3"
   }
 }

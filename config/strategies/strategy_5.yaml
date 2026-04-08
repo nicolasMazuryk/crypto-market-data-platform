@@ -1,0 +1,13 @@
+# Strategy 5: Cross-Exchange Funding Arbitrage
+# Short on Exchange B to capture price drop driven by Exchange A's settlement
+
+strategy_id: "strategy_5"
+direction: "short"
+exchange_a: "binance"
+exchange_b: "bybit"
+funding_threshold_a: 0.005    # 0.5% on Exchange A
+funding_max_b: 0.004          # Max 0.4% on Exchange B
+funding_spread_threshold: 0.004 # Min 0.4% spread
+entry_offset_seconds: 3       # Enter at T_funding - 3s
+deadline_seconds: 60
+vol_ratio_threshold: 1.0      # A volume must exceed B volume

@@ -1,0 +1,96 @@
+import { describe, it, expect } from 'vitest'
+import { Strategy2 } from '../../strategies/strategy-2.js'
+import { buildWindow, makeFundingEvent, BINANCE_FEES } from './fixtures.js'
+
+const TOLERANCE = 1e-10
+
+describe('E2E: Strategy 2 — Retracement Exit', () => {
+  const strategy = new Strategy2()
+  strategy.initialize(
+    {
+      strategy_id: 'strategy_2',
+      direction: 'long',
+      funding_threshold: 0.004,
+      entry_offset_seconds: 5,
+      retracement_pct: 0.5,
+      deadline_seconds: 60,
+    },
+    BINANCE_FEES,
+    0
+  )
+
+  it('Scenario 3: Retracement hit before deadline', () => {
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const basePrice = 50000
+
+    // Price drops to 49800 at T+5, then retraces
+    // P_funding (bid_open at T) = 50000
+    // P_low = 49800 at T+5
+    // P_target = 49800 + (50000 - 49800) * 0.50 = 49900
+    // Retracement should hit at T+10 where bid_high > 49900
+
+    const overrides = new Map<
+      number,
+      Partial<{
+        bidOpen: number
+        bidHigh: number
+        bidLow: number
+        askOpen: number
+        askHigh: number
+        askLow: number
+      }>
+    >()
+    overrides.set(-5, { askOpen: 50005 }) // Entry
+    overrides.set(0, { bidOpen: 50000, bidHigh: 50010, bidLow: 49990 }) // P_funding
+    overrides.set(5, { bidOpen: 49810, bidHigh: 49820, bidLow: 49800 }) // P_low
+    overrides.set(10, { bidOpen: 49910, bidHigh: 49920, bidLow: 49890 }) // Retracement fills
+
+    const window = buildWindow({
+      fundingTime,
+      basePrice,
+      overrides,
+      priceFn: offset => {
+        if (offset < 0) return basePrice
+        if (offset <= 5) return basePrice - offset * 40 // dropping
+        return 49800 + (offset - 5) * 20 // recovering
+      },
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('TP_HIT')
+    expect(result.funding_received).toBe(true)
+    // Exit at retracement target price — maker fee
+    expect(result.pnl.fees).toBeCloseTo(0.0004 + 0.0002, TOLERANCE) // taker + maker
+  })
+
+  it('Scenario 4: No retracement, deadline exit', () => {
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+
+    // Price drops steadily and keeps dropping — P_low keeps updating so
+    // the retracement target keeps moving down, never reached.
+    // P_funding (bid_open at T) = 50000
+    // Price keeps declining throughout the window: each second lower than the last.
+    // Retracement target = P_low + (50000 - P_low) * 0.5
+    // But P_low moves down each second, so target also drops and is never hit.
+    const window = buildWindow({
+      fundingTime,
+      basePrice: 50000,
+      priceFn: offset => {
+        if (offset < 0) return 50000
+        // Continuous decline: 50000 - offset * 5 per second
+        return 50000 - offset * 5
+      },
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('DEADLINE')
+    // Deadline exit: two taker fees
+    expect(result.pnl.fees).toBeCloseTo(0.0004 * 2, TOLERANCE)
+  })
+})
