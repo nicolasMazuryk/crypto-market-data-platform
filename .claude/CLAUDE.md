@@ -73,9 +73,10 @@ npm run sync:funding-rates   # Run funding rates sync locally
 ```bash
 npm run infra:init           # Initialize Terraform
 npm run infra:plan           # Preview infrastructure changes
-npm run infra:apply          # Apply infrastructure changes
-npm run setup                # Full server provisioning (Ansible)
-npm run deploy               # Deploy latest code (git pull + build + restart)
+npm run infra:apply          # Apply infrastructure changes + auto-generate hosts.ini
+npm run infra:inventory      # (Re)generate ansible/inventory/hosts.ini from Terraform output
+npm run setup                # Full server provisioning (Ansible) — auto-generates hosts.ini first
+npm run deploy               # Deploy latest code (git pull + build + restart) — auto-generates hosts.ini first
 npm run deploy:migrate       # Run database migrations on server
 npm run remote:ssh           # SSH into server
 npm run remote:status        # Show Docker containers + timer status
