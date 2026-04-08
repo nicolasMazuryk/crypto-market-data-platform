@@ -16,6 +16,7 @@
     "create:funding-download-tasks": "MODE=create tsx src/scripts/create-funding-download-tasks.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "test": "vitest run",
