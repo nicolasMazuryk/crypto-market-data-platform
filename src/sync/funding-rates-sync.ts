@@ -2,8 +2,8 @@ import ccxt from 'ccxt'
 import unzipper from 'unzipper'
 
 import {
-  DATA_PERIOD_END,
-  DATA_PERIOD_START,
+  SYNC_DATA_PERIOD_END,
+  SYNC_DATA_PERIOD_START,
   FUNDING_RATE_SYMBOL_CONCURRENCY,
   FUNDING_RATE_BACKOFF_BASE_MS,
   FUNDING_RATE_BACKOFF_MAX_MS,
@@ -553,8 +553,8 @@ function getEffectiveRange(market: MarketRow, now: Date): { start: Date; end: Da
   const listing = parseClickHouseDateTime(market.listing_date)
   const delisting = parseClickHouseDateTime(market.delisting_date)
 
-  const start = listing && listing > DATA_PERIOD_START ? listing : DATA_PERIOD_START
-  const periodEnd = DATA_PERIOD_END ?? now
+  const start = listing && listing > SYNC_DATA_PERIOD_START ? listing : SYNC_DATA_PERIOD_START
+  const periodEnd = SYNC_DATA_PERIOD_END ?? now
   const end = delisting && delisting < periodEnd ? delisting : periodEnd
 
   if (end <= start) {
@@ -1045,9 +1045,9 @@ async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig, syncMode
 
   // Filter markets based on listing_date and delisting_date relative to data period
   // Exclude markets that:
-  // - Have listing_date after DATA_PERIOD_END (not listed during the period)
-  // - Have delisting_date before DATA_PERIOD_START (delisted before period)
-  const periodEnd = DATA_PERIOD_END ?? now
+  // - Have listing_date after SYNC_DATA_PERIOD_END (not listed during the period)
+  // - Have delisting_date before SYNC_DATA_PERIOD_START (delisted before period)
+  const periodEnd = SYNC_DATA_PERIOD_END ?? now
   const markets = allMarkets.filter(market => {
     if (market.type !== 'perpetual') {
       return false
@@ -1062,7 +1062,7 @@ async function syncExchangeFundingRates(exchangeConfig: ExchangeConfig, syncMode
     }
 
     // Exclude if delisted before period start
-    if (delistingDate && delistingDate < DATA_PERIOD_START) {
+    if (delistingDate && delistingDate < SYNC_DATA_PERIOD_START) {
       return false
     }
 
@@ -1221,8 +1221,8 @@ export async function syncFundingRates(syncMode: FundingRateSyncMode = 'incremen
   }
 
   // Validate symbol counts per exchange
-  const dataPeriodStartStr = toClickHouseDateTime(DATA_PERIOD_START)
-  const dataPeriodEndStr = DATA_PERIOD_END ? toClickHouseDateTime(DATA_PERIOD_END) : null
+  const dataPeriodStartStr = toClickHouseDateTime(SYNC_DATA_PERIOD_START)
+  const dataPeriodEndStr = SYNC_DATA_PERIOD_END ? toClickHouseDateTime(SYNC_DATA_PERIOD_END) : null
   for (const exchangeConfig of EXCHANGE_CONFIGS) {
     try {
       const validation = await validateSymbolsForExchange(exchangeConfig.name, dataPeriodStartStr, dataPeriodEndStr)

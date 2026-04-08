@@ -85,9 +85,25 @@ The scheduled `worker-funding-rates` unit runs incremental sync only. Use `worke
 
 Funding-rate behavior is controlled by:
 
+- `SYNC_DATA_PERIOD_START` / `SYNC_DATA_PERIOD_END` - shared sync window for `sync:markets` and `sync:funding-rates`
 - `FUNDING_RATE_SYNC_MODE` - `incremental` for scheduled runs, `backfill` for manual history loads
 - `FUNDING_RATE_SYMBOL_CONCURRENCY` - parallel symbol fetches
 - `FUNDING_RATE_PAGE_SIZE` - per-request page size
+
+Funding download tasks read their date range and task options from `.env*`:
+
+- `FUNDING_DOWNLOAD_TASKS_DATE_RANGE_START`
+- `FUNDING_DOWNLOAD_TASKS_DATE_RANGE_END`
+- `FUNDING_DOWNLOAD_TASKS_THRESHOLD`
+- `FUNDING_DOWNLOAD_TASKS_DRY_RUN`
+- `FUNDING_DOWNLOAD_TASKS_EXCLUDED_EXCHANGES`
+
+Run them with:
+
+```bash
+npm run analyze:funding-download-tasks
+npm run create:funding-download-tasks
+```
 
 ## Project Structure
 

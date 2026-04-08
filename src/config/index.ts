@@ -13,13 +13,13 @@ function parseFundingRateSyncMode(): FundingRateSyncMode {
   throw new Error(`Invalid FUNDING_RATE_SYNC_MODE: ${value}`)
 }
 
-const dataPeriodStart = parseDateEnv('DATA_PERIOD_START', { required: true })
-if (!dataPeriodStart) {
-  throw new Error('Missing required environment variable: DATA_PERIOD_START')
+const syncDataPeriodStart = parseDateEnv('SYNC_DATA_PERIOD_START', { required: true })
+if (!syncDataPeriodStart) {
+  throw new Error('Missing required environment variable: SYNC_DATA_PERIOD_START')
 }
 
-export const DATA_PERIOD_START = dataPeriodStart
-export const DATA_PERIOD_END = parseDateEnv('DATA_PERIOD_END')
+export const SYNC_DATA_PERIOD_START = syncDataPeriodStart
+export const SYNC_DATA_PERIOD_END = parseDateEnv('SYNC_DATA_PERIOD_END')
 
 export const FUNDING_RATE_MAX_RETRIES = parseIntEnv('FUNDING_RATE_MAX_RETRIES')
 export const FUNDING_RATE_BACKOFF_BASE_MS = parseIntEnv('FUNDING_RATE_BACKOFF_BASE_MS')

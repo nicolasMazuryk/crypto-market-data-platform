@@ -5,7 +5,7 @@ Collects active + delisted USDT-margined perpetual markets and stores them in Cl
 ## Data Period
 
 - Start: **2025-01-01 UTC** (see `src/config/index.ts`)
-- End: **open-ended** (`DATA_PERIOD_END = null`)
+- End: **open-ended** (`SYNC_DATA_PERIOD_END = null`)
 
 Funding rates should be collected backwards (newest -> oldest) and filtered to the period start.
 
@@ -91,8 +91,8 @@ Uses `.env` (see `.env.example`) for local configuration. Production `.env` is t
 ### Core Application
 - `NODE_ENV` - Environment (development/production)
 - `LOG_LEVEL` - Logging level (debug/info/warn/error)
-- `DATA_PERIOD_START` - Data collection start date (ISO 8601)
-- `DATA_PERIOD_END` - Data collection end date (null for open-ended)
+- `SYNC_DATA_PERIOD_START` - Shared sync start date for markets and funding rates (ISO 8601)
+- `SYNC_DATA_PERIOD_END` - Shared sync end date (null for open-ended)
 
 ### ClickHouse Database
 - `CLICKHOUSE_HOST` - Database host
@@ -112,6 +112,13 @@ Uses `.env` (see `.env.example`) for local configuration. Production `.env` is t
 - `FUNDING_RATE_BACKOFF_MAX_MS` - Maximum backoff delay (default: 30s)
 - `FUNDING_RATE_PAGE_SIZE` - Records per API call (default: 100)
 - `FUNDING_RATE_SYMBOL_CONCURRENCY` - Parallel symbol fetches (default: 5)
+
+### Funding Download Tasks
+- `FUNDING_DOWNLOAD_TASKS_DATE_RANGE_START` - Inclusive start date (`YYYY-MM-DD`)
+- `FUNDING_DOWNLOAD_TASKS_DATE_RANGE_END` - Inclusive end date (`YYYY-MM-DD`)
+- `FUNDING_DOWNLOAD_TASKS_THRESHOLD` - Funding-rate cutoff used in create mode
+- `FUNDING_DOWNLOAD_TASKS_DRY_RUN` - `true` to preview without inserts
+- `FUNDING_DOWNLOAD_TASKS_EXCLUDED_EXCHANGES` - Comma-separated exchanges to skip
 
 ### Alerting
 - `SLACK_WEBHOOK_URL` - Slack webhook for alerts

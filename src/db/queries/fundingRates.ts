@@ -350,7 +350,7 @@ export interface SymbolValidationResult {
 
 /**
  * Gets symbols from markets table that were listed before or during the data period
- * and were NOT delisted before DATA_PERIOD_START.
+ * and were NOT delisted before SYNC_DATA_PERIOD_START.
  * These are the symbols that should have funding rate data.
  */
 export async function getExpectedSymbolsForExchange(
@@ -423,6 +423,139 @@ export async function getActualSymbolsForExchange(exchange: string, useFinal = f
  * Validates that symbols in funding_rates match expected symbols from markets table.
  * Returns validation result with discrepancies if any.
  */
+export interface FundingTriggerEvent {
+  exchange: string
+  symbol: string
+  funding_date: string
+  is_midnight: number
+}
+
+export interface ThresholdAnalysisResult {
+  unique_symbols: number
+  exchange_symbol_days: number
+  symbol_days: number
+  midnight_events: number
+}
+
+export async function queryFundingEventsBelowThreshold(
+  threshold: number,
+  dateStart: string,
+  dateEnd: string,
+  excludedExchanges: string[]
+): Promise<FundingTriggerEvent[]> {
+  const client = getClickHouseClient()
+  const excludeClause =
+    excludedExchanges.length > 0
+      ? ` AND exchange NOT IN (${excludedExchanges.map((_, i) => `{exc_${String(i)}: String}`).join(', ')})`
+      : ''
+
+  const queryParams: Record<string, unknown> = {
+    threshold,
+    dateStart,
+    dateEnd,
+  }
+  for (let i = 0; i < excludedExchanges.length; i++) {
+    queryParams[`exc_${String(i)}`] = excludedExchanges[i]
+  }
+
+  const query = `
+    SELECT
+      exchange,
+      symbol,
+      toString(toDate(funding_time)) AS funding_date,
+      max(toHour(funding_time) = 0 AND toMinute(funding_time) = 0) AS is_midnight
+    FROM funding_rates FINAL
+    WHERE funding_rate < {threshold: Float64}
+      AND toDate(funding_time) >= {dateStart: Date}
+      AND toDate(funding_time) <= {dateEnd: Date}
+      ${excludeClause}
+    GROUP BY exchange, symbol, toDate(funding_time)
+    ORDER BY exchange, symbol, funding_date
+  `
+
+  const result = await client.query({
+    query,
+    query_params: queryParams,
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{
+    exchange: string
+    symbol: string
+    funding_date: string
+    is_midnight: number | string
+  }>()
+
+  return rows.map(row => ({
+    exchange: row.exchange,
+    symbol: row.symbol,
+    funding_date: row.funding_date,
+    is_midnight: Number(row.is_midnight),
+  }))
+}
+
+export async function queryThresholdAnalysis(
+  threshold: number,
+  dateStart: string,
+  dateEnd: string,
+  excludedExchanges: string[]
+): Promise<ThresholdAnalysisResult> {
+  const client = getClickHouseClient()
+  const excludeClause =
+    excludedExchanges.length > 0
+      ? ` AND exchange NOT IN (${excludedExchanges.map((_, i) => `{exc_${String(i)}: String}`).join(', ')})`
+      : ''
+
+  const queryParams: Record<string, unknown> = {
+    threshold,
+    dateStart,
+    dateEnd,
+  }
+  for (let i = 0; i < excludedExchanges.length; i++) {
+    queryParams[`exc_${String(i)}`] = excludedExchanges[i]
+  }
+
+  const query = `
+    SELECT
+      uniqExact(symbol) AS unique_symbols,
+      count() AS exchange_symbol_days,
+      uniqExact(symbol, toDate(funding_time)) AS symbol_days,
+      countIf(toHour(funding_time) = 0 AND toMinute(funding_time) = 0) AS midnight_events
+    FROM (
+      SELECT
+        exchange,
+        symbol,
+        funding_time
+      FROM funding_rates FINAL
+      WHERE funding_rate < {threshold: Float64}
+        AND toDate(funding_time) >= {dateStart: Date}
+        AND toDate(funding_time) <= {dateEnd: Date}
+        ${excludeClause}
+    )
+  `
+
+  const result = await client.query({
+    query,
+    query_params: queryParams,
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{
+    unique_symbols: number | string
+    exchange_symbol_days: number | string
+    symbol_days: number | string
+    midnight_events: number | string
+  }>()
+
+  const row = rows[0]
+  return {
+    unique_symbols: Number(row?.unique_symbols ?? 0),
+    exchange_symbol_days: Number(row?.exchange_symbol_days ?? 0),
+    symbol_days: Number(row?.symbol_days ?? 0),
+    midnight_events: Number(row?.midnight_events ?? 0),
+  }
+}
+
 export async function validateSymbolsForExchange(
   exchange: string,
   dataPeriodStart: string,

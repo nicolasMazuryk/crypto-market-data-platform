@@ -572,9 +572,9 @@ describe('download_tasks table', () => {
     })
     const rows = await result.json<{ symbol: string; status: string }>()
     const bySymbol = Object.fromEntries(rows.map(r => [r.symbol, r.status]))
-    expect(bySymbol['SYM_COMPLETED']).toBe('completed')
-    expect(bySymbol['SYM_FAILED']).toBe('failed')
-    expect(bySymbol['SYM_PENDING']).toBe('pending')
+    expect(bySymbol.SYM_COMPLETED).toBe('completed')
+    expect(bySymbol.SYM_FAILED).toBe('failed')
+    expect(bySymbol.SYM_PENDING).toBe('pending')
   })
 
   it('stale recovery: returns correct count', async () => {

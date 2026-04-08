@@ -8,7 +8,7 @@ import type { Market } from '../exchanges/types.js'
 import { createExchangeSymbolResolver } from '../exchanges/symbol-resolver.js'
 
 function ensureRequiredConfigEnv(): void {
-  process.env.DATA_PERIOD_START = '2025-01-01T00:00:00Z'
+  process.env.SYNC_DATA_PERIOD_START = '2025-01-01T00:00:00Z'
   process.env.FUNDING_RATE_MAX_RETRIES = '5'
   process.env.FUNDING_RATE_BACKOFF_BASE_MS = '750'
   process.env.FUNDING_RATE_BACKOFF_MAX_MS = '30000'

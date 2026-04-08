@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'url'
 
-import { DATA_PERIOD_END, DATA_PERIOD_START } from '../config/index.js'
+import { SYNC_DATA_PERIOD_END, SYNC_DATA_PERIOD_START } from '../config/index.js'
 import { closeClickHouseClient } from '../db/client.js'
 import { insertMarkets } from '../db/queries/markets.js'
 import { toClickHouseDateTime, type MarketRow } from '../db/types.js'
@@ -10,10 +10,10 @@ import { logger } from '../logger.js'
 
 export async function runMarketsSync(): Promise<void> {
   try {
-    const periodEnd = DATA_PERIOD_END ? DATA_PERIOD_END.toISOString() : 'present'
+    const periodEnd = SYNC_DATA_PERIOD_END ? SYNC_DATA_PERIOD_END.toISOString() : 'present'
 
     logger.info({ env: config.env }, 'Market sync starting')
-    logger.info({ periodStart: DATA_PERIOD_START.toISOString(), periodEnd }, 'Starting markets sync')
+    logger.info({ periodStart: SYNC_DATA_PERIOD_START.toISOString(), periodEnd }, 'Starting markets sync')
 
     const markets = await syncMarkets()
     const now = new Date()

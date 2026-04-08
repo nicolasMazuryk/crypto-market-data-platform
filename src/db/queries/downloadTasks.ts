@@ -221,6 +221,17 @@ export async function optimizeDownloadTasksTable(): Promise<void> {
   })
 }
 
+export async function listCompletedTaskKeys(): Promise<Set<string>> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `SELECT exchange, symbol, toString(date) AS date FROM download_tasks FINAL WHERE status = 'completed'`,
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{ exchange: string; symbol: string; date: string }>()
+  return new Set(rows.map(row => `${row.exchange}:${row.symbol}:${row.date}`))
+}
+
 export async function countTasksByStatus(exchange?: string): Promise<TaskStatusCounts> {
   const client = getClickHouseClient()
   const result = await client.query({

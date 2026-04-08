@@ -109,6 +109,17 @@ npm run remote:funding-backfill
 
 This starts `worker-funding-rates-backfill`, which runs the historical backfill path. The hourly `worker-funding-rates` timer stays on incremental mode only.
 
+## Funding Download Tasks
+
+```bash
+npm run analyze:funding-download-tasks
+npm run create:funding-download-tasks
+```
+
+- Configure `.env`, `.env.dev`, or the production env with the `FUNDING_DOWNLOAD_TASKS_*` variables before running these commands.
+- `analyze` mode: prints a summary of candidate funding-triggered download days for the selected date range.
+- `create` mode: creates `pending` download tasks for funding events below the configured threshold; with `FUNDING_DOWNLOAD_TASKS_DRY_RUN=true` it only previews the result.
+
 ## Manually Trigger a Worker/Job
 
 ```bash
