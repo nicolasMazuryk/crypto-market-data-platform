@@ -6,7 +6,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-SERVER_IP=$(cd "$REPO_ROOT/terraform" && terraform output -raw server_ip)
+if [[ -z "${SERVER_IP:-}" ]]; then
+  SERVER_IP=$(cd "$REPO_ROOT/terraform" && terraform output -raw server_ip 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\n')
+fi
+
+if [[ ! "$SERVER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Error: could not get a valid server IP from Terraform." >&2
+  echo "Run 'npm run infra:apply' first, or pass SERVER_IP=x.x.x.x before running this script." >&2
+  exit 1
+fi
 
 cat > "$REPO_ROOT/ansible/inventory/hosts.ini" <<EOF
 [servers]

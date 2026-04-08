@@ -11,6 +11,7 @@ coverage/
 package-lock.json
 
 data/
+!src/backtesting/data/
 
 tasks/
 src/markets/snapshots/

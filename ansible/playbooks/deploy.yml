@@ -13,6 +13,7 @@
         version: "{{ repo_branch }}"
         accept_hostkey: true
         key_file: /home/nicolas/.ssh/github_deploy_key
+        force: true
       become_user: nicolas
 
     - name: Build Docker image
