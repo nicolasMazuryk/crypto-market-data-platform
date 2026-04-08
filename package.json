@@ -14,6 +14,8 @@
     "validate:quotes": "tsx src/scripts/validate-quotes.ts",
     "analyze:funding-download-tasks": "MODE=analyze tsx src/scripts/create-funding-download-tasks.ts",
     "create:funding-download-tasks": "MODE=create tsx src/scripts/create-funding-download-tasks.ts",
+    "remote:analyze:funding-download-tasks": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'docker compose -f /opt/arbinet/docker-compose.prod.yml run --rm -T -e MODE=analyze worker-funding-download-tasks'",
+    "remote:create:funding-download-tasks": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'docker compose -f /opt/arbinet/docker-compose.prod.yml run --rm -T -e MODE=create worker-funding-download-tasks'",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
