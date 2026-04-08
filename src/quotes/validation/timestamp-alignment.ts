@@ -12,9 +12,7 @@ export class TimestampAlignmentAccumulator {
   private lastTs: number | null = null
 
   update(row: QuoteRow): void {
-    if (this.firstTs === null) {
-      this.firstTs = row.ts
-    }
+    this.firstTs ??= row.ts
 
     this.lastTs = row.ts
   }

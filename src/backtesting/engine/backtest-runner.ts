@@ -24,8 +24,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
 
   // Get fee schedule for the exchange where trades execute.
   // Strategy 5 trades on exchange_b, not base.exchange.
-  const feeExchange =
-    strategyId === 'strategy_5' ? strategyConfig.exchange_b : base.exchange
+  const feeExchange = strategyId === 'strategy_5' ? strategyConfig.exchange_b : base.exchange
   const feeSchedule = base.fees[feeExchange]
   if (!feeSchedule) {
     throw new Error(`No fee schedule configured for exchange: ${feeExchange}`)

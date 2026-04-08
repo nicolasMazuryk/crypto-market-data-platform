@@ -43,13 +43,9 @@ export class SchemaMetadataAccumulator {
   }
 
   update(row: QuoteRow): void {
-    if (this.firstSourceType === null) {
-      this.firstSourceType = row.source_type
-    }
+    this.firstSourceType ??= row.source_type
 
-    if (this.firstConfidenceScore === null) {
-      this.firstConfidenceScore = row.confidence_score
-    }
+    this.firstConfidenceScore ??= row.confidence_score
 
     this.exchangeValues.add(row.exchange)
     this.symbolValues.add(row.symbol)

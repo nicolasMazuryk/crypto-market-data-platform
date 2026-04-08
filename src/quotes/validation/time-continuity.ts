@@ -36,9 +36,7 @@ export class TimeContinuityAccumulator {
   private readonly gapExamples: TimeGapExample[] = []
 
   update(row: QuoteRow): void {
-    if (this.firstTs === null) {
-      this.firstTs = row.ts
-    }
+    this.firstTs ??= row.ts
 
     this.lastTs = row.ts
     this.actualCandles += 1

@@ -16,7 +16,8 @@ export class Strategy1 implements BaseStrategy {
   private config!: Strategy1Config
   private feeSchedule!: FeeSchedule
 
-  initialize(config: Strategy1Config, feeSchedule: FeeSchedule): void {
+  initialize(config: Strategy1Config, feeSchedule: FeeSchedule, slippage?: number): void {
+    void slippage
     this.config = config
     this.feeSchedule = feeSchedule
   }

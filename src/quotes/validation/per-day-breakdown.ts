@@ -74,9 +74,7 @@ export class PerDayBreakdownAccumulator {
     const day = tsToDateString(row.ts)
     const dayStats = this.byDay.get(day) ?? createDayStats()
 
-    if (dayStats.firstTs === null) {
-      dayStats.firstTs = row.ts
-    }
+    dayStats.firstTs ??= row.ts
 
     if (dayStats.prevTs !== null) {
       const deltaMs = row.ts - dayStats.prevTs

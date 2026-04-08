@@ -18,8 +18,6 @@ export const bybitDownloader: ExchangeDownloader = {
     const urlSymbol = this.toUrlSymbol(symbol)
     const ymd = formatDate(date)
 
-    return [
-      `https://quote-saver.bycsi.com/orderbook/linear/${urlSymbol}/${ymd}_${urlSymbol}_ob200.data.zip`,
-    ]
+    return [`https://quote-saver.bycsi.com/orderbook/linear/${urlSymbol}/${ymd}_${urlSymbol}_ob200.data.zip`]
   },
 }

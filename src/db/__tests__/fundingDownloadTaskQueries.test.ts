@@ -136,7 +136,7 @@ describe('funding download task queries', () => {
 
       const relevant = events.filter(e => e.exchange === exchange1 || e.exchange === exchange2)
       expect(relevant).toHaveLength(1)
-      expect(relevant[0].exchange).toBe(exchange1)
+      expect(relevant[0]?.exchange).toBe(exchange1)
     })
 
     it('returns empty for rates above threshold', async () => {

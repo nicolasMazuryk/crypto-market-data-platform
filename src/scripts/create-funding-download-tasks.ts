@@ -192,7 +192,11 @@ async function runCreate(config: ScriptConfig): Promise<void> {
   const exchangesBySymbol = new Map<string, MarketRow[]>()
   const uniqueSymbols = new Set<string>()
   for (const pair of symbolDatePairs) {
-    uniqueSymbols.add(pair.split(':')[0])
+    const [symbol] = pair.split(':')
+    if (!symbol) {
+      continue
+    }
+    uniqueSymbols.add(symbol)
   }
 
   for (const symbol of uniqueSymbols) {
@@ -205,6 +209,9 @@ async function runCreate(config: ScriptConfig): Promise<void> {
   // Expand: for each (symbol, date), add tasks for all exchanges listing the symbol
   for (const pair of symbolDatePairs) {
     const [symbol, date] = pair.split(':')
+    if (!symbol || !date) {
+      continue
+    }
     const markets = exchangesBySymbol.get(symbol) ?? []
 
     for (const market of markets) {

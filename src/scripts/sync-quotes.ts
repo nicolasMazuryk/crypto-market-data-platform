@@ -15,7 +15,9 @@ function toError(error: unknown): Error {
 
 export async function runSyncQuotes(): Promise<void> {
   if (WORKER_INDEX < 0 || WORKER_INDEX >= WORKER_COUNT) {
-    throw new Error(`Invalid worker config: WORKER_INDEX=${String(WORKER_INDEX)} must be >= 0 and < WORKER_COUNT=${String(WORKER_COUNT)}`)
+    throw new Error(
+      `Invalid worker config: WORKER_INDEX=${String(WORKER_INDEX)} must be >= 0 and < WORKER_COUNT=${String(WORKER_COUNT)}`
+    )
   }
 
   console.info(`Worker ${String(WORKER_INDEX)}/${String(WORKER_COUNT)} starting`)

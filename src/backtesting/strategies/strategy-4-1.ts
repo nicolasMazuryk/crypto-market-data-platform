@@ -25,7 +25,8 @@ export class Strategy41 implements BaseStrategy {
     this.id = variant
   }
 
-  initialize(config: Strategy41Config, feeSchedule: FeeSchedule): void {
+  initialize(config: Strategy41Config, feeSchedule: FeeSchedule, slippage?: number): void {
+    void slippage
     this.config = config
     this.feeSchedule = feeSchedule
   }

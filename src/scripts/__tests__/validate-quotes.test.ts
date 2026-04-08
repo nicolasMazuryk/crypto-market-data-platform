@@ -30,37 +30,47 @@ vi.mock('../../db/queries/orderbooks.js', () => ({
 
 vi.mock('../../quotes/validation/index.js', () => {
   class OhlcIntegrityAccumulator {
-    update(): void {}
-    finalize() {
-      return ohlcFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return ohlcFinalizeMock() as unknown
     }
   }
 
   class SpreadValidityAccumulator {
-    update(): void {}
-    finalize() {
-      return spreadFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return spreadFinalizeMock() as unknown
     }
   }
 
   class TimeContinuityAccumulator {
-    update(): void {}
-    finalize() {
-      return timeContinuityFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return timeContinuityFinalizeMock() as unknown
     }
   }
 
   class InterpolationAnalysisAccumulator {
-    update(): void {}
-    finalize() {
-      return interpolationFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return interpolationFinalizeMock() as unknown
     }
   }
 
   class PriceReasonablenessAccumulator {
-    update(): void {}
-    finalize() {
-      return priceReasonablenessFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return priceReasonablenessFinalizeMock() as unknown
     }
   }
 
@@ -69,13 +79,8 @@ vi.mock('../../quotes/validation/index.js', () => {
     private firstConfidenceScore: string | null = null
 
     update(row: { source_type: string; confidence_score: string }): void {
-      if (this.firstSourceType === null) {
-        this.firstSourceType = row.source_type
-      }
-
-      if (this.firstConfidenceScore === null) {
-        this.firstConfidenceScore = row.confidence_score
-      }
+      this.firstSourceType ??= row.source_type
+      this.firstConfidenceScore ??= row.confidence_score
     }
 
     getFirstSourceType(): string {
@@ -86,50 +91,62 @@ vi.mock('../../quotes/validation/index.js', () => {
       return this.firstConfidenceScore ?? 'unknown'
     }
 
-    finalize() {
-      return schemaMetadataFinalizeMock()
+    finalize(): unknown {
+      return schemaMetadataFinalizeMock() as unknown
     }
   }
 
   class DayBoundaryContinuityAccumulator {
-    update(): void {}
-    finalize() {
-      return dayBoundaryFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return dayBoundaryFinalizeMock() as unknown
     }
   }
 
   class PerDayBreakdownAccumulator {
-    update(): void {}
-    finalize() {
-      return perDayBreakdownFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return perDayBreakdownFinalizeMock() as unknown
     }
   }
 
   class StalePriceAccumulator {
-    update(): void {}
-    finalize() {
-      return stalePriceFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return stalePriceFinalizeMock() as unknown
     }
   }
 
   class SpreadDistributionAccumulator {
-    update(): void {}
-    finalize() {
-      return spreadDistributionFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return spreadDistributionFinalizeMock() as unknown
     }
   }
 
   class InterpolationDamageAccumulator {
-    update(): void {}
-    finalize() {
-      return interpolationDamageFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return interpolationDamageFinalizeMock() as unknown
     }
   }
 
   class TimestampAlignmentAccumulator {
-    update(): void {}
-    finalize() {
-      return timestampAlignmentFinalizeMock()
+    update(): void {
+      return undefined
+    }
+    finalize(): unknown {
+      return timestampAlignmentFinalizeMock() as unknown
     }
   }
 

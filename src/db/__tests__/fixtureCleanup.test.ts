@@ -30,17 +30,21 @@ describe('createClickHouseFixtureCleanupRegistry', () => {
   it('deduplicates tracked table and exchange pairs and cleans in deterministic order', async () => {
     const calls: string[] = []
 
-    vi.mocked(deleteDownloadTasksByExchange).mockImplementation(async exchange => {
+    vi.mocked(deleteDownloadTasksByExchange).mockImplementation(exchange => {
       calls.push(`download_tasks:${exchange}`)
+      return Promise.resolve()
     })
-    vi.mocked(deleteFundingRatesByExchange).mockImplementation(async exchange => {
+    vi.mocked(deleteFundingRatesByExchange).mockImplementation(exchange => {
       calls.push(`funding_rates:${exchange}`)
+      return Promise.resolve()
     })
-    vi.mocked(deleteMarketsByExchange).mockImplementation(async exchange => {
+    vi.mocked(deleteMarketsByExchange).mockImplementation(exchange => {
       calls.push(`markets:${exchange}`)
+      return Promise.resolve()
     })
-    vi.mocked(deleteOrderbooksByExchange).mockImplementation(async exchange => {
+    vi.mocked(deleteOrderbooksByExchange).mockImplementation(exchange => {
       calls.push(`orderbooks:${exchange}`)
+      return Promise.resolve()
     })
 
     const registry = createClickHouseFixtureCleanupRegistry()

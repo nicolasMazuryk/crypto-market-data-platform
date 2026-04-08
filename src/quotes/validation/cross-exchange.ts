@@ -11,7 +11,9 @@ function divergencePercent(low: number, high: number): number {
   return ((high - low) / midpoint) * 100
 }
 
-export function validateCrossExchangeConsistency(seriesBySymbol: Map<string, CrossExchangeSeriesInput[]>): CrossExchangeResult[] {
+export function validateCrossExchangeConsistency(
+  seriesBySymbol: Map<string, CrossExchangeSeriesInput[]>
+): CrossExchangeResult[] {
   const results: CrossExchangeResult[] = []
 
   for (const [symbol, seriesList] of seriesBySymbol.entries()) {
