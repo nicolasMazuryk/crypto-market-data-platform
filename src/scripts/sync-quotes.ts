@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url'
 
 import { closeClickHouseClient } from '../db/client.js'
-import { listPendingTasks, optimizeDownloadTasksTable, resetStaleTasks } from '../db/queries/downloadTasks.js'
+import { listPendingTasks, resetStaleTasks } from '../db/queries/downloadTasks.js'
 import { STALE_RECOVERY_MINUTES, WORKER_COUNT, WORKER_INDEX } from '../quotes/config.js'
 import { syncQuotes } from '../quotes/index.js'
 
@@ -63,16 +63,6 @@ export async function runSyncQuotes(): Promise<void> {
     }
   } catch (error: unknown) {
     runError = toError(error)
-  }
-
-  try {
-    await optimizeDownloadTasksTable()
-    console.info('Compacted download_tasks table with FINAL optimization')
-  } catch (error: unknown) {
-    const compactError = toError(error)
-    console.error(`Failed to compact download_tasks table: ${compactError.message}`)
-    process.exitCode = 1
-    runError ??= compactError
   }
 
   if (runError !== undefined) {

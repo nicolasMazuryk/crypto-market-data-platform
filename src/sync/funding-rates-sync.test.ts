@@ -1,3 +1,4 @@
+import ccxt from 'ccxt'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { toClickHouseDateTime } from '../db/types.js'
@@ -397,5 +398,19 @@ describe('funding rate sync', () => {
     )
 
     expect(isSkippableFundingRateError('bitget', error)).toBe(true)
+  })
+
+  it('treats okx instId validation errors as skippable', async () => {
+    const { isSkippableFundingRateError } = await import('./funding-rates-sync.js')
+    const error = new ccxt.BadRequest('okx {"code":"51000","msg":"Parameter instId error"}')
+
+    expect(isSkippableFundingRateError('okx', error)).toBe(true)
+  })
+
+  it('treats bybit NotSupported errors as skippable', async () => {
+    const { isSkippableFundingRateError } = await import('./funding-rates-sync.js')
+    const error = new ccxt.NotSupported('bybit market does not support funding rate history')
+
+    expect(isSkippableFundingRateError('bybit', error)).toBe(true)
   })
 })

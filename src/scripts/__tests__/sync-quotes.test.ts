@@ -8,7 +8,6 @@ interface SyncQuotesOptions {
 }
 
 const listPendingTasksMock = vi.hoisted(() => vi.fn<() => Promise<DownloadTaskRow[]>>())
-const optimizeDownloadTasksTableMock = vi.hoisted(() => vi.fn<() => Promise<void>>())
 const resetStaleTasksMock = vi.hoisted(() => vi.fn<() => Promise<number>>())
 const syncQuotesMock = vi.hoisted(() =>
   vi.fn<(tasks: DownloadTaskRow[], options?: SyncQuotesOptions) => Promise<ProcessedTask[]>>()
@@ -16,7 +15,6 @@ const syncQuotesMock = vi.hoisted(() =>
 
 vi.mock('../../db/queries/downloadTasks.js', () => ({
   listPendingTasks: listPendingTasksMock,
-  optimizeDownloadTasksTable: optimizeDownloadTasksTableMock,
   resetStaleTasks: resetStaleTasksMock,
 }))
 
@@ -48,12 +46,17 @@ function sampleTask(): DownloadTaskRow {
 
 describe('sync-quotes script', () => {
   let originalExitCode: typeof process.exitCode
+  let originalWorkerIndex: string | undefined
+  let originalWorkerCount: string | undefined
 
   beforeEach(() => {
     originalExitCode = process.exitCode
+    originalWorkerIndex = process.env.WORKER_INDEX
+    originalWorkerCount = process.env.WORKER_COUNT
     process.exitCode = undefined
+    process.env.WORKER_INDEX = '0'
+    process.env.WORKER_COUNT = '1'
     listPendingTasksMock.mockReset()
-    optimizeDownloadTasksTableMock.mockReset()
     resetStaleTasksMock.mockReset()
     resetStaleTasksMock.mockResolvedValue(0)
     syncQuotesMock.mockReset()
@@ -63,11 +66,23 @@ describe('sync-quotes script', () => {
 
   afterEach(() => {
     process.exitCode = originalExitCode
+    if (originalWorkerIndex === undefined) {
+      delete process.env.WORKER_INDEX
+    } else {
+      process.env.WORKER_INDEX = originalWorkerIndex
+    }
+
+    if (originalWorkerCount === undefined) {
+      delete process.env.WORKER_COUNT
+    } else {
+      process.env.WORKER_COUNT = originalWorkerCount
+    }
+
     vi.restoreAllMocks()
     vi.resetModules()
   })
 
-  it('compacts download_tasks after a successful sync run', async () => {
+  it('runs quote sync successfully for a worker shard', async () => {
     const tasks = [sampleTask()]
     listPendingTasksMock.mockResolvedValue(tasks)
     syncQuotesMock.mockResolvedValue([
@@ -78,7 +93,6 @@ describe('sync-quotes script', () => {
         rowsWritten: 42,
       },
     ])
-    optimizeDownloadTasksTableMock.mockResolvedValue(undefined)
 
     const { runSyncQuotes } = await loadModule()
     await runSyncQuotes()
@@ -91,23 +105,12 @@ describe('sync-quotes script', () => {
 
     expect(firstCall[0]).toEqual(tasks)
     expect(typeof firstCall[1]?.onInfo).toBe('function')
-    expect(optimizeDownloadTasksTableMock).toHaveBeenCalledTimes(1)
   })
 
-  it('still compacts download_tasks when sync throws and rethrows the original error', async () => {
-    const tasks = [sampleTask()]
-    const syncError = new Error('sync failed')
+  it('runs the same sync path on non-primary workers', async () => {
+    process.env.WORKER_INDEX = '1'
+    process.env.WORKER_COUNT = '2'
 
-    listPendingTasksMock.mockResolvedValue(tasks)
-    syncQuotesMock.mockRejectedValue(syncError)
-    optimizeDownloadTasksTableMock.mockResolvedValue(undefined)
-
-    const { runSyncQuotes } = await loadModule()
-    await expect(runSyncQuotes()).rejects.toThrow('sync failed')
-    expect(optimizeDownloadTasksTableMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('fails the run when download_tasks compaction fails', async () => {
     const tasks = [sampleTask()]
     listPendingTasksMock.mockResolvedValue(tasks)
     syncQuotesMock.mockResolvedValue([
@@ -115,13 +118,24 @@ describe('sync-quotes script', () => {
         exchange: 'binance',
         symbol: 'BTCUSDT',
         date: '2026-01-01',
-        rowsWritten: 1,
+        rowsWritten: 42,
       },
     ])
-    optimizeDownloadTasksTableMock.mockRejectedValue(new Error('optimize failed'))
 
     const { runSyncQuotes } = await loadModule()
-    await expect(runSyncQuotes()).rejects.toThrow('optimize failed')
-    expect(process.exitCode).toBe(1)
+    await runSyncQuotes()
+
+    expect(syncQuotesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rethrows the original sync error', async () => {
+    const tasks = [sampleTask()]
+    const syncError = new Error('sync failed')
+
+    listPendingTasksMock.mockResolvedValue(tasks)
+    syncQuotesMock.mockRejectedValue(syncError)
+
+    const { runSyncQuotes } = await loadModule()
+    await expect(runSyncQuotes()).rejects.toThrow('sync failed')
   })
 })

@@ -7,4 +7,4 @@ OnFailure=worker-failure-notify@%n.service
 [Service]
 Type=oneshot
 ExecStart={{ app_dir }}/quote-sync-coordinator.sh
-TimeoutStartSec=7200
+TimeoutStartSec=infinity

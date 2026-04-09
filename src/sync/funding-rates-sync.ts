@@ -215,6 +215,15 @@ function isSkippableFundingRateError(exchange: ExchangeName, error: unknown): bo
     return true
   }
 
+  // OKX rejects unsupported contract ids like non-USDT perpetuals with a BadRequest.
+  if (exchange === 'okx' && error instanceof ccxt.BadRequest && message.includes('parameter instid error')) {
+    return true
+  }
+
+  if (exchange === 'bybit' && error instanceof ccxt.NotSupported) {
+    return true
+  }
+
   if (exchange === 'bybit' && message.includes('only support linear and inverse market')) {
     return true
   }

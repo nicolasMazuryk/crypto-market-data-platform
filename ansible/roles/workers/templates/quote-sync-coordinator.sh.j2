@@ -22,6 +22,7 @@ done
 echo "All ${WORKER_COUNT} workers launched, waiting for completion..."
 
 FAILURES=0
+COMPACTION_FAILED=0
 for i in "${!PIDS[@]}"; do
   pid="${PIDS[$i]}"
   if wait "${pid}"; then
@@ -33,8 +34,19 @@ for i in "${!PIDS[@]}"; do
   fi
 done
 
-if [ "${FAILURES}" -gt 0 ]; then
-  echo "ERROR: ${FAILURES}/${WORKER_COUNT} worker(s) failed"
+echo "Running final download_tasks compaction..."
+if /usr/bin/docker compose -f "${COMPOSE_FILE}" run --rm worker-quote-sync node dist/scripts/optimize-download-tasks.js; then
+  echo "download_tasks compaction completed successfully"
+else
+  code=$?
+  echo "ERROR: download_tasks compaction failed with exit code ${code}"
+  COMPACTION_FAILED=1
+fi
+
+if [ "${FAILURES}" -gt 0 ] || [ "${COMPACTION_FAILED}" -gt 0 ]; then
+  if [ "${FAILURES}" -gt 0 ]; then
+    echo "ERROR: ${FAILURES}/${WORKER_COUNT} worker(s) failed"
+  fi
   exit 1
 fi
 

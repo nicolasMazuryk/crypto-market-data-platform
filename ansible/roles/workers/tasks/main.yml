@@ -1,0 +1,53 @@
+---
+- name: Template worker systemd units
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - src: worker-failure-notify@.service.j2
+      dest: worker-failure-notify@.service
+    - src: worker-funding-rates.service.j2
+      dest: worker-funding-rates.service
+    - src: worker-funding-rates-backfill.service.j2
+      dest: worker-funding-rates-backfill.service
+    - src: worker-funding-rates.timer.j2
+      dest: worker-funding-rates.timer
+    - src: worker-market-sync.service.j2
+      dest: worker-market-sync.service
+    - src: worker-market-sync.timer.j2
+      dest: worker-market-sync.timer
+    - src: worker-migrate.service.j2
+      dest: worker-migrate.service
+    - src: worker-quote-sync-coordinator.service.j2
+      dest: worker-quote-sync-coordinator.service
+  notify: Reload systemd
+
+- name: Deploy worker helper scripts
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ app_dir }}/{{ item.dest }}"
+    owner: nicolas
+    group: nicolas
+    mode: "{{ item.mode }}"
+  loop:
+    - src: notify-failure.sh.j2
+      dest: notify-failure.sh
+      mode: "0755"
+    - src: quote-sync-coordinator.sh.j2
+      dest: quote-sync-coordinator.sh
+      mode: "0755"
+
+- name: Reload systemd before managing timers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable scheduled worker timers
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - worker-funding-rates.timer
+    - worker-market-sync.timer
