@@ -21,10 +21,12 @@ if [[ -n "$DISK_USAGE" ]] && (( DISK_USAGE > 80 )); then
   ERRORS+=("Disk usage at ${DISK_USAGE}%")
 fi
 
-# Check scheduled worker timers are active (quote sync is manual-only)
+# Alert only if a timer is enabled but not active (disabled timers are intentional)
 for timer in worker-market-sync worker-funding-rates; do
-  if ! systemctl is-active --quiet "${timer}.timer"; then
-    ERRORS+=("Timer ${timer}.timer is not active")
+  if systemctl is-enabled --quiet "${timer}.timer" 2>/dev/null; then
+    if ! systemctl is-active --quiet "${timer}.timer"; then
+      ERRORS+=("Timer ${timer}.timer is enabled but not active")
+    fi
   fi
 done
 

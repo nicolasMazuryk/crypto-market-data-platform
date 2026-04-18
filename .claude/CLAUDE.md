@@ -66,7 +66,9 @@ npm run db:shell         # ClickHouse client shell
 ### Local Sync Operations
 ```bash
 npm run sync:markets         # Run market sync locally
-npm run sync:funding-rates   # Run funding rates sync locally
+npm run sync:funding         # Run funding rates sync locally
+npm run validate:funding     # Validate funding rates locally
+npm run validate:quotes      # Validate quotes locally
 ```
 
 ### Infrastructure & Deployment
@@ -83,6 +85,27 @@ npm run remote:status        # Show Docker containers + timer status
 npm run remote:logs:markets  # Tail market sync logs
 npm run remote:logs:funding  # Tail funding rates logs
 npm run remote:logs:quotes   # Tail quote sync logs
+```
+
+### Remote Workflow (canonical sequence)
+```bash
+npm run remote:run:markets                  # 1. Sync market listings
+npm run remote:funding-backfill             # 2. Backfill historical funding rates
+npm run remote:run:funding                  # 3. Run incremental funding sync
+npm run remote:validate:funding             # 4. Validate funding data on server
+npm run remote:analyze:funding-download-tasks  # 5. Analyze funding download candidates
+npm run remote:create:funding-download-tasks   # 6. Create funding download tasks
+npm run remote:quote-sync                   # 7. Run quote sync
+npm run remote:validate:quotes              # 8. Validate quotes on server
+npm run backtest                            # 9. Run backtest locally
+```
+
+### Remote Timer Management
+```bash
+npm run remote:timer:add:markets     # Enable + start market sync timer
+npm run remote:timer:add:funding     # Enable + start funding sync timer
+npm run remote:timer:remove:markets  # Disable + stop market sync timer
+npm run remote:timer:remove:funding  # Disable + stop funding sync timer
 ```
 
 ## Environment

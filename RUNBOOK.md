@@ -4,7 +4,7 @@
 
 Single Hetzner CPX62 server (16 vCPU / 32 GB) running:
 - **ClickHouse** — persistent Docker container, data on attached Hetzner volume (`/data`)
-- **Workers** — one-shot Docker containers; market sync and incremental funding sync run on systemd timers; quote sync and funding backfill are started manually
+- **Workers** — one-shot Docker containers; market sync and incremental funding sync are driven by systemd timers (not auto-started on provisioning — activate manually when ready); quote sync and funding backfill are started manually
 - **Monitoring** — health check script on a 3-minute systemd timer
 
 All services run on one server. ClickHouse is only accessible via localhost (SSH tunnel for remote access).
@@ -37,6 +37,8 @@ npm run setup
 # NOTE: On first run, Ansible will print a GitHub deploy key.
 # Add it to GitHub repo Settings > Deploy keys (read-only) before proceeding.
 # Then re-run: npm run setup
+# NOTE: Scheduled timers are NOT auto-started. Activate them manually when ready
+# (see "Activate Scheduled Sync" below).
 
 # 5. Apply database migrations
 npm run deploy:migrate
@@ -60,6 +62,38 @@ This runs the Ansible deploy playbook which: git pulls, rebuilds the Docker imag
 npm run deploy
 # 3. Run migrations
 npm run deploy:migrate
+```
+
+## Workflow: Full Data Pipeline Sequence
+
+Run these in order on a fresh server:
+
+```bash
+npm run remote:run:markets                 # 1. Sync market listings
+npm run remote:funding-backfill            # 2. Backfill historical funding rates
+npm run remote:run:funding                 # 3. Run incremental funding sync
+npm run remote:validate:funding            # 4. Validate funding data
+npm run remote:analyze:funding-download-tasks  # 5. Analyze funding download candidates
+npm run remote:create:funding-download-tasks   # 6. Create funding download tasks
+npm run remote:quote-sync                  # 7. Run quote sync
+npm run remote:validate:quotes             # 8. Validate quotes data
+npm run backtest                           # 9. Run backtest locally
+```
+
+## Activate Scheduled Sync
+
+Timers are not started automatically during provisioning. Enable them when ready:
+
+```bash
+npm run remote:timer:add:markets    # Enable + start market sync timer
+npm run remote:timer:add:funding    # Enable + start funding sync timer
+```
+
+To disable:
+
+```bash
+npm run remote:timer:remove:markets
+npm run remote:timer:remove:funding
 ```
 
 ## SSH Access
@@ -93,6 +127,32 @@ sudo journalctl -u worker-quote-sync-coordinator -n 100 --no-pager
 sudo journalctl -u worker-funding-rates-backfill -n 100 --no-pager
 ```
 
+## Manually Trigger a Worker/Job
+
+```bash
+npm run remote:run:markets       # Run market sync + stream logs
+npm run remote:run:funding        # Run incremental funding sync + stream logs
+npm run remote:funding-backfill   # Run historical funding backfill + stream logs
+npm run remote:quote-sync         # Run quote sync coordinator + stream logs
+```
+
+Or SSH in and use systemctl directly:
+
+```bash
+sudo systemctl start worker-market-sync
+sudo systemctl start worker-funding-rates
+sudo systemctl start worker-funding-rates-backfill
+sudo systemctl start worker-quote-sync-coordinator
+sudo systemctl start worker-migrate
+```
+
+## Validate Data
+
+```bash
+npm run remote:validate:funding   # Run funding rate validation on server
+npm run remote:validate:quotes    # Run quotes validation on server
+```
+
 ## Run Quote Sync (Coordinator, Recommended)
 
 ```bash
@@ -112,25 +172,13 @@ This starts `worker-funding-rates-backfill`, which runs the historical backfill 
 ## Funding Download Tasks
 
 ```bash
-npm run analyze:funding-download-tasks
-npm run create:funding-download-tasks
+npm run remote:analyze:funding-download-tasks
+npm run remote:create:funding-download-tasks
 ```
 
 - Configure `.env`, `.env.dev`, or the production env with the `FUNDING_DOWNLOAD_TASKS_*` variables before running these commands.
 - `analyze` mode: prints a summary of candidate funding-triggered download days for the selected date range.
 - `create` mode: creates `pending` download tasks for funding events below the configured threshold; with `FUNDING_DOWNLOAD_TASKS_DRY_RUN=true` it only previews the result.
-
-## Manually Trigger a Worker/Job
-
-```bash
-npm run remote:ssh
-# Then on the server:
-sudo systemctl start worker-market-sync
-sudo systemctl start worker-funding-rates
-sudo systemctl start worker-funding-rates-backfill
-sudo systemctl start worker-quote-sync-coordinator
-sudo systemctl start worker-migrate
-```
 
 ## Check Timer Status
 
@@ -156,7 +204,7 @@ Runs every 3 minutes. Checks:
 - ClickHouse ping
 - Docker running
 - Disk usage < 80%
-- Scheduled worker timers active (market sync, funding rates)
+- Scheduled worker timers active (only if enabled; disabled timers do not alert)
 
 Manual run:
 

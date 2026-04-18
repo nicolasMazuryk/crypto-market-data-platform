@@ -40,14 +40,5 @@
       dest: quote-sync-coordinator.sh
       mode: "0755"
 
-- name: Reload systemd before managing timers
+- name: Reload systemd
   ansible.builtin.meta: flush_handlers
-
-- name: Enable scheduled worker timers
-  ansible.builtin.systemd:
-    name: "{{ item }}"
-    enabled: true
-    state: started
-  loop:
-    - worker-funding-rates.timer
-    - worker-market-sync.timer

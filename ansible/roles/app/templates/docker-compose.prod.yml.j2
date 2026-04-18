@@ -58,3 +58,17 @@ services:
     command: ["node", "dist/scripts/create-funding-download-tasks.js"]
     network_mode: host
     profiles: ["worker"]
+
+  worker-validate-funding:
+    image: {{ app_name }}:latest
+    env_file: {{ app_dir }}/.env
+    command: ["node", "dist/scripts/validate-funding-rates.js"]
+    network_mode: host
+    profiles: ["worker"]
+
+  worker-validate-quotes:
+    image: {{ app_name }}:latest
+    env_file: {{ app_dir }}/.env
+    command: ["node", "dist/scripts/validate-quotes.js"]
+    network_mode: host
+    profiles: ["worker"]
