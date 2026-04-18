@@ -2,6 +2,7 @@ import { getClickHouseClient } from '../../db/client.js'
 import type { FundingEvent } from './types.js'
 
 export interface CrossFundingEvent {
+  symbol: string
   funding_time: Date
   funding_rate_a: number
   funding_rate_b: number
@@ -9,25 +10,29 @@ export interface CrossFundingEvent {
 
 export async function queryFundingEvents(
   exchange: string,
-  symbol: string,
+  symbol: string | undefined,
   startDate: string,
   endDate: string,
   threshold: number
 ): Promise<FundingEvent[]> {
+  const symbolFilter = symbol ? 'AND symbol = {symbol: String}' : ''
+  const params: Record<string, unknown> = { exchange, startDate, endDate, threshold }
+  if (symbol) params.symbol = symbol
+
   const client = getClickHouseClient()
   const result = await client.query({
     query: `
       SELECT exchange, symbol, funding_time, toFloat64(funding_rate) AS funding_rate
       FROM funding_rates
       WHERE exchange = {exchange: String}
-        AND symbol = {symbol: String}
+        ${symbolFilter}
         AND funding_time >= {startDate: DateTime}
         AND funding_time <= {endDate: DateTime}
         AND funding_rate < 0
         AND abs(toFloat64(funding_rate)) >= {threshold: Float64}
       ORDER BY funding_time ASC
     `,
-    query_params: { exchange, symbol, startDate, endDate, threshold },
+    query_params: params,
     format: 'JSONEachRow',
   })
 
@@ -43,17 +48,22 @@ export async function queryFundingEvents(
 export async function queryCrossExchangeFundingEvents(
   exchangeA: string,
   exchangeB: string,
-  symbol: string,
+  symbol: string | undefined,
   startDate: string,
   endDate: string,
   thresholdA: number,
   maxB: number,
   spreadThreshold: number
 ): Promise<CrossFundingEvent[]> {
+  const symbolFilter = symbol ? 'AND a.symbol = {symbol: String}' : ''
+  const params: Record<string, unknown> = { exchangeA, exchangeB, startDate, endDate, thresholdA, maxB, spreadThreshold }
+  if (symbol) params.symbol = symbol
+
   const client = getClickHouseClient()
   const result = await client.query({
     query: `
       SELECT
+        a.symbol AS symbol,
         a.funding_time AS funding_time,
         toFloat64(a.funding_rate) AS funding_rate_a,
         toFloat64(b.funding_rate) AS funding_rate_b
@@ -63,7 +73,7 @@ export async function queryCrossExchangeFundingEvents(
         AND a.funding_time = b.funding_time
       WHERE a.exchange = {exchangeA: String}
         AND b.exchange = {exchangeB: String}
-        AND a.symbol = {symbol: String}
+        ${symbolFilter}
         AND a.funding_time >= {startDate: DateTime}
         AND a.funding_time <= {endDate: DateTime}
         AND a.funding_rate < 0
@@ -72,12 +82,13 @@ export async function queryCrossExchangeFundingEvents(
         AND (toFloat64(a.funding_rate) - toFloat64(b.funding_rate)) <= -{spreadThreshold: Float64}
       ORDER BY a.funding_time ASC
     `,
-    query_params: { exchangeA, exchangeB, symbol, startDate, endDate, thresholdA, maxB, spreadThreshold },
+    query_params: params,
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<{ funding_time: string; funding_rate_a: number; funding_rate_b: number }>()
+  const rows = await result.json<{ symbol: string; funding_time: string; funding_rate_a: number; funding_rate_b: number }>()
   return rows.map(r => ({
+    symbol: r.symbol,
     funding_time: new Date(r.funding_time.includes('T') ? r.funding_time : `${r.funding_time.replace(' ', 'T')}Z`),
     funding_rate_a: r.funding_rate_a,
     funding_rate_b: r.funding_rate_b,

@@ -10,7 +10,7 @@ describe('Config Loader', () => {
     const config = loadConfig(stratPath, BASE_CONFIG)
 
     expect(config.base.exchange).toBe('binance')
-    expect(config.base.symbol).toBe('HANAUSDT')
+    expect(config.base.symbol).toBeUndefined()
     expect(config.base.fees.binance).toBeDefined()
     expect(config.base.validation.required_seconds_before).toBe(5)
 

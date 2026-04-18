@@ -20,7 +20,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   const { base, strategy: strategyConfig } = config
   const strategyId = strategyConfig.strategy_id
 
-  logger.info({ strategy: strategyId, exchange: base.exchange, symbol: base.symbol }, 'Starting backtest')
+  logger.info({ strategy: strategyId, exchange: base.exchange, symbol: base.symbol ?? 'all' }, 'Starting backtest')
 
   // Get fee schedule for the exchange where trades execute.
   // Strategy 5 trades on exchange_b, not base.exchange.
@@ -62,7 +62,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
 
     for (const crossEvent of crossEvents) {
       // Fetch Exchange B's data window
-      const windowB = await fetchOrderbookWindow(s5Config.exchange_b, base.symbol, crossEvent.funding_time, base.window)
+      const windowB = await fetchOrderbookWindow(s5Config.exchange_b, crossEvent.symbol, crossEvent.funding_time, base.window)
 
       totalDataRows += windowB.length
 
@@ -76,7 +76,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
 
       const fakeEvent: FundingEvent = {
         exchange: s5Config.exchange_b,
-        symbol: base.symbol,
+        symbol: crossEvent.symbol,
         funding_time: crossEvent.funding_time,
         funding_rate: crossEvent.funding_rate_b,
       }

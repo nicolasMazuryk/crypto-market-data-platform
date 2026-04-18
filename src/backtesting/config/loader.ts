@@ -101,7 +101,8 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
   const ctx = 'base_config'
 
   const exchange = requireString(merged, 'exchange', ctx)
-  const symbol = requireString(merged, 'symbol', ctx)
+  const symbolVal = merged.symbol
+  const symbol = typeof symbolVal === 'string' && symbolVal.length > 0 ? symbolVal : undefined
   const start_date = requireString(merged, 'start_date', ctx)
   const end_date = requireString(merged, 'end_date', ctx)
 
@@ -176,7 +177,17 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
     output_dir: requireString(rObj, 'output_dir', `${ctx}.reporting`),
   }
 
-  return { exchange, symbol, start_date, end_date, fees, validation, window, slippage, reporting }
+  return {
+    exchange,
+    ...(symbol ? { symbol } : {}),
+    start_date,
+    end_date,
+    fees,
+    validation,
+    window,
+    slippage,
+    reporting,
+  }
 }
 
 function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig {

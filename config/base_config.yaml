@@ -2,7 +2,7 @@
 # Strategy-specific configs are deep-merged on top of this
 
 exchange: "binance"
-symbol: "HANAUSDT"
+# symbol: "HANAUSDT"  # Omit to run for all symbols on the exchange
 start_date: "2025-10-11 00:00:00"
 end_date: "2025-10-14 00:00:00"
 

@@ -50,8 +50,8 @@ export interface ReportingConfig {
 export interface BaseConfig {
   /** Exchange to backtest (e.g., "binanceusdm") */
   exchange: string
-  /** Symbol to backtest (e.g., "BTCUSDT") */
-  symbol: string
+  /** Symbol to backtest (e.g., "BTCUSDT"). Omit to run for all symbols on the exchange. */
+  symbol?: string
   /** Start date for backtest (ISO 8601) */
   start_date: string
   /** End date for backtest (ISO 8601) */
