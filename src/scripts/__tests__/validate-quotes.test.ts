@@ -21,7 +21,7 @@ const interpolationDamageFinalizeMock = vi.hoisted(() => vi.fn())
 const timestampAlignmentFinalizeMock = vi.hoisted(() => vi.fn())
 
 const computeCompletenessMock = vi.hoisted(() => vi.fn())
-const validateCrossExchangeConsistencyMock = vi.hoisted(() => vi.fn())
+const validateCrossExchangeConsistencyFromDescriptorsMock = vi.hoisted(() => vi.fn())
 const printValidationReportMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../../db/queries/orderbooks.js', () => ({
@@ -166,7 +166,7 @@ vi.mock('../../quotes/validation/index.js', () => {
     computeCompleteness: computeCompletenessMock,
     printValidationReport: printValidationReportMock,
     readOrderbookData: readOrderbookDataMock,
-    validateCrossExchangeConsistency: validateCrossExchangeConsistencyMock,
+    validateCrossExchangeConsistencyFromDescriptors: validateCrossExchangeConsistencyFromDescriptorsMock,
   }
 })
 
@@ -225,7 +225,7 @@ describe('validate-quotes script', () => {
     interpolationDamageFinalizeMock.mockReset()
     timestampAlignmentFinalizeMock.mockReset()
     computeCompletenessMock.mockReset()
-    validateCrossExchangeConsistencyMock.mockReset()
+    validateCrossExchangeConsistencyFromDescriptorsMock.mockReset()
     printValidationReportMock.mockReset()
 
     ohlcFinalizeMock.mockReturnValue({ violationCount: 0, pass: true })
@@ -321,7 +321,7 @@ describe('validate-quotes script', () => {
         stalePrice: 0,
       },
     })
-    validateCrossExchangeConsistencyMock.mockReturnValue([])
+    validateCrossExchangeConsistencyFromDescriptorsMock.mockResolvedValue([])
   })
 
   afterEach(async () => {
@@ -362,7 +362,7 @@ describe('validate-quotes script', () => {
 
     readOrderbookDataMock.mockImplementation(() => asAsyncIterable([sampleRow]))
 
-    validateCrossExchangeConsistencyMock.mockReturnValue([
+    validateCrossExchangeConsistencyFromDescriptorsMock.mockResolvedValue([
       {
         symbol: 'BTCUSDT',
         exchanges: ['binance', 'okx'],
@@ -384,10 +384,22 @@ describe('validate-quotes script', () => {
     await runValidateQuotes()
 
     expect(readOrderbookDataMock).toHaveBeenCalledTimes(2)
-    expect(validateCrossExchangeConsistencyMock).toHaveBeenCalledTimes(1)
+    expect(validateCrossExchangeConsistencyFromDescriptorsMock).toHaveBeenCalledTimes(1)
     expect(printValidationReportMock).toHaveBeenCalledTimes(1)
     await expect(fs.access(reportPath)).resolves.toBeUndefined()
     expect(process.exitCode).toBe(0)
+
+    const [descriptorsBySymbol] =
+      validateCrossExchangeConsistencyFromDescriptorsMock.mock.calls[0] as [Map<string, unknown[]>]
+    expect([...descriptorsBySymbol.entries()]).toEqual([
+      [
+        'BTCUSDT',
+        [
+          { exchange: 'binance', symbol: 'BTCUSDT' },
+          { exchange: 'okx', symbol: 'BTCUSDT' },
+        ],
+      ],
+    ])
   })
 
   it('treats day-boundary gaps as critical failures', async () => {

@@ -21,8 +21,7 @@ import {
   computeCompleteness,
   printValidationReport,
   readOrderbookData,
-  validateCrossExchangeConsistency,
-  type CrossExchangeSeriesInput,
+  validateCrossExchangeConsistencyFromDescriptors,
   type FileValidationResult,
   type QuoteDataDescriptor,
   type QuoteValidationReport,
@@ -31,7 +30,6 @@ import {
 
 interface DatasetValidationOutput {
   readonly fileResult: FileValidationResult
-  readonly crossExchangeSeries: CrossExchangeSeriesInput | null
 }
 
 function computeCriticalFailures(file: Omit<FileValidationResult, 'criticalFailures' | 'status'>): string[] {
@@ -147,7 +145,6 @@ async function validateDataset(descriptor: QuoteDataDescriptor): Promise<Dataset
   const interpolationDamageAccumulator = new InterpolationDamageAccumulator()
   const timestampAlignmentAccumulator = new TimestampAlignmentAccumulator()
 
-  const crossExchangePoints: CrossExchangeSeriesInput['points'] = []
   let rowCount = 0
 
   for await (const row of stream) {
@@ -164,18 +161,6 @@ async function validateDataset(descriptor: QuoteDataDescriptor): Promise<Dataset
     spreadDistributionAccumulator.update(row)
     interpolationDamageAccumulator.update(row)
     timestampAlignmentAccumulator.update(row)
-
-    if (
-      row.bid_close !== null &&
-      row.ask_close !== null &&
-      Number.isFinite(row.bid_close) &&
-      Number.isFinite(row.ask_close)
-    ) {
-      crossExchangePoints.push({
-        ts: row.ts,
-        midPrice: (row.bid_close + row.ask_close) / 2,
-      })
-    }
   }
 
   const sourceType = schemaMetadataAccumulator.getFirstSourceType()
@@ -237,14 +222,6 @@ async function validateDataset(descriptor: QuoteDataDescriptor): Promise<Dataset
       criticalFailures,
       status,
     },
-    crossExchangeSeries:
-      crossExchangePoints.length === 0
-        ? null
-        : {
-            exchange: descriptor.exchange,
-            symbol: descriptor.symbol,
-            points: crossExchangePoints,
-          },
   }
 }
 
@@ -261,9 +238,6 @@ export async function runValidateQuotes(): Promise<void> {
   console.log(`Validating ${String(pairs.length)} dataset(s) with concurrency=${String(workerCount)}`)
 
   const fileResultsByIndex: (FileValidationResult | undefined)[] = Array.from({ length: pairs.length })
-  const crossExchangeSeriesByIndex: (CrossExchangeSeriesInput | null | undefined)[] = Array.from({
-    length: pairs.length,
-  })
   let nextIndex = 0
 
   const runWorker = async (): Promise<void> => {
@@ -290,7 +264,6 @@ export async function runValidateQuotes(): Promise<void> {
 
       const output = await validateDataset(descriptor)
       fileResultsByIndex[currentIndex] = output.fileResult
-      crossExchangeSeriesByIndex[currentIndex] = output.crossExchangeSeries
     }
   }
 
@@ -304,21 +277,23 @@ export async function runValidateQuotes(): Promise<void> {
     return fileResult
   })
 
-  const crossExchangeBySymbol = new Map<string, CrossExchangeSeriesInput[]>()
-  for (const series of crossExchangeSeriesByIndex) {
-    if (!series) {
-      continue
+  const descriptorsBySymbol = new Map<string, QuoteDataDescriptor[]>()
+  for (const pair of pairs) {
+    const descriptor: QuoteDataDescriptor = {
+      exchange: pair.exchange,
+      symbol: pair.symbol,
     }
 
-    const existing = crossExchangeBySymbol.get(series.symbol)
+    const existing = descriptorsBySymbol.get(pair.symbol)
     if (existing) {
-      existing.push(series)
+      existing.push(descriptor)
     } else {
-      crossExchangeBySymbol.set(series.symbol, [series])
+      descriptorsBySymbol.set(pair.symbol, [descriptor])
     }
   }
 
-  const crossExchange = validateCrossExchangeConsistency(crossExchangeBySymbol)
+  console.log(`Running cross-exchange validation for ${String(descriptorsBySymbol.size)} symbol(s)`)
+  const crossExchange = await validateCrossExchangeConsistencyFromDescriptors(descriptorsBySymbol)
 
   const report: QuoteValidationReport = {
     generatedAt: new Date().toISOString(),

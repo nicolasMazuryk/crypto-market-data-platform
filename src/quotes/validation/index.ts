@@ -1,5 +1,8 @@
 export { computeCompleteness } from './completeness.js'
-export { validateCrossExchangeConsistency } from './cross-exchange.js'
+export {
+  validateCrossExchangeConsistency,
+  validateCrossExchangeConsistencyFromDescriptors,
+} from './cross-exchange.js'
 export { dayEndMs, dayStartMs, partitionByDay, tsToDateString } from './day-utils.js'
 export { DayBoundaryContinuityAccumulator, validateDayBoundaryContinuity } from './day-boundary.js'
 export { InterpolationDamageAccumulator, assessInterpolationDamage } from './interpolation-damage.js'
