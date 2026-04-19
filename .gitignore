@@ -18,12 +18,8 @@ tasks/
 !ansible/roles/workers/tasks/main.yml
 src/markets/snapshots/
 
-# Terraform
-terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.backup
-terraform/*.tfvars
-terraform/.terraform.lock.hcl
-
 # Ansible
 ansible/inventory/hosts.ini
+
+# Terraform
+**/.terraform/providers/
