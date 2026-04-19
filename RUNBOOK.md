@@ -76,8 +76,9 @@ npm run remote:validate:funding            # 4. Validate funding data
 npm run remote:analyze:funding-download-tasks  # 5. Analyze funding download candidates
 npm run remote:create:funding-download-tasks   # 6. Create funding download tasks
 npm run remote:quote-sync                  # 7. Run quote sync
+npm run remote:report:download-task-progress  # 9. Report download task progress
 npm run remote:validate:quotes             # 8. Validate quotes data
-npm run backtest                           # 9. Run backtest locally
+npm run backtest                           # 10. Run backtest locally
 ```
 
 ## Activate Scheduled Sync
@@ -151,6 +152,7 @@ sudo systemctl start worker-migrate
 ```bash
 npm run remote:validate:funding   # Run funding rate validation on server
 npm run remote:validate:quotes    # Run quotes validation on server
+npm run remote:report:download-task-progress  # Run download task progress report on server
 ```
 
 ## Run Quote Sync (Coordinator, Recommended)

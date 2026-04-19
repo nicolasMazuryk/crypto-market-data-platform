@@ -9,6 +9,7 @@ import { pingClickHouse } from '../health.js'
 import {
   countTasksByStatus,
   insertDownloadTasks,
+  listExchangeTaskProgress,
   listFailedTasks,
   listPendingTasks,
   resetStaleTasks,
@@ -655,5 +656,184 @@ describe('download_tasks table', () => {
 
     expect(counts.pending).toBe(1)
     expect(counts.failed).toBe(1)
+  })
+
+  it('reports per-exchange progress from latest task versions', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const exchangeA = trackDownloadTaskExchange(`progress_a_${runId}`)
+    const exchangeB = trackDownloadTaskExchange(`progress_b_${runId}`)
+
+    await insertDownloadTasks([
+      {
+        exchange: exchangeA,
+        symbol: `A_DONE_${runId}`,
+        date: '2026-01-06',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exchangeA,
+        symbol: `A_FAIL_1_${runId}`,
+        date: '2026-01-06',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exchangeA,
+        symbol: `A_FAIL_2_${runId}`,
+        date: '2026-01-06',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exchangeA,
+        symbol: `A_PENDING_${runId}`,
+        date: '2026-01-06',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exchangeA,
+        symbol: `A_DOWN_${runId}`,
+        date: '2026-01-06',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exchangeA,
+        symbol: `A_PROC_${runId}`,
+        date: '2026-01-06',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exchangeB,
+        symbol: `B_DONE_${runId}`,
+        date: '2026-01-06',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange: exchangeB,
+        symbol: `B_PENDING_${runId}`,
+        date: '2026-01-06',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+    ])
+
+    await updateTaskStatus(exchangeA, `A_DONE_${runId}`, '2026-01-06', 'downloading')
+    await updateTaskStatus(exchangeA, `A_DONE_${runId}`, '2026-01-06', 'processing')
+    await updateTaskStatus(exchangeA, `A_DONE_${runId}`, '2026-01-06', 'completed', { rows_written: 10 })
+    await updateTaskStatus(exchangeA, `A_FAIL_1_${runId}`, '2026-01-06', 'failed', { error_message: 'parse error' })
+    await updateTaskStatus(exchangeA, `A_FAIL_2_${runId}`, '2026-01-06', 'downloading')
+    await updateTaskStatus(exchangeA, `A_FAIL_2_${runId}`, '2026-01-06', 'failed', { error_message: 'parse error' })
+    await updateTaskStatus(exchangeA, `A_DOWN_${runId}`, '2026-01-06', 'downloading')
+    await updateTaskStatus(exchangeA, `A_PROC_${runId}`, '2026-01-06', 'processing')
+    await updateTaskStatus(exchangeB, `B_DONE_${runId}`, '2026-01-06', 'completed', { rows_written: 12 })
+
+    const progress = await listExchangeTaskProgress()
+
+    const rowA = progress.find(row => row.exchange === exchangeA)
+    const rowB = progress.find(row => row.exchange === exchangeB)
+
+    expect(rowA).toEqual({
+      exchange: exchangeA,
+      completed_tasks: 1,
+      pending_tasks: 3,
+      failed_tasks: 2,
+      error_breakdown: [['parse error', 2]],
+    })
+    expect(rowB).toEqual({
+      exchange: exchangeB,
+      completed_tasks: 1,
+      pending_tasks: 1,
+      failed_tasks: 0,
+      error_breakdown: [],
+    })
+
+    const totalLatestTasks = progress.reduce(
+      (sum, row) => sum + row.completed_tasks + row.pending_tasks + row.failed_tasks,
+      0
+    )
+    expect(totalLatestTasks).toBe(8)
+  })
+
+  it('excludes blank failure messages and non-latest failures from error breakdowns', async () => {
+    const runId = randomUUID().slice(0, 8)
+    const exchange = trackDownloadTaskExchange(`errors_${runId}`)
+
+    await insertDownloadTasks([
+      {
+        exchange,
+        symbol: `DONE_${runId}`,
+        date: '2026-01-07',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange,
+        symbol: `BLANK_${runId}`,
+        date: '2026-01-07',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+      {
+        exchange,
+        symbol: `NULL_${runId}`,
+        date: '2026-01-07',
+        status: 'pending',
+        error_message: null,
+        file_size_bytes: null,
+        rows_written: null,
+        quality_score: null,
+      },
+    ])
+
+    await updateTaskStatus(exchange, `DONE_${runId}`, '2026-01-07', 'failed', { error_message: 'transient error' })
+    await updateTaskStatus(exchange, `DONE_${runId}`, '2026-01-07', 'completed', { rows_written: 20 })
+    await updateTaskStatus(exchange, `BLANK_${runId}`, '2026-01-07', 'failed', { error_message: '' })
+    await updateTaskStatus(exchange, `NULL_${runId}`, '2026-01-07', 'failed', { error_message: null })
+
+    const progress = await listExchangeTaskProgress()
+    const row = progress.find(result => result.exchange === exchange)
+
+    expect(row).toEqual({
+      exchange,
+      completed_tasks: 1,
+      pending_tasks: 0,
+      failed_tasks: 2,
+      error_breakdown: [],
+    })
   })
 })

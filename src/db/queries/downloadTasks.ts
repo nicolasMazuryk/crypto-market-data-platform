@@ -20,6 +20,24 @@ export interface TaskStatusCounts {
   failed: number
 }
 
+export type ErrorBreakdownEntry = [errorMessage: string, occurrences: number]
+
+export interface ExchangeTaskProgressRow {
+  exchange: string
+  completed_tasks: number
+  pending_tasks: number
+  failed_tasks: number
+  error_breakdown: ErrorBreakdownEntry[]
+}
+
+interface RawExchangeTaskProgressRow {
+  exchange: string
+  completed_tasks: string | number
+  pending_tasks: string | number
+  failed_tasks: string | number
+  error_breakdown: unknown
+}
+
 function hasOwn(fields: DownloadTaskUpdateFields, key: keyof DownloadTaskUpdateFields): boolean {
   return Object.prototype.hasOwnProperty.call(fields, key)
 }
@@ -40,6 +58,39 @@ function nextUpdatedAt(existing: DownloadTaskRow | null): string {
   const effectiveMs = previousUpdatedAtMs === null ? nowMs : Math.max(nowMs, previousUpdatedAtMs + 1000)
 
   return toClickHouseDateTime(new Date(effectiveMs))
+}
+
+function toNumber(value: string | number): number {
+  return typeof value === 'number' ? value : Number(value)
+}
+
+function normalizeErrorBreakdown(value: unknown): ErrorBreakdownEntry[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value.flatMap(entry => {
+    if (Array.isArray(entry) && entry.length >= 2) {
+      return [[String(entry[0]), toNumber(entry[1] as string | number)]]
+    }
+
+    if (entry && typeof entry === 'object') {
+      const tuple = entry as {
+        error_message?: unknown
+        occurrences?: unknown
+        1?: unknown
+        2?: unknown
+      }
+      const errorMessage = tuple.error_message ?? tuple[1]
+      const occurrences = tuple.occurrences ?? tuple[2]
+
+      if (errorMessage !== undefined && occurrences !== undefined) {
+        return [[String(errorMessage), toNumber(occurrences as string | number)]]
+      }
+    }
+
+    return []
+  })
 }
 
 async function getTaskByExchangeSymbolDate(
@@ -258,4 +309,60 @@ export async function countTasksByStatus(exchange?: string): Promise<TaskStatusC
   }
 
   return counts
+}
+
+export async function listExchangeTaskProgress(): Promise<ExchangeTaskProgressRow[]> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `
+      WITH latest_tasks AS (
+          SELECT
+              exchange,
+              symbol,
+              date,
+              argMax(status, updated_at) AS status,
+              argMax(error_message, updated_at) AS error_message
+          FROM download_tasks
+          GROUP BY exchange, symbol, date
+      ),
+      error_counts AS (
+          SELECT
+              exchange,
+              error_message,
+              count() AS occurrences
+          FROM latest_tasks
+          WHERE status = 'failed'
+            AND error_message IS NOT NULL
+            AND error_message != ''
+          GROUP BY exchange, error_message
+      ),
+      errors_by_exchange AS (
+          SELECT
+              exchange,
+              arraySort(item -> item.1, groupArray((error_message, occurrences))) AS error_breakdown
+          FROM error_counts
+          GROUP BY exchange
+      )
+      SELECT
+          t.exchange,
+          countIf(t.status = 'completed') AS completed_tasks,
+          countIf(t.status IN ('pending', 'downloading', 'processing')) AS pending_tasks,
+          countIf(t.status = 'failed') AS failed_tasks,
+          ifNull(e.error_breakdown, []) AS error_breakdown
+      FROM latest_tasks AS t
+      LEFT JOIN errors_by_exchange AS e USING (exchange)
+      GROUP BY t.exchange, e.error_breakdown
+      ORDER BY t.exchange
+    `,
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<RawExchangeTaskProgressRow>()
+  return rows.map(row => ({
+    exchange: row.exchange,
+    completed_tasks: toNumber(row.completed_tasks),
+    pending_tasks: toNumber(row.pending_tasks),
+    failed_tasks: toNumber(row.failed_tasks),
+    error_breakdown: normalizeErrorBreakdown(row.error_breakdown),
+  }))
 }

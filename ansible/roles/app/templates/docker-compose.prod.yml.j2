@@ -72,3 +72,10 @@ services:
     command: ["node", "dist/scripts/validate-quotes.js"]
     network_mode: host
     profiles: ["worker"]
+
+  worker-report-download-task-progress:
+    image: {{ app_name }}:latest
+    env_file: {{ app_dir }}/.env
+    command: ["node", "dist/scripts/report-download-task-progress.js"]
+    network_mode: host
+    profiles: ["worker"]

@@ -77,6 +77,7 @@ npm run remote:logs:funding
 npm run remote:logs:quotes
 npm run remote:quote-sync
 npm run remote:funding-backfill
+npm run remote:report:download-task-progress
 ```
 
 The scheduled `worker-funding-rates` unit runs incremental sync only. Use `worker-funding-rates-backfill` through `npm run remote:funding-backfill` when historical coverage still needs to be seeded.
