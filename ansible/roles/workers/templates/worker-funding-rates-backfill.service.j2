@@ -7,4 +7,4 @@ OnFailure=worker-failure-notify@%n.service
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/docker compose -f {{ docker_compose_file }} run --rm -e FUNDING_RATE_SYNC_MODE=backfill worker-funding-rates
-TimeoutStartSec=14400
+TimeoutStartSec=infinity
