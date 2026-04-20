@@ -69,7 +69,7 @@ function printHelp(): void {
     '  --program <path>      Path to program.md (default: autoresearch/program.md)',
     '  --run <tag>           Run only the given tag (repeatable). Default: run all.',
     '  --baseline-only       Run iter 0 only for each selected tag',
-    '  --reset               Delete worktree + results state for selected tags first',
+    '  --reset               Delete worktree + results + reports + logs for selected tags, then exit',
     '  --list                List matrix tags and exit',
     '  --dashboard           Rebuild .autoresearch/dashboard.json and exit',
   ]
@@ -118,8 +118,7 @@ async function runWithPools(
   specs: RunSpec[],
   matrix: MatrixFile,
   programMdPath: string,
-  baselineOnly: boolean,
-  reset: boolean
+  baselineOnly: boolean
 ): Promise<void> {
   const chSemaphore = new Semaphore(matrix.max_parallel_backtests)
   const runSemaphore = new Semaphore(matrix.max_parallel)
@@ -137,16 +136,12 @@ async function runWithPools(
   try {
     const tasks = specs.map(spec =>
       runSemaphore.withLease(async () => {
-        if (reset) {
-          await resetRunState(repoRoot, spec.tag)
-        }
         const result = await runController({
           repoRoot,
           spec,
           programMdPath,
           chSemaphore,
           baselineOnly,
-          reset,
           abortSignal: abortController.signal,
         })
         console.log(
@@ -193,7 +188,15 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  await runWithPools(repoRoot, specs, matrix, programMdPath, cli.baselineOnly, cli.reset)
+  if (cli.reset) {
+    for (const { spec } of selected) {
+      await resetRunState(repoRoot, spec.tag)
+      console.log(`[autoresearch] reset: ${spec.tag}`)
+    }
+    return
+  }
+
+  await runWithPools(repoRoot, specs, matrix, programMdPath, cli.baselineOnly)
   writeDashboard(repoRoot)
 }
 

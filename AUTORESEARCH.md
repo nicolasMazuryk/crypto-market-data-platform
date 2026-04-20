@@ -36,7 +36,7 @@ Autonomous strategy parameter tuning. A Claude agent proposes YAML edits one par
 npm run autoresearch                        # Run all matrix rows
 npm run autoresearch -- --run <tag>         # Run a single tag
 npm run autoresearch -- --baseline-only     # Iter 0 only (no agent), all rows
-npm run autoresearch -- --reset             # Wipe state + worktrees, then run
+npm run autoresearch -- --reset             # Wipe state + worktrees and exit
 npm run autoresearch:list                   # Print all tags and iteration counts
 npm run autoresearch:dashboard              # Rebuild dashboard.json and exit
 ```
@@ -55,7 +55,7 @@ ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
 | `--program <path>` | `autoresearch/program.md` | Path to agent instructions |
 | `--run <tag>` | (all) | Run only this tag; repeatable for multiple tags |
 | `--baseline-only` | false | Run iter 0 only (backtest, no agent) |
-| `--reset` | false | Delete worktree + results + reports for selected tags before running |
+| `--reset` | false | Delete worktree + results + reports + logs for selected tags, then exit |
 | `--list` | false | List matrix tags and exit |
 | `--dashboard` | false | Rebuild dashboard.json and exit |
 

@@ -28,7 +28,6 @@ export interface RunControllerOptions {
   programMdPath: string
   chSemaphore: Semaphore
   baselineOnly?: boolean
-  reset?: boolean
   abortSignal?: AbortSignal
 }
 
@@ -74,7 +73,7 @@ async function runControllerLocked(opts: RunControllerOptions): Promise<RunContr
   const statePath = getStateJsonPath(repoRoot, spec.tag)
   const tsvPath = getResultsTsvPath(repoRoot, spec.tag)
 
-  const handle = await ensureWorktree({ repoRoot, spec, ...(opts.reset === true ? { reset: true } : {}) })
+  const handle = await ensureWorktree({ repoRoot, spec })
   logger.info(
     { worktree: handle.worktreePath, branch: handle.branch, baseline: handle.baselineCommit },
     'worktree ready'
