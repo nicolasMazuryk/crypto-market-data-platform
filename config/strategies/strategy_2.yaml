@@ -3,7 +3,7 @@
 
 strategy_id: "strategy_2"
 direction: "long"
-funding_threshold: 0.004      # 0.4%
+funding_threshold: 0.003      # 0.3%
 entry_offset_seconds: 5       # Enter at T_funding - 5s
 retracement_pct: 0.50         # 50% retracement target
 deadline_seconds: 60          # Max hold after T_funding

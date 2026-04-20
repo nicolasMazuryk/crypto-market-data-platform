@@ -4,7 +4,7 @@
 exchange: "binance"
 # symbol: "HANAUSDT"  # Omit to run for all symbols on the exchange
 start_date: "2025-10-11 00:00:00"
-end_date: "2025-10-14 00:00:00"
+end_date: "2026-04-14 00:00:00"
 
 fees:
   binance:
@@ -33,8 +33,8 @@ fees:
     maker_fee: 0.0002   # 0.02%
 
 validation:
-  required_seconds_before: 5
-  required_seconds_after: 10
+  required_seconds_before: 3
+  required_seconds_after: 3
   max_gap_seconds: 3
   max_price_change_pct: 0.20  # 20%
 

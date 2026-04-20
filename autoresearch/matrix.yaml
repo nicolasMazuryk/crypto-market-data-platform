@@ -19,13 +19,13 @@ per_iteration_budget_usd: 0.50
 runs:
   - strategy: strategy_1
     exchange: binance
-    agent: claude
+    agent: codex
   # - strategy: strategy_2
   #   exchange: binance
-  #   agent: claude
-  - strategy: strategy_3a
-    exchange: binance
-    agent: codex
+  #   agent: codex
+  # - strategy: strategy_3a
+  #   exchange: binance
+  #   agent: codex
   # - strategy: strategy_5
   #   exchange_a: binance
   #   exchange_b: bybit
