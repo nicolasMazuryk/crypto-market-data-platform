@@ -1,0 +1,89 @@
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
+import { buildPrompt } from '../agent/prompt-builder.js'
+import type { ResultRow, RunSpec } from '../types.js'
+
+function spec(overrides: Partial<RunSpec> = {}): RunSpec {
+  return {
+    tag: 'strategy_1-binance',
+    strategy: 'strategy_1',
+    exchange: 'binance',
+    exchange_a: null,
+    exchange_b: null,
+    iterations: 50,
+    iteration_timeout_ms: 600_000,
+    backtest_timeout_ms: 600_000,
+    per_iteration_budget_usd: 0.5,
+    agent: 'claude',
+    ...overrides,
+  }
+}
+
+describe('buildPrompt', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'autoresearch-prompt-'))
+  })
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('produces stable prefix across iterations (for prompt caching)', () => {
+    const program = path.join(dir, 'program.md')
+    const yamlPath = path.join(dir, 'strat.yaml')
+    const proposal = path.join(dir, 'proposal.json')
+    fs.writeFileSync(program, '# program\ndo the thing')
+    fs.writeFileSync(yamlPath, 'strategy_id: strategy_1\nfunding_threshold: 0.004')
+
+    const makeArgs = (iter: number, rows: ResultRow[]): Parameters<typeof buildPrompt>[0] => ({
+      repoRoot: dir,
+      worktreePath: dir,
+      spec: spec(),
+      programMdPath: program,
+      strategyYamlPath: yamlPath,
+      iter,
+      iterations: 50,
+      bestPnl: null,
+      baselinePnl: null,
+      recentRows: rows,
+      proposalPath: proposal,
+    })
+
+    const p1 = buildPrompt(makeArgs(1, []))
+    const p2 = buildPrompt(makeArgs(2, []))
+
+    // Split on the iteration-context marker: prefix must be identical.
+    const marker = '## Iteration context'
+    const prefix1 = p1.slice(0, p1.indexOf(marker))
+    const prefix2 = p2.slice(0, p2.indexOf(marker))
+    expect(prefix1).toBe(prefix2)
+    expect(prefix1.length).toBeGreaterThan(100)
+  })
+
+  it('warns about strategy_5 pinned exchanges in the hard constraints', () => {
+    const program = path.join(dir, 'program.md')
+    const yamlPath = path.join(dir, 'strat.yaml')
+    fs.writeFileSync(program, 'program')
+    fs.writeFileSync(yamlPath, 'exchange_a: binance\nexchange_b: bybit')
+    const prompt = buildPrompt({
+      repoRoot: dir,
+      worktreePath: dir,
+      spec: spec({ strategy: 'strategy_5', exchange: null, exchange_a: 'binance', exchange_b: 'bybit' }),
+      programMdPath: program,
+      strategyYamlPath: yamlPath,
+      iter: 3,
+      iterations: 5,
+      bestPnl: 0.1,
+      baselinePnl: 0.05,
+      recentRows: [],
+      proposalPath: path.join(dir, 'p.json'),
+    })
+    expect(prompt).toMatch(/strategy_5 pins/)
+    expect(prompt).toMatch(/exchange_a=binance/)
+    expect(prompt).toMatch(/exchange_b=bybit/)
+  })
+})

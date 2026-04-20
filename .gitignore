@@ -18,6 +18,8 @@ tasks/
 !ansible/roles/workers/tasks/main.yml
 src/markets/snapshots/
 
+.autoresearch/
+autoresearch/worktrees/
 # Ansible
 ansible/inventory/hosts.ini
 

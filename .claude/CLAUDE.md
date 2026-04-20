@@ -108,6 +108,22 @@ npm run remote:timer:remove:markets  # Disable + stop market sync timer
 npm run remote:timer:remove:funding  # Disable + stop funding sync timer
 ```
 
+### Autoresearch
+
+See [AUTORESEARCH.md](../AUTORESEARCH.md) for full architecture, flow, and flag reference.
+
+```bash
+npm run autoresearch                        # Run all matrix rows (full tuning)
+npm run autoresearch -- --run <tag>         # Run a single tag (e.g. strategy_1-binance)
+npm run autoresearch -- --baseline-only     # Iter 0 only (no agent), all rows
+npm run autoresearch -- --reset             # Wipe state + worktrees, then run
+npm run autoresearch:list                   # Print all tags and iteration counts
+npm run autoresearch:dashboard              # Rebuild .autoresearch/dashboard.json
+```
+
+Matrix config: `autoresearch/matrix.yaml` — strategy/exchange pairs, iteration counts, parallelism.
+Agent instructions: `autoresearch/program.md` — stable prompt prefix telling the agent what to edit.
+
 ## Environment
 
 Uses `.env` (see `.env.example`) for local configuration. Production `.env` is templated by Ansible on the server.

@@ -116,6 +116,19 @@ npm run create:funding-download-tasks
 └── package.json   # Dependencies and scripts
 ```
 
+## Autoresearch
+
+Autonomous strategy parameter tuning via a Claude agent loop. The agent proposes YAML edits one parameter at a time; the harness backtests each change, commits improvements, and reverts regressions. Multiple strategy/exchange combinations run in parallel via isolated git worktrees.
+
+See [AUTORESEARCH.md](./AUTORESEARCH.md) for architecture, end-to-end flow, commands, and configuration reference.
+
+```bash
+npm run autoresearch                    # Tune all matrix rows
+npm run autoresearch -- --baseline-only # Run baselines first (no agent)
+npm run autoresearch:list               # Show configured runs
+npm run autoresearch:dashboard          # Rebuild aggregated results
+```
+
 ## License
 
 MIT
