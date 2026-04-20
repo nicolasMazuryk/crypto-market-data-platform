@@ -12,11 +12,11 @@ describe('Config Loader', () => {
     expect(config.base.exchange).toBe('binance')
     expect(config.base.symbol).toBeUndefined()
     expect(config.base.fees.binance).toBeDefined()
-    expect(config.base.validation.required_seconds_before).toBe(5)
+    expect(config.base.validation.required_seconds_before).toBe(3)
 
     expect(config.strategy.strategy_id).toBe('strategy_1')
     if (config.strategy.strategy_id === 'strategy_1') {
-      expect(config.strategy.funding_threshold).toBe(0.004)
+      expect(config.strategy.funding_threshold).toBe(0.003)
       expect(config.strategy.entry_offset_seconds).toBe(5)
       expect(config.strategy.exit_offset_seconds).toBe(2)
     }

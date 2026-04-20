@@ -4,6 +4,7 @@ import path from 'path'
 import { commitExists, resetHard, revParseHead } from '../git/ratchet.js'
 import { createTagLogger } from '../logging.js'
 import {
+  getLockPath,
   getLogPath,
   getResultsTsvPath,
   getStateJsonPath,
@@ -52,7 +53,7 @@ function writeLogLine(logPath: string, line: string): void {
  */
 export async function runController(opts: RunControllerOptions): Promise<RunControllerResult> {
   const { repoRoot, spec } = opts
-  const lockPath = path.join(repoRoot, '.autoresearch', 'results', spec.tag, 'lock')
+  const lockPath = getLockPath(repoRoot, spec.tag)
   const lock = await acquireLock(lockPath)
 
   try {

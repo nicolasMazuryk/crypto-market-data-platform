@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
@@ -47,16 +48,35 @@ function ensureSymlink(target: string, linkPath: string): void {
   fs.symlinkSync(target, linkPath)
 }
 
+interface WorktreeInfo {
+  path: string
+  branch: string | null
+}
+
+function parseWorktreePorcelain(output: string): WorktreeInfo[] {
+  const infos: WorktreeInfo[] = []
+  let current: { path?: string; branch?: string } = {}
+  for (const line of output.split('\n')) {
+    if (line.startsWith('worktree ')) {
+      if (current.path !== undefined) infos.push({ path: current.path, branch: current.branch ?? null })
+      current = { path: line.slice('worktree '.length).trim() }
+    } else if (line.startsWith('branch ') && current.path !== undefined) {
+      current.branch = line.slice('branch '.length).trim()
+    }
+  }
+  if (current.path !== undefined) infos.push({ path: current.path, branch: current.branch ?? null })
+  return infos
+}
+
 /** List worktrees attached to this repo. Each entry is an absolute path. */
 export async function listWorktreePaths(repoRoot: string): Promise<string[]> {
   const out = await runGit(repoRoot, ['worktree', 'list', '--porcelain'], 'list')
-  const paths: string[] = []
-  for (const line of out.split('\n')) {
-    if (line.startsWith('worktree ')) {
-      paths.push(line.slice('worktree '.length).trim())
-    }
-  }
-  return paths
+  return parseWorktreePorcelain(out).map(w => w.path)
+}
+
+function uniqueBranchName(repoRoot: string, tag: string): string {
+  const hash = crypto.createHash('sha256').update(repoRoot).digest('hex').slice(0, 8)
+  return `autoresearch-${hash}-${tag}`
 }
 
 async function branchExists(repoRoot: string, branch: string): Promise<boolean> {
@@ -86,22 +106,49 @@ export interface WorktreeHandle {
 export async function ensureWorktree(opts: CreateWorktreeOptions): Promise<WorktreeHandle> {
   const { repoRoot, spec, reset } = opts
   const worktreePath = getWorktreePath(repoRoot, spec.tag)
-  const branch = getBranchName(spec.tag)
+  const preferredBranch = getBranchName(spec.tag)
 
   if (reset && fs.existsSync(worktreePath)) {
     await removeWorktree(repoRoot, spec.tag)
+    // Delete the workspace-unique branch so the new worktree starts from current HEAD.
+    const uniqueBranch = uniqueBranchName(repoRoot, spec.tag)
+    if (await branchExists(repoRoot, uniqueBranch)) {
+      await runGit(repoRoot, ['branch', '-D', uniqueBranch], 'delete unique branch for reset')
+    }
   }
 
-  const worktrees = await listWorktreePaths(repoRoot)
-  const alreadyAttached = worktrees.includes(worktreePath)
+  const porcelain = await runGit(repoRoot, ['worktree', 'list', '--porcelain'], 'list')
+  const worktreeInfos = parseWorktreePorcelain(porcelain)
+  const alreadyAttached = worktreeInfos.some(w => w.path === worktreePath)
+  const preferredBranchLocked = worktreeInfos.some(
+    w => w.path !== worktreePath && w.branch === `refs/heads/${preferredBranch}`
+  )
+
+  let branch = preferredBranch
 
   if (!alreadyAttached) {
     fs.mkdirSync(path.dirname(worktreePath), { recursive: true })
-    const exists = await branchExists(repoRoot, branch)
-    if (exists) {
-      await runGit(repoRoot, ['worktree', 'add', worktreePath, branch], 'attach existing branch')
+    const exists = await branchExists(repoRoot, preferredBranch)
+    if (exists && !preferredBranchLocked) {
+      await runGit(repoRoot, ['worktree', 'add', worktreePath, preferredBranch], 'attach existing branch')
+    } else if (exists && preferredBranchLocked) {
+      // Preferred branch is checked out in another worktree (e.g. a different workspace).
+      // Create a workspace-unique branch from HEAD instead.
+      branch = uniqueBranchName(repoRoot, spec.tag)
+      const uniqueExists = await branchExists(repoRoot, branch)
+      if (uniqueExists) {
+        await runGit(repoRoot, ['worktree', 'add', worktreePath, branch], 'attach unique branch')
+      } else {
+        await runGit(repoRoot, ['worktree', 'add', '-b', branch, worktreePath, 'HEAD'], 'create unique branch')
+      }
     } else {
-      await runGit(repoRoot, ['worktree', 'add', '-b', branch, worktreePath, 'HEAD'], 'create new branch')
+      await runGit(repoRoot, ['worktree', 'add', '-b', preferredBranch, worktreePath, 'HEAD'], 'create new branch')
+    }
+  } else {
+    // Worktree already exists — find the actual branch it's on.
+    const info = worktreeInfos.find(w => w.path === worktreePath)
+    if (info?.branch !== null && info?.branch !== undefined) {
+      branch = info.branch.replace('refs/heads/', '')
     }
   }
 

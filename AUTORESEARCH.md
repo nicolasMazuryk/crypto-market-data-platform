@@ -41,6 +41,12 @@ npm run autoresearch:list                   # Print all tags and iteration count
 npm run autoresearch:dashboard              # Rebuild dashboard.json and exit
 ```
 
+If an agent needs direct remote access to the remote server which hosts ClickHouse database:
+
+```bash
+ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
+```
+
 ## CLI Flags
 
 | Flag | Default | Purpose |

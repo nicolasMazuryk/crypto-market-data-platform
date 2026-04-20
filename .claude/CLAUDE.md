@@ -87,6 +87,12 @@ npm run remote:logs:funding  # Tail funding rates logs
 npm run remote:logs:quotes   # Tail quote sync logs
 ```
 
+Code agents can SSH directly to the remote server (which hosts ClickHouse database) with:
+
+```bash
+ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
+```
+
 ### Remote Workflow (canonical sequence)
 ```bash
 npm run remote:run:markets                  # 1. Sync market listings

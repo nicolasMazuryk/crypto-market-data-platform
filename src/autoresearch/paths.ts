@@ -35,7 +35,7 @@ export function getLogPath(repoRoot: string, tag: string): string {
 }
 
 export function getLockPath(repoRoot: string, tag: string): string {
-  return path.join(getResultsDir(repoRoot, tag), 'lock')
+  return path.join(getAutoresearchRoot(repoRoot), 'locks', `${tag}.lock`)
 }
 
 export function getDashboardJsonPath(repoRoot: string): string {

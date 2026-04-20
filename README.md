@@ -69,6 +69,12 @@ npm run format:check
 
 ## Remote Operations
 
+Code agents can SSH directly to the remote server which hosts ClickHouse with:
+
+```bash
+ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
+```
+
 ```bash
 npm run remote:ssh
 npm run remote:status

@@ -146,6 +146,7 @@ async function runWithPools(
           programMdPath,
           chSemaphore,
           baselineOnly,
+          reset,
           abortSignal: abortController.signal,
         })
         console.log(

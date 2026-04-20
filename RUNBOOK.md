@@ -99,6 +99,12 @@ npm run remote:timer:remove:funding
 
 ## SSH Access
 
+Code agents can connect directly with:
+
+```bash
+ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
+```
+
 ```bash
 npm run remote:ssh
 ```
