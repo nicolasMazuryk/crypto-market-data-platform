@@ -74,6 +74,12 @@ describe('Config Loader', () => {
     expect(config.base.fees.binance?.taker_fee).toBe(0.0005)
   })
 
+  it('defaults funding_time_tolerance_seconds to 60 when absent', () => {
+    const stratPath = path.join(process.cwd(), 'config', 'strategies', 'strategy_5.yaml')
+    const config = loadConfig(stratPath, BASE_CONFIG)
+    expect(config.base.funding_time_tolerance_seconds).toBe(60)
+  })
+
   it('throws for non-existent base config', () => {
     const stratPath = path.join(process.cwd(), 'config', 'strategies', 'strategy_1.yaml')
     expect(() => loadConfig(stratPath, '/nonexistent/path.yaml')).toThrow('Base config not found')

@@ -53,10 +53,20 @@ export async function queryCrossExchangeFundingEvents(
   endDate: string,
   thresholdA: number,
   maxB: number,
-  spreadThreshold: number
+  spreadThreshold: number,
+  fundingTimeToleranceSeconds = 60
 ): Promise<CrossFundingEvent[]> {
   const symbolFilter = symbol ? 'AND a.symbol = {symbol: String}' : ''
-  const params: Record<string, unknown> = { exchangeA, exchangeB, startDate, endDate, thresholdA, maxB, spreadThreshold }
+  const params: Record<string, unknown> = {
+    exchangeA,
+    exchangeB,
+    startDate,
+    endDate,
+    thresholdA,
+    maxB,
+    spreadThreshold,
+    fundingTimeToleranceSeconds,
+  }
   if (symbol) params.symbol = symbol
 
   const client = getClickHouseClient()
@@ -70,7 +80,8 @@ export async function queryCrossExchangeFundingEvents(
       FROM funding_rates a
       INNER JOIN funding_rates b
         ON a.symbol = b.symbol
-        AND a.funding_time = b.funding_time
+        AND toStartOfHour(a.funding_time) = toStartOfHour(b.funding_time)
+        AND abs(dateDiff('second', a.funding_time, b.funding_time)) <= {fundingTimeToleranceSeconds: UInt32}
       WHERE a.exchange = {exchangeA: String}
         AND b.exchange = {exchangeB: String}
         ${symbolFilter}

@@ -54,7 +54,8 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
       base.end_date,
       s5Config.funding_threshold_a,
       s5Config.funding_max_b,
-      s5Config.funding_spread_threshold
+      s5Config.funding_spread_threshold,
+      base.funding_time_tolerance_seconds
     )
 
     totalEventsScanned = crossEvents.length

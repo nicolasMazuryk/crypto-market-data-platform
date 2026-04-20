@@ -66,6 +66,11 @@ export interface BaseConfig {
   slippage: SlippageConfig
   /** Reporting config */
   reporting: ReportingConfig
+  /**
+   * Max seconds two exchanges' funding_time values may differ and still be
+   * considered the same funding event (Strategy 5 cross-exchange join).
+   */
+  funding_time_tolerance_seconds: number
 }
 
 /** Strategy 1: Negative Funding LONG - Instant Exit */

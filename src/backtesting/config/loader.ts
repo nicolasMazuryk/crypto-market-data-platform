@@ -177,6 +177,12 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
     output_dir: requireString(rObj, 'output_dir', `${ctx}.reporting`),
   }
 
+  const toleranceRaw = merged.funding_time_tolerance_seconds
+  const funding_time_tolerance_seconds =
+    toleranceRaw === undefined || toleranceRaw === null
+      ? 60
+      : requirePositiveInt(merged, 'funding_time_tolerance_seconds', ctx)
+
   return {
     exchange,
     ...(symbol ? { symbol } : {}),
@@ -187,6 +193,7 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
     window,
     slippage,
     reporting,
+    funding_time_tolerance_seconds,
   }
 }
 
