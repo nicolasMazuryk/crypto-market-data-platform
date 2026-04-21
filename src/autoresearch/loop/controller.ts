@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 
 import { commitExists, resetHard, revParseHead } from '../git/ratchet.js'
-import { createTagLogger } from '../logging.js'
+import { createTagLogger, stripAnsi } from '../logging.js'
 import {
   getLockPath,
   getLogPath,
@@ -67,7 +67,7 @@ async function runControllerLocked(opts: RunControllerOptions): Promise<RunContr
   const logger = createTagLogger(repoRoot, spec.tag)
   const logPath = getLogPath(repoRoot, spec.tag)
   const logWrite = (line: string): void => {
-    writeLogLine(logPath, line)
+    writeLogLine(logPath, stripAnsi(line))
   }
 
   const statePath = getStateJsonPath(repoRoot, spec.tag)

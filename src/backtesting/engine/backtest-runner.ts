@@ -61,38 +61,50 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     totalEventsScanned = crossEvents.length
     logger.info({ events: crossEvents.length }, 'Found cross-exchange funding events')
 
-    for (const crossEvent of crossEvents) {
-      // Fetch Exchange B's data window
-      const windowB = await fetchOrderbookWindow(s5Config.exchange_b, crossEvent.symbol, crossEvent.funding_time, base.window)
-
-      totalDataRows += windowB.length
-
-      const validation = validateEventData(windowB, crossEvent.funding_time, base.validation)
-      if (!validation.valid) {
-        for (const reason of validation.skipReasons) allSkipReasons.push(reason)
-        continue
-      }
-
-      triggeredCount++
-
-      const fakeEvent: FundingEvent = {
-        exchange: s5Config.exchange_b,
-        symbol: crossEvent.symbol,
-        funding_time: crossEvent.funding_time,
-        funding_rate: crossEvent.funding_rate_b,
-      }
-
-      const result = s5Strategy.executeWithCrossExchange(
-        fakeEvent,
-        windowB,
-        crossEvent.funding_rate_a,
-        crossEvent.funding_rate_b
+    const FETCH_CONCURRENCY_S5 = 30
+    for (let i = 0; i < crossEvents.length; i += FETCH_CONCURRENCY_S5) {
+      const batch = crossEvents.slice(i, i + FETCH_CONCURRENCY_S5)
+      const pairs = await Promise.all(
+        batch.map(async crossEvent => ({
+          crossEvent,
+          windowB: await fetchOrderbookWindow(s5Config.exchange_b, crossEvent.symbol, crossEvent.funding_time, base.window),
+        }))
       )
 
-      if (result) {
-        trades.push(result)
-      } else {
-        unfilledCount++
+      for (const { crossEvent, windowB } of pairs) {
+        totalDataRows += windowB.length
+
+        const validation = validateEventData(windowB, crossEvent.funding_time, base.validation)
+        if (!validation.valid) {
+          for (const reason of validation.skipReasons) allSkipReasons.push(reason)
+          continue
+        }
+
+        triggeredCount++
+
+        const fakeEvent: FundingEvent = {
+          exchange: s5Config.exchange_b,
+          symbol: crossEvent.symbol,
+          funding_time: crossEvent.funding_time,
+          funding_rate: crossEvent.funding_rate_b,
+        }
+
+        const result = s5Strategy.executeWithCrossExchange(
+          fakeEvent,
+          windowB,
+          crossEvent.funding_rate_a,
+          crossEvent.funding_rate_b
+        )
+
+        if (result) {
+          trades.push(result)
+        } else {
+          unfilledCount++
+        }
+      }
+
+      if (i > 0 && i % 1000 === 0) {
+        logger.info({ processed: i, total: crossEvents.length }, 'Backtest progress')
       }
     }
   } else {
@@ -110,29 +122,42 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     totalEventsScanned = events.length
     logger.info({ events: events.length }, 'Found funding events meeting threshold')
 
-    for (const event of events) {
-      const window = await fetchOrderbookWindow(event.exchange, event.symbol, event.funding_time, base.window)
+    const FETCH_CONCURRENCY = 30
+    for (let i = 0; i < events.length; i += FETCH_CONCURRENCY) {
+      const batch = events.slice(i, i + FETCH_CONCURRENCY)
+      const pairs = await Promise.all(
+        batch.map(async event => ({
+          event,
+          window: await fetchOrderbookWindow(event.exchange, event.symbol, event.funding_time, base.window),
+        }))
+      )
 
-      totalDataRows += window.length
+      for (const { event, window } of pairs) {
+        totalDataRows += window.length
 
-      const validation = validateEventData(window, event.funding_time, base.validation)
-      if (!validation.valid) {
-        for (const reason of validation.skipReasons) allSkipReasons.push(reason)
-        logger.debug({ event: event.funding_time, reasons: validation.skipReasons }, 'Skipping event')
-        continue
+        const validation = validateEventData(window, event.funding_time, base.validation)
+        if (!validation.valid) {
+          for (const reason of validation.skipReasons) allSkipReasons.push(reason)
+          logger.debug({ event: event.funding_time, reasons: validation.skipReasons }, 'Skipping event')
+          continue
+        }
+
+        if (!strategy.shouldTrigger(event)) {
+          continue
+        }
+
+        triggeredCount++
+
+        const result = strategy.execute(event, window)
+        if (result) {
+          trades.push(result)
+        } else {
+          unfilledCount++
+        }
       }
 
-      if (!strategy.shouldTrigger(event)) {
-        continue
-      }
-
-      triggeredCount++
-
-      const result = strategy.execute(event, window)
-      if (result) {
-        trades.push(result)
-      } else {
-        unfilledCount++
+      if (i > 0 && i % 1000 === 0) {
+        logger.info({ processed: i, total: events.length }, 'Backtest progress')
       }
     }
   }

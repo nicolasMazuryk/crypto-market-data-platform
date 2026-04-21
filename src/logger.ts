@@ -62,7 +62,9 @@ const consoleTransport = !isProduction
   ? pino.transport({
       target: 'pino-pretty',
       options: {
-        colorize: true,
+        // Avoid ANSI in piped child output (autoresearch log files, CI) while
+        // keeping colors for interactive terminals.
+        colorize: process.stdout.isTTY === true,
         translateTime: 'SYS:standard',
         ignore: 'pid,hostname',
         messageKey: 'message',
