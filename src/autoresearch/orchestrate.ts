@@ -5,8 +5,8 @@ import { writeDashboard } from './dashboard.js'
 import { runController } from './loop/controller.js'
 import { Semaphore } from './loop/pool.js'
 import { loadMatrix, toRunSpec } from './matrix/loader.js'
-import { tagForRow } from './paths.js'
-import { removeWorktree } from './worktree/manager.js'
+import { getDashboardJsonPath, tagForRow } from './paths.js'
+import { deleteAutoresearchBranch, removeWorktree } from './worktree/manager.js'
 import type { MatrixFile, MatrixRow, RunSpec } from './types.js'
 
 interface CliArgs {
@@ -67,9 +67,10 @@ function printHelp(): void {
     'Flags:',
     '  --matrix <path>       Path to matrix.yaml (default: autoresearch/matrix.yaml)',
     '  --program <path>      Path to program.md (default: autoresearch/program.md)',
-    '  --run <tag>           Run only the given tag (repeatable). Default: run all.',
+    '  --run <tag>           Limit to this tag (repeatable). Applies to run, baseline-only, and reset.',
     '  --baseline-only       Run iter 0 only for each selected tag',
-    '  --reset               Delete worktree + results + reports + logs for selected tags, then exit',
+    '  --reset               Delete worktree + branch + results + reports + logs for selected tags, then exit.',
+    '                        Combine with --run to reset a single tag.',
     '  --list                List matrix tags and exit',
     '  --dashboard           Rebuild .autoresearch/dashboard.json and exit',
   ]
@@ -82,6 +83,7 @@ function resolveRepoRoot(): string {
 
 async function resetRunState(repoRoot: string, tag: string): Promise<void> {
   await removeWorktree(repoRoot, tag)
+  await deleteAutoresearchBranch(repoRoot, tag)
   const resultsDir = path.join(repoRoot, '.autoresearch', 'results', tag)
   if (fs.existsSync(resultsDir)) {
     fs.rmSync(resultsDir, { recursive: true, force: true })
@@ -192,6 +194,15 @@ async function main(): Promise<void> {
     for (const { spec } of selected) {
       await resetRunState(repoRoot, spec.tag)
       console.log(`[autoresearch] reset: ${spec.tag}`)
+    }
+    // Only wipe the dashboard when resetting all tags; a partial reset leaves
+    // other tags' data intact so the dashboard remains useful.
+    if (cli.runs === null) {
+      const dashboardPath = getDashboardJsonPath(repoRoot)
+      if (fs.existsSync(dashboardPath)) {
+        fs.rmSync(dashboardPath, { force: true })
+        console.log('[autoresearch] reset: dashboard.json removed')
+      }
     }
     return
   }

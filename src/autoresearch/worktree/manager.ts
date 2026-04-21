@@ -189,6 +189,26 @@ export async function removeWorktree(repoRoot: string, tag: string): Promise<voi
   await runGit(repoRoot, ['worktree', 'remove', '--force', worktreePath], 'remove worktree')
 }
 
+/**
+ * Delete the autoresearch branch for a tag if no remaining worktree is using it.
+ * Safe to call after removeWorktree; skips silently if the branch does not exist
+ * or is still in use by another worktree.
+ */
+export async function deleteAutoresearchBranch(repoRoot: string, tag: string): Promise<void> {
+  const branch = getBranchName(tag)
+  if (!(await branchExists(repoRoot, branch))) return
+
+  // Verify no other worktree is still using this branch before deleting.
+  const porcelain = await runGit(repoRoot, ['worktree', 'list', '--porcelain'], 'list worktrees')
+  const inUse = parseWorktreePorcelain(porcelain).some(w => w.branch === `refs/heads/${branch}`)
+  if (inUse) return
+
+  const result = await execGit(repoRoot, ['branch', '-D', branch])
+  if (result.code !== 0) {
+    console.warn(`[autoresearch] Could not delete branch ${branch}: ${result.stderr.trim()}`)
+  }
+}
+
 function applyBaseConfigOverrides(worktreePath: string, spec: RunSpec): void {
   const baseConfigPath = path.join(worktreePath, 'config', 'base_config.yaml')
   if (!fs.existsSync(baseConfigPath)) {
