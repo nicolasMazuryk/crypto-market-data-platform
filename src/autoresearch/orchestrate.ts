@@ -6,6 +6,7 @@ import { runController } from './loop/controller.js'
 import { Semaphore } from './loop/pool.js'
 import { loadMatrix, toRunSpec } from './matrix/loader.js'
 import { getDashboardJsonPath, tagForRow } from './paths.js'
+import { startTunnel } from './tunnel.js'
 import { deleteAutoresearchBranch, removeWorktree } from './worktree/manager.js'
 import type { MatrixFile, MatrixRow, RunSpec } from './types.js'
 
@@ -207,7 +208,17 @@ async function main(): Promise<void> {
     return
   }
 
-  await runWithPools(repoRoot, specs, matrix, programMdPath, cli.baselineOnly)
+  console.log('[autoresearch] opening SSH tunnel to remote ClickHouse...')
+  const tunnel = await startTunnel()
+  process.env.CLICKHOUSE_HOST = '127.0.0.1'
+  process.env.CLICKHOUSE_HTTP_PORT = String(tunnel.localPort)
+  console.log(`[autoresearch] tunnel ready on port ${String(tunnel.localPort)}`)
+
+  try {
+    await runWithPools(repoRoot, specs, matrix, programMdPath, cli.baselineOnly)
+  } finally {
+    tunnel.close()
+  }
   writeDashboard(repoRoot)
 }
 
