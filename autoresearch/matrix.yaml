@@ -26,6 +26,28 @@ runs:
   - strategy: strategy_3a
     exchange: binance
     agent: codex
+  # - strategy: strategy_3b
+  #   exchange: binance
+  #   agent: codex
+  # - strategy: strategy_4_1a
+  #   exchange: binance
+  #   agent: codex
+  # - strategy: strategy_4_1b
+  #   exchange: binance
+  #   agent: codex
+  # - strategy: strategy_4_2a
+  #   exchange: binance
+  #   agent: codex
+  # - strategy: strategy_4_2b
+  #   exchange: binance
+  #   agent: codex
+  # - strategy: strategy_4_3a
+  #   exchange: binance
+  #   agent: codex
+  # - strategy: strategy_4_3b
+  #   exchange: binance
+  #   agent: codex
   # - strategy: strategy_5
   #   exchange_a: binance
   #   exchange_b: bybit
+  #   agent: codex
