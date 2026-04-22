@@ -59,3 +59,19 @@ export function tagForRow(row: MatrixRow): string {
 export function allowedEditPathsForStrategy(strategy: string): string[] {
   return [`config/strategies/${strategy}.yaml`]
 }
+
+export function getProposalsDir(repoRoot: string, tag: string): string {
+  return path.join(getResultsDir(repoRoot, tag), 'proposals')
+}
+
+export function getProposalIterPath(repoRoot: string, tag: string, iter: number): string {
+  return path.join(getProposalsDir(repoRoot, tag), `iter_${String(iter)}.json`)
+}
+
+export function strategyDocFamily(strategyId: string): string {
+  if (strategyId === 'strategy_3a' || strategyId === 'strategy_3b') return 'strategy_3'
+  if (strategyId === 'strategy_4_1a' || strategyId === 'strategy_4_1b') return 'strategy_4_1'
+  if (strategyId === 'strategy_4_2a' || strategyId === 'strategy_4_2b') return 'strategy_4_2'
+  if (strategyId === 'strategy_4_3a' || strategyId === 'strategy_4_3b') return 'strategy_4_3'
+  return strategyId
+}

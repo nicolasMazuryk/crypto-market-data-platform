@@ -79,9 +79,9 @@ export interface Strategy1Config {
   direction: 'long'
   /** Minimum absolute funding rate to trigger (e.g., 0.004 for 0.4%) */
   funding_threshold: number
-  /** Seconds before T_funding to enter */
+  /** Seconds before T_funding to enter (>= 2, market-order latency) */
   entry_offset_seconds: number
-  /** Seconds after T_funding to exit */
+  /** Seconds after T_funding to exit (>= 2, market-order latency) */
   exit_offset_seconds: number
 }
 
@@ -90,10 +90,11 @@ export interface Strategy2Config {
   strategy_id: 'strategy_2'
   direction: 'long'
   funding_threshold: number
+  /** Seconds before T_funding to enter (>= 2, market-order latency) */
   entry_offset_seconds: number
   /** Retracement level (0-1, e.g., 0.50 for 50%) */
   retracement_pct: number
-  /** Max seconds after T_funding before forced exit */
+  /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
 }
 
@@ -102,6 +103,7 @@ export interface Strategy3Config {
   strategy_id: 'strategy_3a' | 'strategy_3b'
   direction: 'short'
   funding_threshold: number
+  /** Seconds before T_funding to enter (>= 2, market-order latency) */
   entry_offset_seconds: number
   /** Stop-loss distance as fraction (e.g., 0.01 for 1%) */
   stop_loss: number
@@ -118,8 +120,9 @@ export interface Strategy41Config {
   strategy_id: 'strategy_4_1a' | 'strategy_4_1b'
   direction: 'long'
   funding_threshold: number
+  /** Seconds before T_funding to enter (>= 2, market-order latency) */
   entry_offset_seconds: number
-  /** Number of limit orders in the ladder */
+  /** Number of limit orders in the ladder (>= 2) */
   ladder_count: number
   /** Multiplier for top of ladder range */
   ladder_top_mult: number
@@ -127,6 +130,7 @@ export interface Strategy41Config {
   ladder_bottom_mult: number
   /** Take-profit above average entry (e.g., 0.002 for 0.2%) */
   take_profit: number
+  /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
   /** Whether funding fee is applied to the position */
   include_funding: boolean
@@ -137,10 +141,12 @@ export interface Strategy42Config {
   strategy_id: 'strategy_4_2a' | 'strategy_4_2b'
   direction: 'long'
   funding_threshold: number
+  /** Seconds before T_funding to enter (>= 2, market-order latency) */
   entry_offset_seconds: number
   /** Multiplier for limit price offset */
   limit_offset_mult: number
   take_profit: number
+  /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
   include_funding: boolean
 }
@@ -150,6 +156,7 @@ export interface Strategy43Config {
   strategy_id: 'strategy_4_3a' | 'strategy_4_3b'
   direction: 'long'
   funding_threshold: number
+  /** Seconds before T_funding to enter (>= 2, market-order latency) */
   entry_offset_seconds: number
   /** Multiplier for entry limit price offset */
   entry_mult: number
@@ -157,6 +164,7 @@ export interface Strategy43Config {
   sl_mult: number
   /** Take-profit distance (e.g., 0.003 for 0.3%) */
   take_profit: number
+  /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
   include_funding: boolean
 }
@@ -175,7 +183,9 @@ export interface Strategy5Config {
   funding_max_b: number
   /** Minimum funding spread (F_A - F_B) */
   funding_spread_threshold: number
+  /** Seconds before T_funding to enter (>= 2, market-order latency) */
   entry_offset_seconds: number
+  /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
   /** Volume ratio threshold: A volume must exceed B volume by this factor */
   vol_ratio_threshold: number

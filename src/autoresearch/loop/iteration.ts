@@ -10,6 +10,7 @@ import { runBacktest } from '../backtest/runner.js'
 import { enforceScope } from '../git/diff-gate.js'
 import { commitAll, diffNameOnlyHead, resetHard, revParseHead } from '../git/ratchet.js'
 import {
+  getProposalIterPath,
   getProposalJsonPath,
   getReportsDir,
   getResultsDir,
@@ -118,6 +119,12 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   const afterHash = hashFile(yamlPath)
   const proposal = readProposal(proposalPath)
   const summary = proposal?.summary ?? ''
+
+  if (proposal !== null) {
+    const proposalIterPath = getProposalIterPath(repoRoot, spec.tag, iter)
+    fs.mkdirSync(path.dirname(proposalIterPath), { recursive: true })
+    fs.writeFileSync(proposalIterPath, JSON.stringify(proposal, null, 2))
+  }
 
   if (afterHash === beforeHash) {
     // No change at all — skip backtest entirely.

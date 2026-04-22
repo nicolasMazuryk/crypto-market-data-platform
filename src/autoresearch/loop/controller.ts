@@ -20,7 +20,7 @@ import { runBaselineIteration, runIteration } from './iteration.js'
 import type { Semaphore } from './pool.js'
 
 const CONSECUTIVE_ERROR_THRESHOLD = 5
-const RECENT_ROWS_IN_PROMPT = 10
+const RECENT_ROWS_IN_PROMPT = 100
 
 export interface RunControllerOptions {
   repoRoot: string

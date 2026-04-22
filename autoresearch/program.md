@@ -31,9 +31,11 @@ field; do not touch them.
 Spend a minute grounding each proposal in the strategy math and the data
 distribution before editing. Recommended reads:
 
-- `docs-strategy/funding_rate_strategies.md` — strategy hypothesis, variable
-  glossary, and P&L decomposition. Skim this at the start of a run so your
-  proposals align with the documented intent. Read strategy that matches your assigned tag.
+- `docs-strategy/strategies/_globals.md` — global variable glossary, P&L
+  decomposition, and hard parameter bounds. Read this first.
+- `docs-strategy/strategies/<family>.md` for your assigned tag — extracted spec
+  for your specific strategy (family derived from `strategy_id`; the exact path
+  is shown in `docs_for_this_run` in the Run identity block above).
 - `src/backtesting/index.ts`, `src/backtesting/engine/backtest-runner.ts` —
   how a backtest is driven end-to-end.
 - `src/backtesting/strategies/strategy-<n>.ts` (plus `strategy-4-1.ts`,
@@ -135,10 +137,20 @@ blocked. Do not attempt it.
 
 - Do NOT edit any file other than `config/strategies/<strategy>.yaml`.
 - Do NOT create, rename, or delete files (other than writing `proposal.json`).
-- Do NOT run `git`, `rm`, package installs, or any write-path shell command.
+- Do NOT run `git`, `rm`, package installs, or any write-path shell command. Run only the read-only commands from the allowlist above.
 - Do NOT write to `results.tsv` — that is the harness's authoritative record.
 - Do NOT mutate ClickHouse; `SELECT`/`DESCRIBE` only.
 - Do NOT reason about stopping — the harness enforces the iteration cap.
+
+## Hard parameter bounds
+
+These are enforced by the config loader. Proposals that violate them will
+fail the backtest and the iteration will be reverted:
+
+- `entry_offset_seconds >= 2` (market-order latency)
+- `exit_offset_seconds  >= 2`
+- `deadline_seconds`: 2 <= value <= 180
+- `ladder_count >= 2`
 
 ## Output per iteration
 
@@ -160,8 +172,9 @@ blocked. Do not attempt it.
 
 - This file (stable, cacheable prefix).
 - The current strategy YAML.
-- The last several rows of the results TSV (iter number, status, total_net_pnl,
-  sharpe, trades, and a one-line description of what was tried).
+- The last 100 rows of the results TSV (iter number, status, total_net_pnl,
+  sharpe, trades, a one-line description of what was tried, and the rationale
+  from the saved proposal where available).
 - The baseline PnL (from iter 0), the current best PnL, and `iter N of M`.
 
 ## Strategy: pick one edit per iteration

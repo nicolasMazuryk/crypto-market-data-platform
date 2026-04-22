@@ -20,7 +20,7 @@ Autonomous strategy parameter tuning. A Claude agent proposes YAML edits one par
 2. **Run baselines** — `npm run autoresearch -- --baseline-only` runs iter 0 (no agent, just backtest) for all rows. Establishes baseline PnL.
 3. **Run full tuning** — `npm run autoresearch` starts the agent loop for all matrix rows up to `default_iterations`.
 4. **Per iteration** (internal):
-   1. Build prompt: program.md + current YAML + last N TSV rows + baseline/best PnL + iter counter.
+   1. Build prompt: program.md + current YAML + last 100 TSV rows (with rationales) + baseline/best PnL + iter counter.
    2. Spawn agent (`claude -p` or `codex exec`, per row `agent:` field). Agent edits `config/strategies/<strategy>.yaml` and writes `.autoresearch/results/<tag>/proposal.json`.
    3. Diff-gate reverts any out-of-scope edits.
    4. If YAML unchanged → noop, skip backtest.
@@ -93,7 +93,9 @@ All runtime state is gitignored under `.autoresearch/`:
 ├── results/<tag>/
 │   ├── results.tsv                   # authoritative history (iter, pnl, status, description…)
 │   ├── state.json                    # current iter_count, best_pnl, best_commit
-│   └── proposal.json                 # agent output for current iteration
+│   ├── proposal.json                 # agent output for current iteration
+│   └── proposals/
+│       └── iter_<N>.json             # archived proposal (rationale + summary) per iteration
 ├── reports/<tag>/
 │   └── iter_<N>.json                 # copy of backtest JSON report per iteration
 ├── logs/<tag>.log                    # Pino structured log per tag
@@ -111,7 +113,7 @@ All runtime state is gitignored under `.autoresearch/`:
 `autoresearch/program.md` is the stable prefix of every agent prompt. It tells the agent to:
 - Edit only `config/strategies/<strategy>.yaml` (numeric parameters only).
 - Write `proposal.json` with `{rationale, summary}`.
-- Never run shell commands or touch git.
+- Run only read-only shell commands from the allowlist in program.md; never touch git.
 
 The harness appends a variable suffix each iteration: recent TSV rows + current YAML content + baseline/best PnL + `iter N of M`.
 
