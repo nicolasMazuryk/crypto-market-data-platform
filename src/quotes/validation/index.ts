@@ -10,7 +10,7 @@ export { InterpolationAnalysisAccumulator, analyzeInterpolation } from './interp
 export { OhlcIntegrityAccumulator, validateOhlcIntegrity } from './ohlc-integrity.js'
 export { PerDayBreakdownAccumulator, buildPerDayBreakdown } from './per-day-breakdown.js'
 export { PriceReasonablenessAccumulator, validatePriceReasonableness } from './price-reasonableness.js'
-export { readOrderbookData } from './reader.js'
+export { readOrderbookData, readOrderbookLiteData } from './reader.js'
 export { printValidationReport } from './report.js'
 export { SchemaMetadataAccumulator, validateSchemaMetadata } from './schema-metadata.js'
 export { SpreadDistributionAccumulator, analyzeSpreadDistribution } from './spread-distribution.js'

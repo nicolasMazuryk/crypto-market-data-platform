@@ -4,47 +4,44 @@ import path from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const listDistinctExchangeSymbolPairsMock = vi.hoisted(() => vi.fn())
-const readOrderbookDataMock = vi.hoisted(() => vi.fn())
+// ---------------------------------------------------------------------------
+// Hoisted mocks
+// ---------------------------------------------------------------------------
 
-const ohlcFinalizeMock = vi.hoisted(() => vi.fn())
-const spreadFinalizeMock = vi.hoisted(() => vi.fn())
+const listDistinctExchangeSymbolPairsMock = vi.hoisted(() => vi.fn())
+const queryOrderbookAggregatesMock = vi.hoisted(() => vi.fn())
+const queryOrderbookPerDayStatsMock = vi.hoisted(() => vi.fn())
+const queryOrderbookCrossExchangeOverlapMock = vi.hoisted(() => vi.fn())
+
+const readOrderbookLiteDataMock = vi.hoisted(() => vi.fn())
+
 const timeContinuityFinalizeMock = vi.hoisted(() => vi.fn())
-const interpolationFinalizeMock = vi.hoisted(() => vi.fn())
-const priceReasonablenessFinalizeMock = vi.hoisted(() => vi.fn())
-const schemaMetadataFinalizeMock = vi.hoisted(() => vi.fn())
-const dayBoundaryFinalizeMock = vi.hoisted(() => vi.fn())
-const perDayBreakdownFinalizeMock = vi.hoisted(() => vi.fn())
 const stalePriceFinalizeMock = vi.hoisted(() => vi.fn())
-const spreadDistributionFinalizeMock = vi.hoisted(() => vi.fn())
+const interpolationFinalizeMock = vi.hoisted(() => vi.fn())
 const interpolationDamageFinalizeMock = vi.hoisted(() => vi.fn())
-const timestampAlignmentFinalizeMock = vi.hoisted(() => vi.fn())
+const priceReasonablenessFinalizeMock = vi.hoisted(() => vi.fn())
 
 const computeCompletenessMock = vi.hoisted(() => vi.fn())
-const validateCrossExchangeConsistencyFromDescriptorsMock = vi.hoisted(() => vi.fn())
 const printValidationReportMock = vi.hoisted(() => vi.fn())
+
+// ---------------------------------------------------------------------------
+// Module mocks
+// ---------------------------------------------------------------------------
 
 vi.mock('../../db/queries/orderbooks.js', () => ({
   listDistinctExchangeSymbolPairs: listDistinctExchangeSymbolPairsMock,
+  queryOrderbookAggregates: queryOrderbookAggregatesMock,
+  queryOrderbookPerDayStats: queryOrderbookPerDayStatsMock,
+  queryOrderbookCrossExchangeOverlap: queryOrderbookCrossExchangeOverlapMock,
 }))
 
 vi.mock('../../quotes/validation/index.js', () => {
-  class OhlcIntegrityAccumulator {
-    update(): void {
-      return undefined
-    }
-    finalize(): unknown {
-      return ohlcFinalizeMock() as unknown
-    }
+  // Inline the two date-utility functions used by buildDayBoundaryResult / buildTimestampAlignmentResult
+  function dayStartMs(dateStr: string): number {
+    return Date.parse(`${dateStr}T00:00:00.000Z`)
   }
-
-  class SpreadValidityAccumulator {
-    update(): void {
-      return undefined
-    }
-    finalize(): unknown {
-      return spreadFinalizeMock() as unknown
-    }
+  function dayEndMs(dateStr: string): number {
+    return Date.parse(`${dateStr}T23:59:59.000Z`)
   }
 
   class TimeContinuityAccumulator {
@@ -53,64 +50,6 @@ vi.mock('../../quotes/validation/index.js', () => {
     }
     finalize(): unknown {
       return timeContinuityFinalizeMock() as unknown
-    }
-  }
-
-  class InterpolationAnalysisAccumulator {
-    update(): void {
-      return undefined
-    }
-    finalize(): unknown {
-      return interpolationFinalizeMock() as unknown
-    }
-  }
-
-  class PriceReasonablenessAccumulator {
-    update(): void {
-      return undefined
-    }
-    finalize(): unknown {
-      return priceReasonablenessFinalizeMock() as unknown
-    }
-  }
-
-  class SchemaMetadataAccumulator {
-    private firstSourceType: string | null = null
-    private firstConfidenceScore: string | null = null
-
-    update(row: { source_type: string; confidence_score: string }): void {
-      this.firstSourceType ??= row.source_type
-      this.firstConfidenceScore ??= row.confidence_score
-    }
-
-    getFirstSourceType(): string {
-      return this.firstSourceType ?? 'unknown'
-    }
-
-    getFirstConfidenceScore(): string {
-      return this.firstConfidenceScore ?? 'unknown'
-    }
-
-    finalize(): unknown {
-      return schemaMetadataFinalizeMock() as unknown
-    }
-  }
-
-  class DayBoundaryContinuityAccumulator {
-    update(): void {
-      return undefined
-    }
-    finalize(): unknown {
-      return dayBoundaryFinalizeMock() as unknown
-    }
-  }
-
-  class PerDayBreakdownAccumulator {
-    update(): void {
-      return undefined
-    }
-    finalize(): unknown {
-      return perDayBreakdownFinalizeMock() as unknown
     }
   }
 
@@ -123,12 +62,12 @@ vi.mock('../../quotes/validation/index.js', () => {
     }
   }
 
-  class SpreadDistributionAccumulator {
+  class InterpolationAnalysisAccumulator {
     update(): void {
       return undefined
     }
     finalize(): unknown {
-      return spreadDistributionFinalizeMock() as unknown
+      return interpolationFinalizeMock() as unknown
     }
   }
 
@@ -141,64 +80,180 @@ vi.mock('../../quotes/validation/index.js', () => {
     }
   }
 
-  class TimestampAlignmentAccumulator {
+  class PriceReasonablenessAccumulator {
     update(): void {
       return undefined
     }
     finalize(): unknown {
-      return timestampAlignmentFinalizeMock() as unknown
+      return priceReasonablenessFinalizeMock() as unknown
     }
   }
 
   return {
-    OhlcIntegrityAccumulator,
-    SpreadValidityAccumulator,
+    dayStartMs,
+    dayEndMs,
     TimeContinuityAccumulator,
-    InterpolationAnalysisAccumulator,
-    PriceReasonablenessAccumulator,
-    SchemaMetadataAccumulator,
-    DayBoundaryContinuityAccumulator,
-    PerDayBreakdownAccumulator,
     StalePriceAccumulator,
-    SpreadDistributionAccumulator,
+    InterpolationAnalysisAccumulator,
     InterpolationDamageAccumulator,
-    TimestampAlignmentAccumulator,
+    PriceReasonablenessAccumulator,
     computeCompleteness: computeCompletenessMock,
     printValidationReport: printValidationReportMock,
-    readOrderbookData: readOrderbookDataMock,
-    validateCrossExchangeConsistencyFromDescriptors: validateCrossExchangeConsistencyFromDescriptorsMock,
+    readOrderbookLiteData: readOrderbookLiteDataMock,
   }
 })
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 async function loadModule() {
   vi.resetModules()
   return import('../validate-quotes.js')
 }
 
-async function* asAsyncIterable<T>(items: T[]): AsyncIterable<T> {
-  for (const item of items) {
-    await Promise.resolve()
-    yield item
+async function* emptyAsyncIterable(): AsyncIterable<never> {
+  // yields nothing
+}
+
+// A complete, "all-passing" aggregate row for a symbol
+function makeAggregateRow(exchange: string, symbol: string) {
+  const dayStr = '2025-01-01'
+  // Midnight UTC and end-of-day UTC in ms
+  const firstTsMs = Date.parse(`${dayStr}T00:00:00.000Z`)
+  const lastTsMs = Date.parse(`${dayStr}T23:59:59.000Z`)
+
+  return {
+    exchange,
+    symbol,
+    row_count: '86400',
+    first_ts_ms: String(firstTsMs),
+    last_ts_ms: String(lastTsMs),
+    expected_candles: '86400',
+    ohlc_constraint_violation_count: '0',
+    partial_ohlc_count: '0',
+    negative_price_count: '0',
+    zero_price_non_interp_count: '0',
+    spread_open_violations: '0',
+    spread_high_violations: '0',
+    spread_low_violations: '0',
+    spread_close_violations: '0',
+    nan_count: '0',
+    infinity_count: '0',
+    interpolated_count: '0',
+    spread_sample_count: '86400',
+    spread_mean_bps: '10',
+    spread_stddev_bps: '1',
+    spread_median_bps: '10',
+    spread_p75_bps: '11',
+    spread_p95_bps: '12',
+    spread_p99_bps: '13',
+    spread_unreasonable_count_500: '0',
+    spread_unreasonable_count_100: '0',
+    exchange_values: [exchange],
+    symbol_values: [symbol],
+    source_type_values: ['orderbook'],
+    confidence_score_values: ['high'],
+    first_source_type: 'orderbook',
+    first_confidence_score: 'high',
+    confidence_mismatch_count: '0',
+    bid_close_min: '1',
+    bid_close_max: '1',
+    bid_close_mean: '1',
+    ask_close_min: '1.01',
+    ask_close_max: '1.01',
+    ask_close_mean: '1.01',
   }
 }
 
-const sampleRow = {
-  ts: 1_000,
-  exchange: 'binance',
-  symbol: 'BTCUSDT',
-  bid_open: 1,
-  bid_high: 1,
-  bid_low: 1,
-  bid_close: 1,
-  ask_open: 1.1,
-  ask_high: 1.1,
-  ask_low: 1.1,
-  ask_close: 1.1,
-  source_type: 'orderbook',
-  is_interpolated: false,
-  confidence_score: 'high',
-  missing_reason: null,
+// A complete, "all-passing" per-day row (full day, no gaps)
+function makePerDayRow(exchange: string, symbol: string, dayStr = '2025-01-01') {
+  const firstTsMs = Date.parse(`${dayStr}T00:00:00.000Z`)
+  const lastTsMs = Date.parse(`${dayStr}T23:59:59.000Z`)
+
+  return {
+    exchange,
+    symbol,
+    day: dayStr,
+    candle_count: '86400',
+    interpolated_count: '0',
+    first_ts_ms: String(firstTsMs),
+    last_ts_ms: String(lastTsMs),
+    first_bid_close: 1,
+    first_ask_close: 1.01,
+    last_bid_close: 1,
+    last_ask_close: 1.01,
+  }
 }
+
+// ---------------------------------------------------------------------------
+// Default passing finalize returns
+// ---------------------------------------------------------------------------
+
+function setupPassingFinalizes() {
+  timeContinuityFinalizeMock.mockReturnValue({
+    firstTs: 1_000_000_000,
+    lastTs: 1_000_086_399_000,
+    durationMs: 86_399_000,
+    expectedCandles: 86_400,
+    actualCandles: 86_400,
+    gapCount: 0,
+    duplicateCount: 0,
+    irregularStepCount: 0,
+    nonMonotonicCount: 0,
+    missingSeconds: 0,
+    gapExamples: [],
+    pass: true,
+  })
+
+  stalePriceFinalizeMock.mockReturnValue({
+    staleSeconds: 0,
+    stalePercent: 0,
+    runCount: 0,
+    longestRunSeconds: 0,
+    runBuckets: { '1-10s': 0, '10-60s': 0, '1-5m': 0, '>5m': 0 },
+    examples: [],
+    status: 'pass',
+  })
+
+  interpolationFinalizeMock.mockReturnValue({
+    interpolatedCount: 0,
+    interpolatedPercent: 0,
+    maxConsecutiveInterpolatedSeconds: 0,
+    runBuckets: { '1s': 0, '2-5s': 0, '5-30s': 0, '30s-5m': 0, '>5m': 0 },
+    longRuns: [],
+  })
+
+  interpolationDamageFinalizeMock.mockReturnValue({
+    boundaryCount: 0,
+    damageScore: 0,
+    highDamageCount: 0,
+    maxBoundaryChangePercent: 0,
+  })
+
+  priceReasonablenessFinalizeMock.mockReturnValue({
+    nanCount: 0,
+    infinityCount: 0,
+    invalidPriceExamples: [],
+    extremeTickCount: 0,
+    extremeTickExamples: [],
+    bidCloseStats: { min: 1, max: 1, mean: 1 },
+    askCloseStats: { min: 1.01, max: 1.01, mean: 1.01 },
+    status: 'pass',
+  })
+
+  computeCompletenessMock.mockReturnValue({
+    expectedCandles: 86_400,
+    actualCandles: 86_400,
+    coveragePercent: 100,
+    qualityScore: 100,
+    deductions: { interpolation: 0, gaps: 0, ohlc: 0, spread: 0, extremeTicks: 0, dayBoundary: 0, stalePrice: 0 },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 describe('validate-quotes script', () => {
   let originalExitCode: typeof process.exitCode
@@ -211,117 +266,24 @@ describe('validate-quotes script', () => {
     originalReportPath = process.env.QUOTES_VALIDATION_REPORT_PATH
 
     listDistinctExchangeSymbolPairsMock.mockReset()
-    readOrderbookDataMock.mockReset()
-    ohlcFinalizeMock.mockReset()
-    spreadFinalizeMock.mockReset()
+    queryOrderbookAggregatesMock.mockReset()
+    queryOrderbookPerDayStatsMock.mockReset()
+    queryOrderbookCrossExchangeOverlapMock.mockReset()
+    readOrderbookLiteDataMock.mockReset()
     timeContinuityFinalizeMock.mockReset()
-    interpolationFinalizeMock.mockReset()
-    priceReasonablenessFinalizeMock.mockReset()
-    schemaMetadataFinalizeMock.mockReset()
-    dayBoundaryFinalizeMock.mockReset()
-    perDayBreakdownFinalizeMock.mockReset()
     stalePriceFinalizeMock.mockReset()
-    spreadDistributionFinalizeMock.mockReset()
+    interpolationFinalizeMock.mockReset()
     interpolationDamageFinalizeMock.mockReset()
-    timestampAlignmentFinalizeMock.mockReset()
+    priceReasonablenessFinalizeMock.mockReset()
     computeCompletenessMock.mockReset()
-    validateCrossExchangeConsistencyFromDescriptorsMock.mockReset()
     printValidationReportMock.mockReset()
 
-    ohlcFinalizeMock.mockReturnValue({ violationCount: 0, pass: true })
-    spreadFinalizeMock.mockReturnValue({ status: 'pass', totalNegativeSpreads: 0, sourceType: 'orderbook' })
-    timeContinuityFinalizeMock.mockReturnValue({ expectedCandles: 1, missingSeconds: 0, pass: true })
-    interpolationFinalizeMock.mockReturnValue({
-      interpolatedCount: 0,
-      interpolatedPercent: 0,
-      maxConsecutiveInterpolatedSeconds: 0,
-      runBuckets: { '1s': 0, '2-5s': 0, '5-30s': 0, '30s-5m': 0, '>5m': 0 },
-      longRuns: [],
-    })
-    priceReasonablenessFinalizeMock.mockReturnValue({
-      status: 'pass',
-      nanCount: 0,
-      infinityCount: 0,
-      extremeTickCount: 0,
-      invalidPriceExamples: [],
-      extremeTickExamples: [],
-      bidCloseStats: { min: 1, max: 1, mean: 1 },
-      askCloseStats: { min: 1, max: 1, mean: 1 },
-    })
-    schemaMetadataFinalizeMock.mockReturnValue({ pass: true })
-    dayBoundaryFinalizeMock.mockReturnValue({
-      dayCount: 1,
-      checkedBoundaryCount: 0,
-      gapAtBoundaryCount: 0,
-      midnightMissingCount: 0,
-      priceJumpCount: 0,
-      examples: [],
-      pass: true,
-    })
-    perDayBreakdownFinalizeMock.mockReturnValue({
-      days: [],
-      badDayCount: 0,
-      badDays: [],
-      partialDayCount: 0,
-      bestDay: null,
-      worstDay: null,
-    })
-    stalePriceFinalizeMock.mockReturnValue({
-      staleSeconds: 0,
-      stalePercent: 0,
-      runCount: 0,
-      longestRunSeconds: 0,
-      runBuckets: {
-        '1-10s': 0,
-        '10-60s': 0,
-        '1-5m': 0,
-        '>5m': 0,
-      },
-      examples: [],
-      status: 'pass',
-    })
-    spreadDistributionFinalizeMock.mockReturnValue({
-      sampleCount: 1,
-      thresholdBps: 100,
-      meanBps: 0,
-      medianBps: 0,
-      p75Bps: 0,
-      p95Bps: 0,
-      p99Bps: 0,
-      stddevBps: 0,
-      unreasonableCount: 0,
-      unreasonablePercent: 0,
-      status: 'pass',
-    })
-    interpolationDamageFinalizeMock.mockReturnValue({
-      boundaryCount: 0,
-      damageScore: 0,
-      highDamageCount: 0,
-      maxBoundaryChangePercent: 0,
-    })
-    timestampAlignmentFinalizeMock.mockReturnValue({
-      firstTs: 1_000,
-      lastTs: 1_000,
-      firstOffsetSeconds: 0,
-      lastOffsetSeconds: 0,
-      pass: true,
-    })
-    computeCompletenessMock.mockReturnValue({
-      qualityScore: 100,
-      expectedCandles: 1,
-      actualCandles: 1,
-      coveragePercent: 100,
-      deductions: {
-        interpolation: 0,
-        gaps: 0,
-        ohlc: 0,
-        spread: 0,
-        extremeTicks: 0,
-        dayBoundary: 0,
-        stalePrice: 0,
-      },
-    })
-    validateCrossExchangeConsistencyFromDescriptorsMock.mockResolvedValue([])
+    // Default: empty stream for lite data
+    readOrderbookLiteDataMock.mockImplementation(() => emptyAsyncIterable())
+    // Default: empty cross-exchange results
+    queryOrderbookCrossExchangeOverlapMock.mockResolvedValue([])
+
+    setupPassingFinalizes()
   })
 
   afterEach(async () => {
@@ -354,25 +316,21 @@ describe('validate-quotes script', () => {
     expect(printValidationReportMock).not.toHaveBeenCalled()
   })
 
-  it('validates db datasets and writes report when configured', async () => {
+  it('validates datasets and writes report when path is configured', async () => {
     listDistinctExchangeSymbolPairsMock.mockResolvedValue([
-      { exchange: 'binance', symbol: 'BTCUSDT' },
+      { exchange: 'bybit', symbol: 'BTCUSDT' },
       { exchange: 'okx', symbol: 'BTCUSDT' },
     ])
 
-    readOrderbookDataMock.mockImplementation(() => asAsyncIterable([sampleRow]))
-
-    validateCrossExchangeConsistencyFromDescriptorsMock.mockResolvedValue([
-      {
-        symbol: 'BTCUSDT',
-        exchanges: ['binance', 'okx'],
-        overlappingSeconds: 1,
-        meanDivergencePercent: 0,
-        maxDivergencePercent: 0,
-        divergenceAboveOnePercentCount: 0,
-        examples: [],
-      },
+    queryOrderbookAggregatesMock.mockResolvedValue([
+      makeAggregateRow('bybit', 'BTCUSDT'),
+      makeAggregateRow('okx', 'BTCUSDT'),
     ])
+    queryOrderbookPerDayStatsMock.mockResolvedValue([
+      makePerDayRow('bybit', 'BTCUSDT'),
+      makePerDayRow('okx', 'BTCUSDT'),
+    ])
+    queryOrderbookCrossExchangeOverlapMock.mockResolvedValue([])
 
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'validate-quotes-script-'))
     tempDirs.push(tempDir)
@@ -383,46 +341,27 @@ describe('validate-quotes script', () => {
     const { runValidateQuotes } = await loadModule()
     await runValidateQuotes()
 
-    expect(readOrderbookDataMock).toHaveBeenCalledTimes(2)
-    expect(validateCrossExchangeConsistencyFromDescriptorsMock).toHaveBeenCalledTimes(1)
+    // Lite streaming was used for each symbol
+    expect(readOrderbookLiteDataMock).toHaveBeenCalledTimes(2)
+    // Cross-exchange was checked for the multi-exchange symbol
+    expect(queryOrderbookCrossExchangeOverlapMock).toHaveBeenCalledWith(['BTCUSDT'])
     expect(printValidationReportMock).toHaveBeenCalledTimes(1)
     await expect(fs.access(reportPath)).resolves.toBeUndefined()
     expect(process.exitCode).toBe(0)
-
-    const [descriptorsBySymbol] =
-      validateCrossExchangeConsistencyFromDescriptorsMock.mock.calls[0] as [Map<string, unknown[]>]
-    expect([...descriptorsBySymbol.entries()]).toEqual([
-      [
-        'BTCUSDT',
-        [
-          { exchange: 'binance', symbol: 'BTCUSDT' },
-          { exchange: 'okx', symbol: 'BTCUSDT' },
-        ],
-      ],
-    ])
   })
 
   it('treats day-boundary gaps as critical failures', async () => {
     listDistinctExchangeSymbolPairsMock.mockResolvedValue([{ exchange: 'okx', symbol: 'APTUSDT' }])
-    readOrderbookDataMock.mockImplementation(() =>
-      asAsyncIterable([
-        {
-          ...sampleRow,
-          exchange: 'okx',
-          symbol: 'APTUSDT',
-        },
-      ])
-    )
 
-    dayBoundaryFinalizeMock.mockReturnValue({
-      dayCount: 2,
-      checkedBoundaryCount: 1,
-      gapAtBoundaryCount: 1,
-      midnightMissingCount: 0,
-      priceJumpCount: 0,
-      examples: [],
-      pass: false,
-    })
+    queryOrderbookAggregatesMock.mockResolvedValue([makeAggregateRow('okx', 'APTUSDT')])
+
+    // Two consecutive days where the second day starts 5 seconds after the first day ends (gap)
+    const day1LastMs = Date.parse('2025-01-01T23:59:59.000Z')
+    const day2FirstMs = Date.parse('2025-01-02T00:00:04.000Z') // 5s after day1 last → gap of 5000ms ≠ 1000ms
+    queryOrderbookPerDayStatsMock.mockResolvedValue([
+      { ...makePerDayRow('okx', 'APTUSDT', '2025-01-01'), last_ts_ms: String(day1LastMs) },
+      { ...makePerDayRow('okx', 'APTUSDT', '2025-01-02'), first_ts_ms: String(day2FirstMs) },
+    ])
 
     const { runValidateQuotes } = await loadModule()
     await runValidateQuotes()
@@ -431,11 +370,7 @@ describe('validate-quotes script', () => {
     expect(printValidationReportMock).toHaveBeenCalledTimes(1)
 
     const firstCall = printValidationReportMock.mock.calls[0] as unknown[] | undefined
-    expect(firstCall).toBeDefined()
-
-    const report = firstCall?.[0] as {
-      files: { criticalFailures: string[]; status: string }[]
-    }
+    const report = firstCall?.[0] as { files: { criticalFailures: string[]; status: string }[] }
     expect(report.files[0]?.criticalFailures).toContain('day-boundary gaps')
     expect(report.files[0]?.status).toBe('fail')
   })

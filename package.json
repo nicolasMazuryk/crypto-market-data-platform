@@ -22,7 +22,7 @@
     "remote:create:funding-download-tasks": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'docker compose -f /opt/arbinet/docker-compose.prod.yml run --rm -T -e MODE=create worker-funding-download-tasks'",
     "remote:quote-sync": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo systemctl start worker-quote-sync-coordinator && sudo journalctl -u worker-quote-sync-coordinator --no-pager -f'",
     "remote:report:download-task-progress": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'docker compose -f /opt/arbinet/docker-compose.prod.yml run --rm -T worker-report-download-task-progress'",
-    "remote:validate:quotes": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'docker compose -f /opt/arbinet/docker-compose.prod.yml run --rm -T worker-validate-quotes'",
+    "remote:validate:quotes": "ssh -i ~/.ssh/nicolas -o ServerAliveInterval=60 -o ServerAliveCountMax=30 nicolas@$(cd terraform && terraform output -raw server_ip) 'docker compose -f /opt/arbinet/docker-compose.prod.yml run --rm -T worker-validate-quotes'",
     "backtest": "tsx src/scripts/run-backtest.ts",
 
     "remote:timer:add:markets": "ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) 'sudo systemctl enable worker-market-sync.timer && sudo systemctl start worker-market-sync.timer && systemctl status worker-market-sync.timer'",

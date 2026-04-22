@@ -1,5 +1,6 @@
 import type { OrderbookRow } from '../../db/types.js'
-import { streamOrderbookRows } from '../../db/queries/orderbooks.js'
+import { streamOrderbookLiteRows, streamOrderbookRows } from '../../db/queries/orderbooks.js'
+import type { OrderbookLiteRow } from '../../db/queries/orderbooks.js'
 import type { QuoteRow } from './types.js'
 
 function asTimestampMs(value: unknown): number {
@@ -54,5 +55,34 @@ export async function* readOrderbookData(
 ): AsyncIterable<QuoteRow> {
   for await (const row of streamOrderbookRows(exchange, symbol, startTime, endTime)) {
     yield toQuoteRow(row)
+  }
+}
+
+function liteToQuoteRow(row: OrderbookLiteRow): QuoteRow {
+  return {
+    ts: asTimestampMs(row.ts),
+    exchange: '',
+    symbol: '',
+    bid_open: null,
+    bid_high: null,
+    bid_low: null,
+    bid_close: row.bid_close,
+    ask_open: null,
+    ask_high: null,
+    ask_low: null,
+    ask_close: row.ask_close,
+    source_type: '',
+    is_interpolated: row.is_interpolated,
+    confidence_score: '',
+    missing_reason: null,
+  }
+}
+
+export async function* readOrderbookLiteData(
+  exchange: string,
+  symbol: string
+): AsyncIterable<QuoteRow> {
+  for await (const row of streamOrderbookLiteRows(exchange, symbol)) {
+    yield liteToQuoteRow(row)
   }
 }
