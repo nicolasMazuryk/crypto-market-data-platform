@@ -5,6 +5,15 @@
   vars_files:
     - ../group_vars/all.yml
 
+  pre_tasks:
+    - name: Ensure persistent quote validation reports directory exists
+      ansible.builtin.file:
+        path: "{{ quotes_validation_reports_dir }}"
+        state: directory
+        owner: nicolas
+        group: nicolas
+        mode: "0755"
+
   roles:
     - base
     - docker

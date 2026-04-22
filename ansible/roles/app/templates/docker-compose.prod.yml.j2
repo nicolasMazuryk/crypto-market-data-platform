@@ -70,6 +70,8 @@ services:
     image: {{ app_name }}:latest
     env_file: {{ app_dir }}/.env
     command: ["node", "dist/scripts/validate-quotes.js"]
+    volumes:
+      - {{ quotes_validation_reports_dir }}:/reports/quotes-validation
     network_mode: host
     profiles: ["worker"]
 

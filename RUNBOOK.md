@@ -161,6 +161,9 @@ npm run remote:validate:quotes    # Run quotes validation on server
 npm run remote:report:download-task-progress  # Run download task progress report on server
 ```
 
+Quote validation reports are persisted on the server under `/data/reports/quotes-validation`.
+Each run updates `latest.json` and also writes a timestamped archive copy in the same directory.
+
 ## Run Quote Sync (Coordinator, Recommended)
 
 ```bash

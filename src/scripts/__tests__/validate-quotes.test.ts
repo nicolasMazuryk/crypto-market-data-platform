@@ -347,6 +347,10 @@ describe('validate-quotes script', () => {
     expect(queryOrderbookCrossExchangeOverlapMock).toHaveBeenCalledWith(['BTCUSDT'])
     expect(printValidationReportMock).toHaveBeenCalledTimes(1)
     await expect(fs.access(reportPath)).resolves.toBeUndefined()
+    const archivedReports = (await fs.readdir(tempDir)).filter(
+      entry => entry.startsWith('report-') && entry.endsWith('.json')
+    )
+    expect(archivedReports).toHaveLength(1)
     expect(process.exitCode).toBe(0)
   })
 

@@ -67,6 +67,13 @@ function toSorted(values: string[]): string[] {
   return [...values].sort((a, b) => a.localeCompare(b))
 }
 
+function buildArchivedReportPath(reportPath: string, generatedAt: string): string {
+  const parsed = path.parse(reportPath)
+  const extension = parsed.ext.length > 0 ? parsed.ext : '.json'
+  const safeTimestamp = generatedAt.replace(/[:.]/g, '-')
+  return path.join(parsed.dir, `${parsed.name}-${safeTimestamp}${extension}`)
+}
+
 // ---------------------------------------------------------------------------
 // Build accumulator results from SQL aggregate row
 // ---------------------------------------------------------------------------
@@ -829,8 +836,13 @@ export async function runValidateQuotes(): Promise<void> {
   const reportPath = process.env.QUOTES_VALIDATION_REPORT_PATH?.trim()
   if (reportPath) {
     await fs.mkdir(path.dirname(reportPath), { recursive: true })
-    await fs.writeFile(reportPath, JSON.stringify(report, null, 2))
+    const reportJson = JSON.stringify(report, null, 2)
+    const archivePath = buildArchivedReportPath(reportPath, report.generatedAt)
+
+    await fs.writeFile(reportPath, reportJson)
+    await fs.writeFile(archivePath, reportJson)
     printValidationReport(report, reportPath)
+    console.log(`Archived report written to ${archivePath}`)
   } else {
     printValidationReport(report, '(stdout)')
   }
