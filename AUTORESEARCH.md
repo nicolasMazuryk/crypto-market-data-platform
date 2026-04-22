@@ -45,12 +45,10 @@ npm run autoresearch:dashboard              # Rebuild dashboard.json and exit
 If an agent needs direct remote access to the remote server which hosts ClickHouse database:
 
 ```bash
-ssh -i ~/.ssh/nicolas nicolas@${REMOTE_SERVER_HOST}
+ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
 ```
 
 `REMOTE_SERVER_HOST` is the single configured host/IP source for remote access.
-`npm run remote:clickhouse:query` uses this variable first; only if it is missing
-does it fall back to `terraform output -raw server_ip`.
 
 ## CLI Flags
 

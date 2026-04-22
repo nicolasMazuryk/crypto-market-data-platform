@@ -61,9 +61,7 @@ is SSH-only, so queries must go through SSH. Two ways to run a query:
    npm run remote:clickhouse:query -- "SELECT count() FROM arbinet.orderbooks"
    ```
 
-   This wrapper uses `REMOTE_SERVER_HOST` as the primary host/IP source. If
-   that variable is missing, it attempts `terraform output -raw server_ip` as
-   fallback.
+   This wrapper uses `REMOTE_SERVER_HOST` as the primary host/IP source.
 
 2. **Direct** (if you need finer control over flags):
 
