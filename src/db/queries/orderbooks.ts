@@ -353,6 +353,7 @@ GROUP BY exchange, symbol
 ORDER BY exchange ASC, symbol ASC
 `,
     format: 'JSONEachRow',
+    clickhouse_settings: { max_execution_time: 600 },
   })
 
   return result.json<OrderbookAggregateRow>()
@@ -379,6 +380,7 @@ GROUP BY exchange, symbol, toDate(ts)
 ORDER BY exchange ASC, symbol ASC, day ASC
 `,
     format: 'JSONEachRow',
+    clickhouse_settings: { max_execution_time: 600 },
   })
 
   return result.json<OrderbookPerDayRow>()

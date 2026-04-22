@@ -12,6 +12,7 @@ export function getClickHouseClient(): ClickHouseClient {
       database,
       username: user,
       password,
+      request_timeout: 600_000,
     })
   }
 
