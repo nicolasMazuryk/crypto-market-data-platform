@@ -61,10 +61,14 @@ is SSH-only, so queries must go through SSH. Two ways to run a query:
    npm run remote:clickhouse:query -- "SELECT count() FROM arbinet.orderbooks"
    ```
 
+   This wrapper uses `REMOTE_SERVER_HOST` as the primary host/IP source. If
+   that variable is missing, it attempts `terraform output -raw server_ip` as
+   fallback.
+
 2. **Direct** (if you need finer control over flags):
 
    ```bash
-   ssh -i ~/.ssh/nicolas nicolas@$(cd terraform && terraform output -raw server_ip) \
+   ssh -i ~/.ssh/nicolas nicolas@${REMOTE_SERVER_HOST} \
      "docker exec -i arbinet-clickhouse clickhouse-client --database=arbinet --query=\"<SQL>\""
    ```
 
