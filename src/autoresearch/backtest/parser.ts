@@ -19,10 +19,13 @@ function toFinite(val: number): number {
 }
 
 export function extractMetrics(report: BacktestReport): BacktestMetrics {
+  const ecm = report.equity_curve_metrics
   return {
     total_net_pnl: toFinite(report.return_metrics.total_net_pnl),
     sharpe: toFinite(report.risk_metrics.sharpe_ratio),
     win_rate: toFinite(report.win_loss.win_rate),
     trades: report.trade_stats.trades_executed,
+    ulcer_index: ecm != null ? toFinite(ecm.ulcer_index) : null,
+    equity_curve_quality_score: ecm != null ? toFinite(ecm.equity_curve_quality_score) : null,
   }
 }

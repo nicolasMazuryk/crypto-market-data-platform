@@ -85,6 +85,8 @@
   },
   "dependencies": {
     "@clickhouse/client": "^1.16.0",
+    "@napi-rs/canvas": "^0.1.65",
+    "chart.js": "^4.4.0",
     "@types/proper-lockfile": "^4.1.4",
     "ccxt": "^4.5.36",
     "dotenv": "^17.2.3",

@@ -16,6 +16,8 @@ function makeRow(overrides: Partial<ResultRow> = {}): ResultRow {
     sharpe: 1.5,
     win_rate: 0.6,
     trades: 12,
+    ulcer_index: 3.14,
+    equity_curve_quality_score: 72.5,
     status: 'keep',
     description: 'bumped funding_threshold',
     report_path: '.autoresearch/reports/x/iter_1.json',
@@ -56,10 +58,7 @@ describe('results tsv', () => {
 
   it('escapes embedded tabs/newlines in free-text fields', () => {
     ensureTsv(tsvPath)
-    appendRow(
-      tsvPath,
-      makeRow({ description: 'weird\tdesc\nwith breaks', error_message: 'err\twith\ttabs' })
-    )
+    appendRow(tsvPath, makeRow({ description: 'weird\tdesc\nwith breaks', error_message: 'err\twith\ttabs' }))
     const parsed = readTsv(tsvPath)
     expect(parsed[0]?.description).toBe('weird desc with breaks')
     expect(parsed[0]?.error_message).toBe('err with tabs')
@@ -67,6 +66,17 @@ describe('results tsv', () => {
 
   it('parseTsvContent rejects mismatched header', () => {
     expect(() => parseTsvContent('wrong\theader\n')).toThrow(/header mismatch/i)
+  })
+
+  it('parseTsvContent accepts legacy 12-column format with null equity metrics', () => {
+    const legacyHeader =
+      'iter\ttimestamp\tcommit_hash\ttotal_net_pnl\tsharpe\twin_rate\ttrades\tstatus\tdescription\treport_path\tduration_s\terror_message'
+    const legacyRow = '1\t2026-01-01T00:00:00Z\tabc\t0.1\t1.5\t0.6\t10\tkeep\tbaseline\treports/x.json\t5.0\t'
+    const rows = parseTsvContent(`${legacyHeader}\n${legacyRow}\n`)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.ulcer_index).toBeNull()
+    expect(rows[0]?.equity_curve_quality_score).toBeNull()
+    expect(rows[0]?.total_net_pnl).toBeCloseTo(0.1)
   })
 
   it('treats empty numeric fields as null', () => {

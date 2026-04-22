@@ -11,12 +11,30 @@ const HEADER = [
   'sharpe',
   'win_rate',
   'trades',
+  'ulcer_index',
+  'equity_curve_quality_score',
   'status',
   'description',
   'report_path',
   'duration_s',
   'error_message',
 ] as const
+
+// Legacy header (12 columns, before equity curve metrics were added)
+const LEGACY_HEADER = [
+  'iter',
+  'timestamp',
+  'commit_hash',
+  'total_net_pnl',
+  'sharpe',
+  'win_rate',
+  'trades',
+  'status',
+  'description',
+  'report_path',
+  'duration_s',
+  'error_message',
+].join('\t')
 
 export const RESULTS_HEADER_LINE = HEADER.join('\t')
 
@@ -39,6 +57,8 @@ function formatRow(row: ResultRow): string {
     formatNumber(row.sharpe),
     formatNumber(row.win_rate),
     row.trades === null ? '' : String(row.trades),
+    formatNumber(row.ulcer_index),
+    formatNumber(row.equity_curve_quality_score),
     row.status,
     escapeField(row.description),
     escapeField(row.report_path),
@@ -85,22 +105,62 @@ export function parseTsvContent(content: string): ResultRow[] {
   const lines = content.split('\n').filter(line => line.length > 0)
   if (lines.length === 0) return []
   const header = lines[0]
-  if (header !== RESULTS_HEADER_LINE) {
+  const isLegacy = header === LEGACY_HEADER
+  if (header !== RESULTS_HEADER_LINE && !isLegacy) {
     throw new Error(`results.tsv header mismatch. Expected '${RESULTS_HEADER_LINE}', got '${header ?? ''}'`)
   }
+  const expectedCols = isLegacy ? 12 : HEADER.length
   const rows: ResultRow[] = []
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]
     if (line === undefined) continue
     const fields = line.split('\t')
-    if (fields.length !== HEADER.length) {
+    if (fields.length !== expectedCols) {
       throw new Error(
-        `results.tsv line ${String(i + 1)}: expected ${String(HEADER.length)} fields, got ${String(fields.length)}`
+        `results.tsv line ${String(i + 1)}: expected ${String(expectedCols)} fields, got ${String(fields.length)}`
       )
     }
-    const [iter, timestamp, commit_hash, pnl, sharpe, win, trades, status, desc, report, dur, err] = fields as [
-      string, string, string, string, string, string, string, string, string, string, string, string,
-    ]
+
+    let iter: string, timestamp: string, commit_hash: string, pnl: string, sharpe: string
+    let win: string, trades: string, status: string, desc: string, report: string, dur: string, err: string
+    let ulcer: string = '',
+      ecq: string = ''
+
+    if (isLegacy) {
+      ;[iter, timestamp, commit_hash, pnl, sharpe, win, trades, status, desc, report, dur, err] = fields as [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
+    } else {
+      ;[iter, timestamp, commit_hash, pnl, sharpe, win, trades, ulcer, ecq, status, desc, report, dur, err] =
+        fields as [
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+          string,
+        ]
+    }
+
     const iterNum = Number(iter)
     if (!Number.isInteger(iterNum) || iterNum < 0) {
       throw new Error(`results.tsv line ${String(i + 1)}: invalid iter '${iter}'`)
@@ -117,6 +177,8 @@ export function parseTsvContent(content: string): ResultRow[] {
       sharpe: parseNumber(sharpe),
       win_rate: parseNumber(win),
       trades: tradesNum,
+      ulcer_index: parseNumber(ulcer),
+      equity_curve_quality_score: parseNumber(ecq),
       status: parseStatus(status),
       description: desc,
       report_path: report,

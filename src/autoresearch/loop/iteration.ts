@@ -9,14 +9,11 @@ import { extractMetrics, parseReport } from '../backtest/parser.js'
 import { runBacktest } from '../backtest/runner.js'
 import { enforceScope } from '../git/diff-gate.js'
 import { commitAll, diffNameOnlyHead, resetHard, revParseHead } from '../git/ratchet.js'
-import {
-  getProposalIterPath,
-  getProposalJsonPath,
-  getReportsDir,
-  getResultsDir,
-} from '../paths.js'
+import { getProposalIterPath, getProposalJsonPath, getReportsDir, getResultsDir } from '../paths.js'
 import { appendRow } from '../results/tsv.js'
 import type { ResultRow, RunSpec, RunState } from '../types.js'
+import { renderEquityCurveChart } from '../../backtesting/reporting/equity-curve-chart.js'
+import type { BacktestReport } from '../../backtesting/reporting/types.js'
 
 import type { Semaphore } from './pool.js'
 
@@ -136,6 +133,8 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
       sharpe: null,
       win_rate: null,
       trades: null,
+      ulcer_index: null,
+      equity_curve_quality_score: null,
       status: 'noop',
       description: truncate(summary || 'no-op (yaml unchanged)', 240),
       report_path: '',
@@ -159,15 +158,14 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   if (backtest.timedOut || backtest.code !== 0 || backtest.reportPath === null) {
     // Backtest failed — revert YAML edits so we stay on last keep.
     await revertWorktreeToHead(worktreePath)
-    const err = backtest.timedOut
-      ? 'backtest_timeout'
-      : `backtest_exit_code=${String(backtest.code)}`
+    const err = backtest.timedOut ? 'backtest_timeout' : `backtest_exit_code=${String(backtest.code)}`
     return buildErrorRow(iter, timestamp, state.last_keep_commit ?? '', err, startedAt)
   }
 
   let metrics
+  let report: BacktestReport
   try {
-    const report = parseReport(backtest.reportPath)
+    report = parseReport(backtest.reportPath)
     metrics = extractMetrics(report)
   } catch (err) {
     await revertWorktreeToHead(worktreePath)
@@ -178,6 +176,12 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   // Copy the report into the per-iteration name so the TSV row points
   // somewhere stable.
   const iterReportPath = copyReport(backtest.reportPath, repoRoot, spec.tag, iter)
+  await renderEquityCurveChart(
+    report.equity_curve,
+    iterReportPath.replace(/\.json$/, '.png'),
+  ).catch((e: unknown) => {
+    logWrite(`[chart] render failed: ${e instanceof Error ? e.message : String(e)}`)
+  })
 
   // Step 5: decide keep/discard.
   const improved = state.best_pnl === null ? true : metrics.total_net_pnl > state.best_pnl
@@ -209,6 +213,8 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     sharpe: metrics.sharpe,
     win_rate: metrics.win_rate,
     trades: metrics.trades,
+    ulcer_index: metrics.ulcer_index,
+    equity_curve_quality_score: metrics.equity_curve_quality_score,
     status,
     description: truncate(summary || (status === 'keep' ? 'improved' : 'regressed'), 240),
     report_path: path.relative(repoRoot, iterReportPath),
@@ -238,6 +244,8 @@ function buildErrorRow(
     sharpe: null,
     win_rate: null,
     trades: null,
+    ulcer_index: null,
+    equity_curve_quality_score: null,
     status: 'error',
     description: '',
     report_path: '',
@@ -274,8 +282,9 @@ export async function runBaselineIteration(args: {
   }
 
   let metrics
+  let report: BacktestReport
   try {
-    const report = parseReport(backtest.reportPath)
+    report = parseReport(backtest.reportPath)
     metrics = extractMetrics(report)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -283,6 +292,12 @@ export async function runBaselineIteration(args: {
   }
 
   const iterReportPath = copyReport(backtest.reportPath, args.repoRoot, args.spec.tag, iter)
+  await renderEquityCurveChart(
+    report.equity_curve,
+    iterReportPath.replace(/\.json$/, '.png'),
+  ).catch((e: unknown) => {
+    args.logWrite(`[chart] render failed: ${e instanceof Error ? e.message : String(e)}`)
+  })
 
   return {
     iter,
@@ -292,6 +307,8 @@ export async function runBaselineIteration(args: {
     sharpe: metrics.sharpe,
     win_rate: metrics.win_rate,
     trades: metrics.trades,
+    ulcer_index: metrics.ulcer_index,
+    equity_curve_quality_score: metrics.equity_curve_quality_score,
     status: 'keep',
     description: 'baseline',
     report_path: path.relative(args.repoRoot, iterReportPath),

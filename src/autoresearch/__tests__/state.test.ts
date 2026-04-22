@@ -12,6 +12,8 @@ function row(overrides: Partial<ResultRow> = {}): ResultRow {
     sharpe: 0,
     win_rate: 0.5,
     trades: 3,
+    ulcer_index: null,
+    equity_curve_quality_score: null,
     status: 'keep',
     description: 'baseline',
     report_path: 'r.json',

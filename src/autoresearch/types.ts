@@ -50,6 +50,8 @@ export interface ResultRow {
   sharpe: number | null
   win_rate: number | null
   trades: number | null
+  ulcer_index: number | null
+  equity_curve_quality_score: number | null
   status: IterationStatus
   description: string
   report_path: string
@@ -81,4 +83,6 @@ export interface BacktestMetrics {
   sharpe: number
   win_rate: number
   trades: number
+  ulcer_index: number | null
+  equity_curve_quality_score: number | null
 }

@@ -16,6 +16,7 @@ import type {
   TradeLogEntry,
 } from './types.js'
 import * as m from './metrics.js'
+import { computeEquityCurveMetrics } from './equity-curve-metrics.js'
 
 interface BuildReportInput {
   config: ResolvedConfig
@@ -90,6 +91,9 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     cumPnl += p
     equityCurve.push(cumPnl)
   }
+
+  // Equity curve metrics
+  const equityCurveMetrics = computeEquityCurveMetrics(equityCurve)
 
   // Risk metrics
   const ddResult = m.maxDrawdown(equityCurve)
@@ -168,5 +172,6 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     reproducibility: reproducibility,
     trade_log: tradeLog,
     equity_curve: equityCurve,
+    equity_curve_metrics: equityCurveMetrics,
   }
 }

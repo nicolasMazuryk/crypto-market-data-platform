@@ -84,6 +84,28 @@ export interface TradeLogEntry {
   hold_duration: number
 }
 
+/** Per-metric scores for equity curve quality */
+export interface EquityCurveScores {
+  r2: number
+  k_ratio: number
+  ulcer_index: number
+  recovery_factor: number
+  serenity_ratio: number
+  gain_to_pain_ratio: number
+}
+
+/** Equity curve shape and quality metrics */
+export interface EquityCurveMetrics {
+  r2: number
+  k_ratio: number
+  ulcer_index: number
+  recovery_factor: number
+  serenity_ratio: number
+  gain_to_pain_ratio: number
+  scores: EquityCurveScores
+  equity_curve_quality_score: number
+}
+
 /** Complete backtest report */
 export interface BacktestReport {
   strategy_id: string
@@ -97,4 +119,5 @@ export interface BacktestReport {
   reproducibility: ReproducibilitySection
   trade_log?: TradeLogEntry[] | undefined
   equity_curve: number[]
+  equity_curve_metrics: EquityCurveMetrics | null
 }

@@ -71,6 +71,24 @@ export function formatReport(report: BacktestReport, outputDir: string): string 
   }
 
   lines.push('')
+  lines.push(`--- Equity Curve Metrics ---`)
+  const ecm = report.equity_curve_metrics
+  if (ecm === null) {
+    lines.push(`  N/A (fewer than 3 equity points)`)
+  } else {
+    const fmt = (v: number) => (isFinite(v) ? v.toFixed(4) : v > 0 ? 'Inf' : '-Inf')
+    lines.push(`  R²:                  ${fmt(ecm.r2)}  (score: ${ecm.scores.r2.toFixed(1)})`)
+    lines.push(`  K-Ratio:             ${fmt(ecm.k_ratio)}  (score: ${ecm.scores.k_ratio.toFixed(1)})`)
+    lines.push(`  Ulcer Index:         ${fmt(ecm.ulcer_index)}%  (score: ${ecm.scores.ulcer_index.toFixed(1)})`)
+    lines.push(`  Recovery Factor:     ${fmt(ecm.recovery_factor)}  (score: ${ecm.scores.recovery_factor.toFixed(1)})`)
+    lines.push(`  Serenity Ratio:      ${fmt(ecm.serenity_ratio)}  (score: ${ecm.scores.serenity_ratio.toFixed(1)})`)
+    lines.push(
+      `  Gain-to-Pain Ratio:  ${fmt(ecm.gain_to_pain_ratio)}  (score: ${ecm.scores.gain_to_pain_ratio.toFixed(1)})`
+    )
+    lines.push(`  Quality Score:       ${ecm.equity_curve_quality_score.toFixed(1)} / 100`)
+  }
+
+  lines.push('')
   lines.push(`Report saved to: ${filepath}`)
   lines.push('')
 

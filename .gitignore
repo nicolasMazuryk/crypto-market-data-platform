@@ -18,6 +18,8 @@ tasks/
 !ansible/roles/workers/tasks/main.yml
 src/markets/snapshots/
 
+.playwright-cli/
+
 .autoresearch/
 autoresearch/worktrees/
 # Ansible

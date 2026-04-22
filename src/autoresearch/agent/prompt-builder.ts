@@ -35,7 +35,9 @@ function compactRow(row: ResultRow, rationale?: string): string {
   const pnl = row.total_net_pnl === null ? 'n/a' : row.total_net_pnl.toFixed(6)
   const sharpe = row.sharpe === null ? 'n/a' : row.sharpe.toFixed(3)
   const trades = row.trades === null ? 'n/a' : String(row.trades)
-  let line = `  iter=${String(row.iter)} status=${row.status} pnl=${pnl} sharpe=${sharpe} trades=${trades} desc="${row.description}"`
+  const ecq = row.equity_curve_quality_score === null ? 'n/a' : row.equity_curve_quality_score.toFixed(1)
+  const ui = row.ulcer_index === null ? 'n/a' : row.ulcer_index.toFixed(3)
+  let line = `  iter=${String(row.iter)} status=${row.status} pnl=${pnl} sharpe=${sharpe} trades=${trades} ecq=${ecq} ui=${ui} desc="${row.description}"`
   if (rationale !== undefined && rationale.length > 0) {
     line += ` rationale="${rationale.replace(/"/g, "'")}"`
   }
@@ -99,9 +101,10 @@ export function buildPrompt(opts: BuildPromptOptions): string {
   const proposalsDir = getProposalsDir(opts.repoRoot, opts.spec.tag)
   const proposalHistory = loadProposalHistory(proposalsDir, opts.recentRows)
 
-  const history = opts.recentRows.length === 0
-    ? '  (none yet — this is the first-or-baseline iteration)'
-    : opts.recentRows.map(row => compactRow(row, proposalHistory.get(row.iter)?.rationale)).join('\n')
+  const history =
+    opts.recentRows.length === 0
+      ? '  (none yet — this is the first-or-baseline iteration)'
+      : opts.recentRows.map(row => compactRow(row, proposalHistory.get(row.iter)?.rationale)).join('\n')
 
   const variableSuffix = [
     '## Iteration context',
