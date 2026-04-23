@@ -82,3 +82,8 @@ export async function commitExists(worktreePath: string, sha: string): Promise<b
   const result = await exec(worktreePath, ['cat-file', '-e', `${sha}^{commit}`])
   return result.code === 0
 }
+
+export async function isAncestor(worktreePath: string, ancestor: string, descendant: string): Promise<boolean> {
+  const result = await exec(worktreePath, ['merge-base', '--is-ancestor', ancestor, descendant])
+  return result.code === 0
+}

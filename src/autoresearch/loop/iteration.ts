@@ -4,7 +4,7 @@ import path from 'path'
 
 import { invokeAgent } from '../agent/invoke.js'
 import { buildPrompt } from '../agent/prompt-builder.js'
-import { clearProposal, readProposal } from '../agent/proposal.js'
+import { clearProposal, readProposalSafe } from '../agent/proposal.js'
 import { extractMetrics, parseReport } from '../backtest/parser.js'
 import { runBacktest } from '../backtest/runner.js'
 import { enforceScope } from '../git/diff-gate.js'
@@ -67,6 +67,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   const { iter, spec, repoRoot, worktreePath, chSemaphore, logWrite, state } = args
   const startedAt = Date.now()
   const timestamp = new Date().toISOString()
+  const preIterationHead = await revParseHead(worktreePath)
 
   const yamlPath = strategyYamlPath(worktreePath, spec.strategy)
   const proposalPath = getProposalJsonPath(repoRoot, spec.tag)
@@ -103,18 +104,28 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     // Defensive: revert any partial edits before recording error.
     await revertWorktreeToHead(worktreePath)
     const err = agentResult.timedOut ? 'agent_timeout' : `agent_exit_code=${String(agentResult.code)}`
-    return buildErrorRow(iter, timestamp, state.last_keep_commit ?? '', err, startedAt)
+    return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt)
   }
 
   // Step 2: diff-gate.
   const gate = await enforceScope(worktreePath, spec)
   if (gate.errorMessage !== null) {
-    return buildErrorRow(iter, timestamp, state.last_keep_commit ?? '', gate.errorMessage, startedAt)
+    return buildErrorRow(iter, timestamp, preIterationHead, gate.errorMessage, startedAt)
   }
 
   // Step 3: check for noop (YAML unchanged).
   const afterHash = hashFile(yamlPath)
-  const proposal = readProposal(proposalPath)
+  const { proposal, error: proposalError } = readProposalSafe(proposalPath)
+  if (proposalError !== null) {
+    await revertWorktreeToHead(worktreePath)
+    return buildErrorRow(
+      iter,
+      timestamp,
+      preIterationHead,
+      `proposal_parse_error: ${proposalError}`,
+      startedAt
+    )
+  }
   const summary = proposal?.summary ?? ''
 
   if (proposal !== null) {
@@ -128,7 +139,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     return {
       iter,
       timestamp,
-      commit_hash: state.last_keep_commit ?? '',
+      commit_hash: preIterationHead,
       total_net_pnl: null,
       sharpe: null,
       win_rate: null,
@@ -159,7 +170,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     // Backtest failed — revert YAML edits so we stay on last keep.
     await revertWorktreeToHead(worktreePath)
     const err = backtest.timedOut ? 'backtest_timeout' : `backtest_exit_code=${String(backtest.code)}`
-    return buildErrorRow(iter, timestamp, state.last_keep_commit ?? '', err, startedAt)
+    return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt)
   }
 
   let metrics
@@ -170,7 +181,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   } catch (err) {
     await revertWorktreeToHead(worktreePath)
     const message = err instanceof Error ? err.message : String(err)
-    return buildErrorRow(iter, timestamp, state.last_keep_commit ?? '', `report_parse_error: ${message}`, startedAt)
+    return buildErrorRow(iter, timestamp, preIterationHead, `report_parse_error: ${message}`, startedAt)
   }
 
   // Copy the report into the per-iteration name so the TSV row points
@@ -194,14 +205,9 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     commitHash = await commitAll(worktreePath, message)
     status = 'keep'
   } else {
-    // Revert to last-kept state.
-    const target = state.last_keep_commit ?? state.baseline_commit
-    if (target !== null) {
-      await resetHard(worktreePath, target)
-    } else {
-      await revertWorktreeToHead(worktreePath)
-    }
-    commitHash = state.last_keep_commit ?? ''
+    // Revert this attempt only (keep any maintenance commits already on HEAD).
+    await resetHard(worktreePath, preIterationHead)
+    commitHash = preIterationHead
     status = 'discard'
   }
 

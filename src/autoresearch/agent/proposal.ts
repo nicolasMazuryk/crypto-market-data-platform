@@ -5,6 +5,11 @@ export interface Proposal {
   summary: string
 }
 
+export interface ProposalReadResult {
+  proposal: Proposal | null
+  error: string | null
+}
+
 export function readProposal(proposalPath: string): Proposal | null {
   if (!fs.existsSync(proposalPath)) return null
   const content = fs.readFileSync(proposalPath, 'utf-8')
@@ -22,6 +27,15 @@ export function readProposal(proposalPath: string): Proposal | null {
   const rationale = typeof obj.rationale === 'string' ? obj.rationale : ''
   const summary = typeof obj.summary === 'string' ? obj.summary : ''
   return { rationale, summary }
+}
+
+export function readProposalSafe(proposalPath: string): ProposalReadResult {
+  try {
+    return { proposal: readProposal(proposalPath), error: null }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { proposal: null, error: message }
+  }
 }
 
 export function clearProposal(proposalPath: string): void {

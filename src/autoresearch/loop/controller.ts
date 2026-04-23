@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-import { commitExists, resetHard, revParseHead } from '../git/ratchet.js'
+import { commitExists, isAncestor, resetHard, revParseHead } from '../git/ratchet.js'
 import { createTagLogger, stripAnsi } from '../logging.js'
 import {
   getLockPath,
@@ -117,14 +117,23 @@ async function runControllerLocked(opts: RunControllerOptions): Promise<RunContr
     }
   }
 
-  // If worktree HEAD drifted from last keep, reset it.
+  // If worktree HEAD drifted from last keep, only hard-reset when it diverged.
+  // If HEAD is simply ahead (e.g. maintenance/cherry-pick commit), keep it.
   if (state.last_keep_commit !== null) {
     const exists = await commitExists(handle.worktreePath, state.last_keep_commit)
     if (exists) {
       const head = await revParseHead(handle.worktreePath)
       if (head !== state.last_keep_commit) {
-        await resetHard(handle.worktreePath, state.last_keep_commit)
-        logger.warn({ from: head, to: state.last_keep_commit }, 'worktree HEAD reset to last keep')
+        const headAheadOfKeep = await isAncestor(handle.worktreePath, state.last_keep_commit, head)
+        if (headAheadOfKeep) {
+          logger.info(
+            { head, last_keep_commit: state.last_keep_commit },
+            'worktree HEAD is ahead of last keep; preserving newer commits'
+          )
+        } else {
+          await resetHard(handle.worktreePath, state.last_keep_commit)
+          logger.warn({ from: head, to: state.last_keep_commit }, 'worktree HEAD reset to last keep')
+        }
       }
     }
   }
