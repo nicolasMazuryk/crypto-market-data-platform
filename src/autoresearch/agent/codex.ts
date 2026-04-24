@@ -5,6 +5,8 @@ import type { InvokeAgentOptions, InvokeAgentResult } from './invoke.js'
 export function invokeCodex(opts: InvokeAgentOptions): Promise<InvokeAgentResult> {
   return new Promise(resolve => {
     const bin = opts.codexBinary ?? 'codex'
+    const model = 'gpt-5.4-mini'
+    const effort = 'medium'
 
     const args: string[] = [
       'exec',
@@ -15,6 +17,10 @@ export function invokeCodex(opts: InvokeAgentOptions): Promise<InvokeAgentResult
       '--color',
       'never',
       '--skip-git-repo-check',
+      '--model',
+      model,
+      '--effort',
+      effort,
     ]
     for (const dir of opts.addDirs) {
       args.push('--add-dir', dir)

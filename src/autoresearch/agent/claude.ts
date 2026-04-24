@@ -5,6 +5,7 @@ import type { InvokeAgentOptions, InvokeAgentResult } from './invoke.js'
 export function invokeClaude(opts: InvokeAgentOptions): Promise<InvokeAgentResult> {
   return new Promise(resolve => {
     const bin = opts.claudeBinary ?? 'claude'
+    const model = 'haiku'
     const allowedTools = opts.allowedTools ?? [
       'Read',
       'Edit',
@@ -29,6 +30,8 @@ export function invokeClaude(opts: InvokeAgentOptions): Promise<InvokeAgentResul
     const args: string[] = [
       '-p',
       opts.prompt,
+      '--model',
+      model,
       '--permission-mode',
       'acceptEdits',
       '--allowedTools',
