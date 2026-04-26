@@ -4,7 +4,7 @@ import type { InvokeAgentOptions, InvokeAgentResult } from './invoke.js'
 
 /** Build the codex exec argument list (exported for testing). */
 export function buildCodexArgs(opts: Pick<InvokeAgentOptions, 'cwd' | 'addDirs' | 'extraArgs' | 'prompt'>): string[] {
-  const model = 'gpt-5.4-mini'
+  const model = 'gpt-5.4'
   const reasoningEffort = 'medium'
 
   const args: string[] = [

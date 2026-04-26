@@ -29,6 +29,7 @@ describe('buildCodexArgs', () => {
     expect(args[args.indexOf('-s') + 1]).toBe('workspace-write')
     expect(args).toContain('--skip-git-repo-check')
     expect(args).toContain('--model')
+    expect(args[args.indexOf('--model') + 1]).toBe('gpt-5.4')
   })
 
   it('appends the prompt as the last positional argument', () => {
