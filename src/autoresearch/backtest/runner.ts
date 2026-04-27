@@ -19,11 +19,29 @@ export interface BacktestRunOptions {
   reportsDir: string
   timeoutMs: number
   logWrite?: (line: string) => void
+  maxAttempts?: number
+  retryDelayMs?: number
 }
+
+const DEFAULT_MAX_ATTEMPTS = 3
+const DEFAULT_RETRY_DELAY_MS = 5_000
+const RETRYABLE_FAILURE_PATTERNS = [/\bECONNREFUSED\b/i, /\bECONNRESET\b/i, /\bETIMEDOUT\b/i, /\bsocket hang up\b/i]
 
 function listJsonFiles(dir: string): Set<string> {
   if (!fs.existsSync(dir)) return new Set()
   return new Set(fs.readdirSync(dir).filter(f => f.endsWith('.json')))
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+export function isRetryableBacktestFailure(
+  result: Pick<BacktestRunResult, 'code' | 'timedOut' | 'stdout' | 'stderr'>
+): boolean {
+  if (result.code === 0 || result.timedOut) return false
+  const output = `${result.stderr}\n${result.stdout}`
+  return RETRYABLE_FAILURE_PATTERNS.some(pattern => pattern.test(output))
 }
 
 /**
@@ -31,7 +49,29 @@ function listJsonFiles(dir: string): Set<string> {
  * worktree. Kill the process group on timeout. Returns the newly-written
  * report file so the caller can parse it.
  */
-export function runBacktest(opts: BacktestRunOptions): Promise<BacktestRunResult> {
+export async function runBacktest(opts: BacktestRunOptions): Promise<BacktestRunResult> {
+  const started = Date.now()
+  const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS
+  const retryDelayMs = opts.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const result = await runBacktestAttempt(opts)
+    if (!isRetryableBacktestFailure(result) || attempt === maxAttempts) {
+      return { ...result, durationMs: Date.now() - started }
+    }
+
+    opts.logWrite?.(
+      `[backtest] transient failure on attempt ${String(attempt)} of ${String(maxAttempts)}; retrying in ${String(
+        retryDelayMs
+      )}ms\n`
+    )
+    await sleep(retryDelayMs)
+  }
+
+  throw new Error('unreachable backtest retry state')
+}
+
+function runBacktestAttempt(opts: BacktestRunOptions): Promise<BacktestRunResult> {
   return new Promise(resolve => {
     const { cwd, strategy, reportsDir, timeoutMs, logWrite } = opts
     fs.mkdirSync(reportsDir, { recursive: true })
