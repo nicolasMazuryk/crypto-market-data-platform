@@ -141,9 +141,9 @@ See [trading-logic.md](./trading-logic.md) for full per-strategy parameter seman
 |-----|------|---------|-------------|
 | `metricsPort` | port | `9464` | Prometheus `/metrics` scrape target |
 | `healthPort` | port | `9466` | `/health` (liveness) and `/ready` (readiness) endpoints |
-| `tracing.enabled` | bool | `false` | Enable OpenTelemetry tracing |
+| `tracing.enabled` | bool | `false` | Enable OpenTelemetry tracing. Set to `true` in `execution.live.yaml`. |
 | `tracing.serviceName` | string | `execution-engine` | Service name in traces |
-| `tracing.endpoint` | string | — | OTLP collector endpoint (required when `enabled: true`) |
+| `tracing.endpoint` | string | — | OTLP collector endpoint (required when `enabled: true`). Live mode uses `http://localhost:4318/v1/traces` (Jaeger on the same host via `--network host`). |
 | `tracing.sampler` | — | `parent` | `always_on` \| `parent` \| `{ ratio: 0–1 }` |
 
 ### `testing` (optional)

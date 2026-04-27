@@ -15,4 +15,20 @@ resource "hcloud_firewall" "main" {
     protocol    = "icmp"
     source_ips  = ["0.0.0.0/0", "::/0"]
   }
+
+  rule {
+    description = "Allow HTTP (ACME + redirect)"
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "80"
+    source_ips  = ["0.0.0.0/0", "::/0"]
+  }
+
+  rule {
+    description = "Allow HTTPS"
+    direction   = "in"
+    protocol    = "tcp"
+    port        = "443"
+    source_ips  = ["0.0.0.0/0", "::/0"]
+  }
 }

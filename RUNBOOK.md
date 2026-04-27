@@ -240,10 +240,30 @@ npm run setup           # Provisions everything, mounts /data
 
 ClickHouse data survives because it lives on the separate Hetzner volume.
 
+## Observability Dashboards
+
+All dashboards are publicly accessible over HTTPS via Caddy reverse proxy (nip.io wildcard TLS).
+
+| Service | URL | Auth |
+|---|---|---|
+| Grafana | https://grafana.203-0-113-10.nip.io | admin / `<OBSERVABILITY_PASSWORD>` |
+| Prometheus | https://prometheus.203-0-113-10.nip.io | ops / `<OBSERVABILITY_PASSWORD>` (HTTP Basic Auth) |
+| Jaeger | https://jaeger.203-0-113-10.nip.io | ops / `<OBSERVABILITY_PASSWORD>` (HTTP Basic Auth) |
+| Alertmanager | https://alertmanager.203-0-113-10.nip.io | ops / `<OBSERVABILITY_PASSWORD>` (HTTP Basic Auth) |
+
+To rotate the basic-auth password, re-run `caddy hash-password` on the server, update `observability_basicauth_password_hash` in `ansible/group_vars/all.yml`, then `npm run setup`.
+
+Check Caddy logs if certs lag on first deploy:
+
+```bash
+ssh -i ~/.ssh/nicolas nicolas@203.0.113.10 'docker logs arbinet-caddy --tail 80'
+```
+
 ## Firewall
 
-- **Hetzner firewall**: Only SSH (22) open externally
+- **Hetzner firewall**: SSH (22), HTTP (80), HTTPS (443) open externally
 - **UFW on server**: Defense-in-depth, same rules
-- **ClickHouse ports** (8123/9000): Bound to 127.0.0.1 only, not externally accessible
+- **ClickHouse ports** (8123/9000): Bound to 127.0.0.1 only, accessible only via Caddy or SSH tunnel
+- **Prometheus/Jaeger/Alertmanager**: Bound to 127.0.0.1, protected by HTTP Basic Auth via Caddy
 
 Verify externally: `nmap -p 8123,9000 SERVER_IP` — should show ports as filtered/closed.

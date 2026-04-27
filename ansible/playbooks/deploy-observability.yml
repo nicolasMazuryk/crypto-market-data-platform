@@ -1,0 +1,19 @@
+---
+- name: Deploy observability stack (Caddy + supporting services)
+  hosts: servers
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+
+  tasks:
+    - name: Template docker-compose.prod.yml
+      ansible.builtin.template:
+        src: ../roles/app/templates/docker-compose.prod.yml.j2
+        dest: "{{ docker_compose_file }}"
+        owner: nicolas
+        group: nicolas
+        mode: "0644"
+
+    - name: Deploy observability stack
+      ansible.builtin.include_role:
+        name: observability

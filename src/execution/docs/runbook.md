@@ -670,7 +670,7 @@ ssh server 'sudo systemctl start execution-engine@live'
 
 ## SSH Tunnel for Local Tools
 
-ClickHouse and Postgres are bound to `127.0.0.1` on the server. To access them from local tools:
+ClickHouse, Postgres, Grafana, and Jaeger are bound to `127.0.0.1` on the server. To access them from local tools:
 
 ```bash
 # Open tunnel (keep this terminal running)
@@ -679,10 +679,14 @@ ssh -i ~/.ssh/nicolas \
   -L 9000:localhost:9000 \
   -L 5432:localhost:5432 \
   -L 3000:localhost:3000 \
+  -L 16686:localhost:16686 \
   -N nicolas@203.0.113.10
 
-# In another terminal: Grafana is now at http://localhost:3000
-# Postgres at localhost:5432, ClickHouse at localhost:8123/9000
+# In another terminal:
+# Grafana:    http://localhost:3000
+# Jaeger UI:  http://localhost:16686
+# Postgres:   localhost:5432
+# ClickHouse: localhost:8123/9000
 ```
 
 ---

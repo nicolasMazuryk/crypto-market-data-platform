@@ -1,0 +1,28 @@
+{
+    email {{ observability_acme_email }}
+}
+
+(auth) {
+    basic_auth {
+        {{ observability_basicauth_user }} {{ observability_basicauth_password_hash }}
+    }
+}
+
+grafana.{{ observability_public_host }} {
+    reverse_proxy 127.0.0.1:3000
+}
+
+prometheus.{{ observability_public_host }} {
+    import auth
+    reverse_proxy 127.0.0.1:9090
+}
+
+jaeger.{{ observability_public_host }} {
+    import auth
+    reverse_proxy 127.0.0.1:16686
+}
+
+alertmanager.{{ observability_public_host }} {
+    import auth
+    reverse_proxy 127.0.0.1:9093
+}

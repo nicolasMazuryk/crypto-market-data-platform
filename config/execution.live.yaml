@@ -64,6 +64,13 @@ risk:
       maxConcurrentIntents: 2000            # count
       maxNotionalUsd: 200000               # USD
 
+# ── Observability ─────────────────────────────────────────────────────────────
+observability:
+  tracing:
+    enabled: true
+    endpoint: http://localhost:4318/v1/traces
+    sampler: parent
+
 # ── Testing knobs ─────────────────────────────────────────────────────────────
 # Use with extreme care in live mode. Any override REQUIRES acknowledgeLiveOverride: true.
 # testing:

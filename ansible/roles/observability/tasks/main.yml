@@ -55,6 +55,14 @@
     group: nicolas
     mode: "0644"
 
+- name: Template Grafana Jaeger datasource
+  ansible.builtin.template:
+    src: grafana-datasource-jaeger.yml.j2
+    dest: "{{ app_dir }}/observability/grafana/provisioning/datasources/jaeger.yaml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
 - name: Copy Grafana dashboard provision config
   ansible.builtin.copy:
     src: "{{ repo_dir }}/docker/grafana/provisioning/dashboards/provision.yaml"
@@ -84,7 +92,29 @@
     remote_src: true
     mode: "0644"
 
+- name: Allow HTTP through UFW (Caddy ACME + redirect)
+  community.general.ufw:
+    rule: allow
+    port: "80"
+    proto: tcp
+    comment: "Caddy HTTP ACME"
+
+- name: Allow HTTPS through UFW (Caddy)
+  community.general.ufw:
+    rule: allow
+    port: "443"
+    proto: tcp
+    comment: "Caddy HTTPS"
+
+- name: Template Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ app_dir }}/observability/Caddyfile"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
 - name: Start observability stack
   ansible.builtin.command:
-    cmd: docker compose -f {{ docker_compose_file }} up -d prometheus alertmanager grafana
+    cmd: docker compose -f {{ docker_compose_file }} up -d prometheus alertmanager grafana jaeger caddy
   changed_when: true

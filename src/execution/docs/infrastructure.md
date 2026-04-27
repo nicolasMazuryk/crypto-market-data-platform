@@ -17,7 +17,7 @@ All services run via `docker/docker-compose.yml`. Ports are bound to all interfa
 | alertmanager | `prom/alertmanager:v0.27.0` | `9093` | Alert routing → Slack |
 | loki | `grafana/loki:3.0.0` | `3100` | Log aggregation |
 | promtail | `grafana/promtail:3.0.0` | — | Log shipping (reads Docker container logs, pushes to Loki) |
-| jaeger | `jaegertracing/all-in-one:latest` | `16686` (UI), `4318` (OTLP) | Distributed tracing (local only) |
+| jaeger | `jaegertracing/all-in-one:1.60` | `16686` (UI), `4318` (OTLP) | Distributed tracing |
 
 The execution engine itself is **not** containerised locally; it runs as a Node process (`npm run execution:dry-run` or `npm run execution:live`) and connects to the above services over localhost.
 
@@ -34,9 +34,10 @@ A single Hetzner Cloud server (`cpx62`, Ubuntu 24.04, Nuremberg `nbg1`) backed b
 | alertmanager | `prom/alertmanager:v0.27.0` | `127.0.0.1:9093` | Alert routing |
 | loki | `grafana/loki:3.0.0` | `127.0.0.1:3100` | Logs |
 | promtail | `grafana/promtail:3.0.0` | — | Log shipping |
+| jaeger | `jaegertracing/all-in-one:1.60` | `127.0.0.1:16686` (UI), `127.0.0.1:4318` (OTLP) | Distributed tracing |
 | execution-engine | `arbinet:latest` | `127.0.0.1:9464` (metrics), `127.0.0.1:9466` (health) | Trading engine |
 
-Jaeger is not deployed in production.
+Jaeger UI is accessible via SSH tunnel: `ssh -i ~/.ssh/nicolas -L 16686:127.0.0.1:16686 nicolas@203.0.113.10`
 
 ## Deployment Flow
 
@@ -75,7 +76,7 @@ Playbooks live under `ansible/playbooks/`. Each Ansible role has a single respon
 | `postgres` | Start Postgres container, wait for health, install daily backup cron (02:30 UTC, 7-day retention) |
 | `workers` | systemd service + timer units for market-sync, funding-rates, migrations, quote-sync workers |
 | `execution-engine` | Create release directories, copy config, tag image with git SHA, atomic `current` symlink, template secrets file, install + conditionally start `execution-engine@<mode>.service` |
-| `observability` | Template Prometheus / AlertManager configs, copy Grafana provisioning + dashboards, start `prometheus grafana alertmanager` via Compose |
+| `observability` | Template Prometheus / AlertManager / Jaeger configs, copy Grafana provisioning + dashboards, start `prometheus grafana alertmanager jaeger` via Compose |
 | `log-shipping` | Template Loki + Promtail configs, start `loki promtail` via Compose |
 
 Full provisioning:
@@ -165,7 +166,15 @@ Promtail scrapes Docker container log files and ships to Loki. Loki retention: 3
 
 ### Jaeger
 
-Distributed tracing (local dev only). OTLP endpoint: `localhost:4318`. Enable in config with `observability.tracing.enabled: true` and set `observability.tracing.endpoint`.
+Distributed tracing deployed in both local and production environments. Traces are stored with the badger backend (default retention ~72 hours). OTLP HTTP endpoint: `localhost:4318`. The execution engine emits traces in live mode (`observability.tracing.enabled: true` in `execution.live.yaml`, endpoint `http://localhost:4318/v1/traces`; the engine container uses `--network host` so `localhost` resolves to the Jaeger container on the same host).
+
+Access the UI in production via SSH tunnel:
+```bash
+ssh -i ~/.ssh/nicolas -L 16686:127.0.0.1:16686 nicolas@203.0.113.10
+open http://localhost:16686
+```
+
+Grafana datasource is provisioned automatically — use Grafana → Explore → Jaeger to query traces by service (`execution-engine`).
 
 ### AlertManager
 

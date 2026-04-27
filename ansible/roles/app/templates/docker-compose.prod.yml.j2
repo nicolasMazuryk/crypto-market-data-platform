@@ -133,6 +133,38 @@ services:
     depends_on:
       - loki
 
+  jaeger:
+    image: {{ jaeger_image }}
+    container_name: arbinet-jaeger
+    restart: unless-stopped
+    user: root
+    ports:
+      - "127.0.0.1:16686:16686"   # UI (access via SSH tunnel)
+      - "127.0.0.1:4318:4318"     # OTLP HTTP collector
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=badger
+      - BADGER_EPHEMERAL=false
+      - BADGER_DIRECTORY_VALUE=/badger/data
+      - BADGER_DIRECTORY_KEY=/badger/key
+    volumes:
+      - jaeger_data:/badger
+
+  caddy:
+    image: {{ caddy_image }}
+    container_name: arbinet-caddy
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - {{ app_dir }}/observability/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - grafana
+      - prometheus
+      - jaeger
+      - alertmanager
+
   worker-market-sync:
     image: {{ app_name }}:latest
     env_file: {{ app_dir }}/.env
@@ -198,3 +230,9 @@ volumes:
     name: arbinet_grafana_data
   loki_data:
     name: arbinet_loki_data
+  jaeger_data:
+    name: arbinet_jaeger_data
+  caddy_data:
+    name: arbinet_caddy_data
+  caddy_config:
+    name: arbinet_caddy_config
