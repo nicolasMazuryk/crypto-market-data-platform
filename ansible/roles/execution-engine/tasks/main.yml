@@ -43,6 +43,16 @@
 
 # ── 2. Config ───────────────────────────────────────────────────────────────────
 
+- name: Copy execution engine base config
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/config/execution.base.yaml"
+    dest: "{{ execution_config_dir }}/execution.base.yaml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+    remote_src: true
+  notify: Restart execution-engine
+
 - name: Copy execution engine config for current mode
   ansible.builtin.copy:
     src: "{{ repo_dir }}/config/execution.{{ execution_mode }}.yaml"
@@ -72,12 +82,8 @@
 # ── 4. Build + tag Docker image ─────────────────────────────────────────────────
 
 - name: Tag current image with git SHA
-  community.docker.docker_image:
-    name: "{{ app_name }}:latest"
-    repository: "{{ app_name }}"
-    tag: "{{ execution_image_tag }}"
-    source: local
-    force_tag: false
+  ansible.builtin.command:
+    cmd: docker tag {{ app_name }}:latest {{ app_name }}:{{ execution_image_tag }}
   changed_when: false
 
 # ── 5. Release directory for atomic rollback ────────────────────────────────────
@@ -109,7 +115,7 @@
     state: link
     force: true
 
-# ── 6. Prune releases beyond last N ────────────────────────────────────────────
+# ── 6. Prune old releases ───────────────────────────────────────────────────────
 
 - name: List release directories
   ansible.builtin.find:
@@ -135,7 +141,20 @@
     mode: "0400"
   no_log: true
 
-# ── 8. systemd units ────────────────────────────────────────────────────────────
+# ── 8. Postgres migrations ──────────────────────────────────────────────────────
+
+- name: Run execution engine Postgres migrations
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm
+      --network host
+      --env-file {{ app_dir }}/.env
+      --env-file {{ execution_secrets_dir }}/execution.env
+      {{ app_name }}:{{ execution_image_tag }}
+      node dist/execution/persistence/drizzle/migrate.js
+  changed_when: false
+
+# ── 10. systemd units ───────────────────────────────────────────────────────────
 
 - name: Template execution-engine systemd service unit
   ansible.builtin.template:
@@ -160,7 +179,7 @@
 - name: Flush handlers (systemd reload before enable/start)
   ansible.builtin.meta: flush_handlers
 
-# ── 9. Enable + (re)start ───────────────────────────────────────────────────────
+# ── 11. Enable + (re)start ──────────────────────────────────────────────────────
 
 - name: Enable execution-engine service
   ansible.builtin.systemd:
@@ -176,7 +195,7 @@
     daemon_reload: false
   when: execution_engine_enabled | bool
 
-# ── 10. Wait for readiness ──────────────────────────────────────────────────────
+# ── 12. Wait for readiness ──────────────────────────────────────────────────────
 
 - name: Wait for execution engine /ready
   ansible.builtin.uri:
