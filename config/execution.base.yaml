@@ -13,7 +13,7 @@ exchanges:
     enabled: true
     credentialsEnvPrefix: BINANCE       # env prefix for BINANCE_API_KEY / BINANCE_API_SECRET
     marketRefreshMs: 60000              # ms — how often to refresh market metadata
-    fundingPullMs: 15000                # ms — how often to poll funding rates
+    fundingPullMs: 10000                # ms — how often to poll funding rates
     rateLimits:
       criticalReservationFraction: 0.1  # fraction [0-1] — reserve 10 % for critical-path requests
       criticalWindowSeconds: 60         # s — rolling window for critical reservation
@@ -23,47 +23,47 @@ exchanges:
     enabled: true
     credentialsEnvPrefix: BYBIT
     marketRefreshMs: 60000
-    fundingPullMs: 15000
+    fundingPullMs: 10000
     rateLimits:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
       buckets: []
 
   - exchange: okx
-    enabled: true
+    enabled: false
     credentialsEnvPrefix: OKX
     marketRefreshMs: 60000
-    fundingPullMs: 15000
+    fundingPullMs: 10000
     rateLimits:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
       buckets: []
 
   - exchange: bitget
-    enabled: true
+    enabled: false
     credentialsEnvPrefix: BITGET
     marketRefreshMs: 60000
-    fundingPullMs: 15000
+    fundingPullMs: 10000
     rateLimits:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
       buckets: []
 
   - exchange: gateio
-    enabled: true
+    enabled: true 
     credentialsEnvPrefix: GATEIO
     marketRefreshMs: 60000
-    fundingPullMs: 15000
+    fundingPullMs: 10000
     rateLimits:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
       buckets: []
 
   - exchange: kucoin
-    enabled: true
+    enabled: false
     credentialsEnvPrefix: KUCOIN
     marketRefreshMs: 60000
-    fundingPullMs: 15000
+    fundingPullMs: 10000
     rateLimits:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
