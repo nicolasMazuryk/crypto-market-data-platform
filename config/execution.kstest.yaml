@@ -1,0 +1,96 @@
+mode: dry_run
+
+exchanges:
+  - exchange: binance
+    enabled: true
+    credentialsEnvPrefix: BINANCE
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+  - exchange: bybit
+    enabled: false
+    credentialsEnvPrefix: BYBIT
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+  - exchange: okx
+    enabled: false
+    credentialsEnvPrefix: OKX
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+  - exchange: bitget
+    enabled: false
+    credentialsEnvPrefix: BITGET
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+  - exchange: gateio
+    enabled: false
+    credentialsEnvPrefix: GATEIO
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+  - exchange: kucoin
+    enabled: false
+    credentialsEnvPrefix: KUCOIN
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+
+strategies:
+  - id: strategy_3a
+    enabled: true
+    negativeFundingThresholdPercent: -0.25
+    entryOffsetSeconds: 2
+    stopLossPercent: 1.0
+    takeProfitPercent: 0
+    tpVariantAMultiplier: 1.5
+    tpVariantBOffsetPercent: 0.4
+    deadlineSeconds: 300
+    amountUsd: 20
+    leverage: 4
+
+scheduler:
+  wakeBeforeHourEndMs: 300000
+  fundingWindowMs: 600000
+
+persistence:
+  writerQueueSize: 1000
+  walPath: ''
+
+observability:
+  metricsPort: 9468
+  tracing:
+    enabled: false
+    serviceName: execution-engine
+    sampler: parent
+
+testing:
+  shadowFillDelayMs: 30000  # 30s — hold positions open so kill-switch trip can be tested
+
+risk:
+  globalMaxConcurrentIntents: 10000
+  globalMaxNotionalUsd: 100000
+  perStrategy:
+    strategy_3a:
+      maxConcurrentIntents: 20
+      maxNotionalUsd: 200000

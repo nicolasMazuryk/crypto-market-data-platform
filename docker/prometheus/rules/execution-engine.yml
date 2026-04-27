@@ -1,0 +1,97 @@
+groups:
+  - name: execution-engine
+    interval: 15s
+    rules:
+      # Engine process liveness
+      - alert: EngineDown
+        expr: engine_up == 0 or absent(engine_up)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Execution engine is down"
+          description: "engine_up has been 0 or absent for > 1 minute"
+
+      # Kill switch tripped
+      - alert: KillSwitchHalted
+        expr: kill_switch_mode{mode="halted"} == 1
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kill switch is in halted mode"
+          description: "The kill switch has been tripped — no new orders will be placed"
+
+      # No fills around a funding window (missed opportunity or broken flow)
+      - alert: NoFillsAroundFunding
+        expr: |
+          rate(intents_decided_total[10m]) > 0
+          and
+          rate(intents_filled_total[15m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Intents decided but no fills in last 15 minutes"
+          description: "Strategy is deciding intents but none are filling — check adapters and WS connection"
+
+      # WS reconnect storm
+      - alert: WsReconnectStorm
+        expr: rate(ws_reconnect_total[1m]) > 3
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket reconnect storm on {{ $labels.exchange }}"
+          description: "More than 3 WS reconnects/min on {{ $labels.exchange }} for 2+ minutes"
+
+      # WS fully disconnected
+      - alert: WsDisconnected
+        expr: ws_connection_state == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WebSocket disconnected on {{ $labels.exchange }}"
+          description: "WS connection_state is 0 (disconnected) for {{ $labels.exchange }} for 2+ minutes"
+
+      # Persistence queue growing — writes piling up
+      - alert: PersistenceQueueHigh
+        expr: persistence_queue_size > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Persistence write queue depth > 100"
+          description: "persistence_queue_size={{ $value }} — DB writes are falling behind"
+
+      # Persistence drops
+      - alert: PersistenceDrops
+        expr: rate(persistence_dropped_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Persistence writes being dropped"
+          description: "persistence_dropped_total is increasing — data loss in progress"
+
+      # High intent error rate (excluding expected cap_exceeded)
+      - alert: HighIntentErrorRate
+        expr: |
+          rate(intents_rejected_total{code!~"cap_exceeded|no_ref_price"}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High intent rejection rate on {{ $labels.exchange }}/{{ $labels.strategy }}"
+          description: "rejection code={{ $labels.code }} rate={{ $value }}/s"
+
+      # Stale funding snapshots
+      - alert: FundingSnapshotsStale
+        expr: funding_snapshots_stale > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Stale funding snapshots on {{ $labels.exchange }}"
+          description: "{{ $value }} stale funding snapshots — funding puller may be stuck"

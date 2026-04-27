@@ -308,3 +308,11 @@ Configured in `src/config/index.ts`:
 ## Development Notes
 
 Progress tracked in GitHub Issues. See `RUNBOOK.md` for operational procedures.
+
+## Execution Engine Config
+
+See `src/execution/docs/configuration.md` for: directory layout, precedence order, secrets guide, parameter reference, and `npm run config:validate` usage.
+
+## Execution Engine Deployment
+
+See `src/execution/docs/runbook.md` for: normal deploy, hotfix deploy, rollback, on-call alert responses, state recovery, and pre-flight checklist.

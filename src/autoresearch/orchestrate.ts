@@ -223,7 +223,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((err: unknown) => {
-  const message = err instanceof Error ? err.stack ?? err.message : String(err)
+  const message = err instanceof Error ? (err.stack ?? err.message) : String(err)
   console.error(`[autoresearch] fatal: ${message}`)
   process.exit(1)
 })

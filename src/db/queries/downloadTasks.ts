@@ -64,6 +64,18 @@ function toNumber(value: string | number): number {
   return typeof value === 'number' ? value : Number(value)
 }
 
+function toErrorMessage(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value)
+  }
+
+  return null
+}
+
 function normalizeErrorBreakdown(value: unknown): ErrorBreakdownEntry[] {
   if (!Array.isArray(value)) {
     return []
@@ -83,9 +95,10 @@ function normalizeErrorBreakdown(value: unknown): ErrorBreakdownEntry[] {
       }
       const errorMessage = tuple.error_message ?? tuple[1]
       const occurrences = tuple.occurrences ?? tuple[2]
+      const normalizedErrorMessage = toErrorMessage(errorMessage)
 
-      if (errorMessage !== undefined && occurrences !== undefined) {
-        return [[String(errorMessage), toNumber(occurrences as string | number)]]
+      if (normalizedErrorMessage !== null && occurrences !== undefined) {
+        return [[normalizedErrorMessage, toNumber(occurrences as string | number)]]
       }
     }
 

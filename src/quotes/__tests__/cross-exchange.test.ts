@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { validateCrossExchangeConsistencyFromDescriptors } from '../validation/cross-exchange.js'
+
 const readOrderbookDataMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../validation/reader.js', () => ({
@@ -11,6 +13,14 @@ async function* asAsyncIterable<T>(items: Iterable<T>): AsyncIterable<T> {
     await Promise.resolve()
     yield item
   }
+}
+
+function getFirst<T>(items: T[]): T {
+  const first = items[0]
+  if (first === undefined) {
+    throw new Error('expected at least one item')
+  }
+  return first
 }
 
 describe('validateCrossExchangeConsistencyFromDescriptors', () => {
@@ -57,7 +67,6 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
       ])
     })
 
-    const { validateCrossExchangeConsistencyFromDescriptors } = await import('../validation/cross-exchange.js')
     const result = await validateCrossExchangeConsistencyFromDescriptors(
       new Map([
         [
@@ -71,14 +80,15 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
     )
 
     expect(result).toHaveLength(1)
-    expect(result[0]).toMatchObject({
+    const first = getFirst(result)
+    expect(first).toMatchObject({
       symbol: 'BTCUSDT',
       exchanges: ['binance', 'okx'],
       overlappingSeconds: 2,
-      maxDivergencePercent: expect.closeTo(1.8018018018018018, 10),
-      meanDivergencePercent: expect.closeTo(1.3984133387118463, 10),
       divergenceAboveOnePercentCount: 1,
     })
+    expect(first.maxDivergencePercent).toBeCloseTo(1.8018018018018018, 10)
+    expect(first.meanDivergencePercent).toBeCloseTo(1.3984133387118463, 10)
   })
 
   it('returns zero-overlap results when exchanges have valid but non-overlapping data', async () => {
@@ -94,7 +104,6 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
       ])
     )
 
-    const { validateCrossExchangeConsistencyFromDescriptors } = await import('../validation/cross-exchange.js')
     const result = await validateCrossExchangeConsistencyFromDescriptors(
       new Map([
         [
@@ -166,7 +175,6 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
       ])
     })
 
-    const { validateCrossExchangeConsistencyFromDescriptors } = await import('../validation/cross-exchange.js')
     const result = await validateCrossExchangeConsistencyFromDescriptors(
       new Map([
         [
@@ -179,26 +187,26 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
       ])
     )
 
-    expect(result).toEqual([
-      {
-        symbol: 'SOLUSDT',
-        exchanges: ['binance', 'bybit'],
-        overlappingSeconds: 1,
-        meanDivergencePercent: expect.closeTo(1.9801980198019802, 10),
-        maxDivergencePercent: expect.closeTo(1.9801980198019802, 10),
-        divergenceAboveOnePercentCount: 1,
-        examples: [
-          {
-            ts: 3_000,
-            divergencePercent: expect.closeTo(1.9801980198019802, 10),
-            lowExchange: 'binance',
-            highExchange: 'bybit',
-            lowMidPrice: 100,
-            highMidPrice: 102,
-          },
-        ],
-      },
-    ])
+    expect(result).toHaveLength(1)
+    const first = getFirst(result)
+    expect(first).toMatchObject({
+      symbol: 'SOLUSDT',
+      exchanges: ['binance', 'bybit'],
+      overlappingSeconds: 1,
+      divergenceAboveOnePercentCount: 1,
+    })
+    expect(first.meanDivergencePercent).toBeCloseTo(1.9801980198019802, 10)
+    expect(first.maxDivergencePercent).toBeCloseTo(1.9801980198019802, 10)
+    expect(first.examples).toHaveLength(1)
+    const example = getFirst(first.examples)
+    expect(example).toMatchObject({
+      ts: 3_000,
+      lowExchange: 'binance',
+      highExchange: 'bybit',
+      lowMidPrice: 100,
+      highMidPrice: 102,
+    })
+    expect(example.divergencePercent).toBeCloseTo(1.9801980198019802, 10)
   })
 
   it('caps divergence examples at ten entries', async () => {
@@ -214,7 +222,6 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
       )
     )
 
-    const { validateCrossExchangeConsistencyFromDescriptors } = await import('../validation/cross-exchange.js')
     const result = await validateCrossExchangeConsistencyFromDescriptors(
       new Map([
         [
@@ -240,15 +247,12 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
           ts: 1_000,
           exchange,
           symbol: 'ADAUSDT',
-          bid_close:
-            exchange === 'binance' ? 98 : exchange === 'bybit' ? 100 : 104,
-          ask_close:
-            exchange === 'binance' ? 100 : exchange === 'bybit' ? 102 : 106,
+          bid_close: exchange === 'binance' ? 98 : exchange === 'bybit' ? 100 : 104,
+          ask_close: exchange === 'binance' ? 100 : exchange === 'bybit' ? 102 : 106,
         },
       ])
     )
 
-    const { validateCrossExchangeConsistencyFromDescriptors } = await import('../validation/cross-exchange.js')
     const result = await validateCrossExchangeConsistencyFromDescriptors(
       new Map([
         [
@@ -262,26 +266,26 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
       ])
     )
 
-    expect(result).toEqual([
-      {
-        symbol: 'ADAUSDT',
-        exchanges: ['binance', 'bybit', 'okx'],
-        overlappingSeconds: 1,
-        meanDivergencePercent: expect.closeTo(5.88235294117647, 10),
-        maxDivergencePercent: expect.closeTo(5.88235294117647, 10),
-        divergenceAboveOnePercentCount: 1,
-        examples: [
-          {
-            ts: 1_000,
-            divergencePercent: expect.closeTo(5.88235294117647, 10),
-            lowExchange: 'binance',
-            highExchange: 'okx',
-            lowMidPrice: 99,
-            highMidPrice: 105,
-          },
-        ],
-      },
-    ])
+    expect(result).toHaveLength(1)
+    const first = getFirst(result)
+    expect(first).toMatchObject({
+      symbol: 'ADAUSDT',
+      exchanges: ['binance', 'bybit', 'okx'],
+      overlappingSeconds: 1,
+      divergenceAboveOnePercentCount: 1,
+    })
+    expect(first.meanDivergencePercent).toBeCloseTo(5.88235294117647, 10)
+    expect(first.maxDivergencePercent).toBeCloseTo(5.88235294117647, 10)
+    expect(first.examples).toHaveLength(1)
+    const example = getFirst(first.examples)
+    expect(example).toMatchObject({
+      ts: 1_000,
+      lowExchange: 'binance',
+      highExchange: 'okx',
+      lowMidPrice: 99,
+      highMidPrice: 105,
+    })
+    expect(example.divergencePercent).toBeCloseTo(5.88235294117647, 10)
   })
 
   it('streams large generated inputs without materializing point arrays', async () => {
@@ -300,7 +304,6 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
       }
     })
 
-    const { validateCrossExchangeConsistencyFromDescriptors } = await import('../validation/cross-exchange.js')
     const result = await validateCrossExchangeConsistencyFromDescriptors(
       new Map([
         [
@@ -313,16 +316,18 @@ describe('validateCrossExchangeConsistencyFromDescriptors', () => {
       ])
     )
 
-    expect(result).toEqual([
-      {
-        symbol: 'DOGEUSDT',
-        exchanges: ['binance', 'okx'],
-        overlappingSeconds: rowCount,
-        meanDivergencePercent: expect.closeTo(0.9950248756218906, 10),
-        maxDivergencePercent: expect.closeTo(0.9950248756218906, 10),
-        divergenceAboveOnePercentCount: 0,
-        examples: [],
-      },
-    ])
+    expect(result).toHaveLength(1)
+    const first = getFirst(result)
+    expect(first).toEqual({
+      symbol: 'DOGEUSDT',
+      exchanges: ['binance', 'okx'],
+      overlappingSeconds: rowCount,
+      meanDivergencePercent: first.meanDivergencePercent,
+      maxDivergencePercent: first.maxDivergencePercent,
+      divergenceAboveOnePercentCount: 0,
+      examples: [],
+    })
+    expect(first.meanDivergencePercent).toBeCloseTo(0.9950248756218906, 10)
+    expect(first.maxDivergencePercent).toBeCloseTo(0.9950248756218906, 10)
   })
 })

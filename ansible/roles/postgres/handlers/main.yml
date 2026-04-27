@@ -1,0 +1,5 @@
+---
+- name: restart postgres
+  ansible.builtin.command:
+    cmd: docker compose -f {{ docker_compose_file }} restart postgres
+  changed_when: true

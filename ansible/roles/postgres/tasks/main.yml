@@ -1,0 +1,54 @@
+---
+- name: Ensure postgres data directory exists
+  ansible.builtin.file:
+    path: "{{ postgres_data_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure postgres backup directory exists
+  ansible.builtin.file:
+    path: "{{ postgres_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Start Postgres via Docker Compose
+  ansible.builtin.command:
+    cmd: docker compose -f {{ docker_compose_file }} up -d postgres
+  changed_when: true
+  environment:
+    POSTGRES_DB: "{{ postgres_db }}"
+    POSTGRES_USER: "{{ postgres_user }}"
+    POSTGRES_PASSWORD: "{{ postgres_password }}"
+    POSTGRES_PORT: "{{ postgres_port }}"
+
+- name: Wait for Postgres to be healthy
+  ansible.builtin.command:
+    cmd: >
+      docker exec arbinet-postgres
+      pg_isready -U {{ postgres_user }} -d {{ postgres_db }}
+  register: pg_ready
+  until: pg_ready.rc == 0
+  retries: 30
+  delay: 2
+  changed_when: false
+
+- name: Install pg_dump backup cron (daily, optional remote upload)
+  ansible.builtin.cron:
+    name: "postgres daily backup"
+    minute: "30"
+    hour: "2"
+    job: >
+      docker exec arbinet-postgres
+      pg_dump -U {{ postgres_user }} {{ postgres_db }}
+      | gzip > {{ postgres_backup_dir }}/arbinet_$(date +\%Y\%m\%d).sql.gz
+      && find {{ postgres_backup_dir }} -name '*.sql.gz'
+      -mtime +{{ postgres_backup_retention_days | default(7) }} -delete
+      {% if postgres_backup_remote_target | default('') | length > 0 %}
+      && rsync -az {{ postgres_backup_dir }}/arbinet_$(date +\%Y\%m\%d).sql.gz
+      {{ postgres_backup_remote_target }}/
+      {% endif %}
+    state: present

@@ -1,0 +1,189 @@
+---
+# ── 1. Directories ──────────────────────────────────────────────────────────────
+
+- name: Ensure execution base directory exists
+  ansible.builtin.file:
+    path: "{{ execution_base_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure execution releases directory exists
+  ansible.builtin.file:
+    path: "{{ execution_releases_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure execution secrets directory exists (root-only)
+  ansible.builtin.file:
+    path: "{{ execution_secrets_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Ensure execution engine config directory exists
+  ansible.builtin.file:
+    path: "{{ execution_config_dir }}"
+    state: directory
+    owner: nicolas
+    group: nicolas
+    mode: "0755"
+
+- name: Ensure execution engine WAL directory exists
+  ansible.builtin.file:
+    path: "{{ execution_wal_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# ── 2. Config ───────────────────────────────────────────────────────────────────
+
+- name: Copy execution engine config for current mode
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/config/execution.{{ execution_mode }}.yaml"
+    dest: "{{ execution_config_dir }}/execution.{{ execution_mode }}.yaml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+    remote_src: true
+  notify: Restart execution-engine
+
+# ── 3. Resolve image tag (git SHA) ─────────────────────────────────────────────
+# Only auto-detect when execution_image_tag is not already set (e.g. by rollback).
+
+- name: Get current git SHA
+  ansible.builtin.command:
+    cmd: git -C {{ repo_dir }} rev-parse --short HEAD
+  register: _git_sha
+  changed_when: false
+  check_mode: false
+  when: execution_image_tag == ""
+
+- name: Set execution_image_tag from git SHA
+  ansible.builtin.set_fact:
+    execution_image_tag: "{{ _git_sha.stdout | trim }}"
+  when: execution_image_tag == ""
+
+# ── 4. Build + tag Docker image ─────────────────────────────────────────────────
+
+- name: Tag current image with git SHA
+  community.docker.docker_image:
+    name: "{{ app_name }}:latest"
+    repository: "{{ app_name }}"
+    tag: "{{ execution_image_tag }}"
+    source: local
+    force_tag: false
+  changed_when: false
+
+# ── 5. Release directory for atomic rollback ────────────────────────────────────
+
+- name: Create release directory for this SHA
+  ansible.builtin.file:
+    path: "{{ execution_releases_dir }}/{{ execution_image_tag }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Record deployed SHA and timestamp
+  ansible.builtin.copy:
+    content: |
+      sha={{ execution_image_tag }}
+      deployed_at={{ ansible_facts['date_time']['iso8601'] }}
+      mode={{ execution_mode }}
+    dest: "{{ execution_releases_dir }}/{{ execution_image_tag }}/release"
+    owner: root
+    group: root
+    mode: "0444"
+    force: false
+
+- name: Update current symlink to latest release (atomic)
+  ansible.builtin.file:
+    src: "{{ execution_releases_dir }}/{{ execution_image_tag }}"
+    dest: "{{ execution_base_dir }}/current"
+    state: link
+    force: true
+
+# ── 6. Prune releases beyond last N ────────────────────────────────────────────
+
+- name: List release directories
+  ansible.builtin.find:
+    paths: "{{ execution_releases_dir }}"
+    file_type: directory
+  register: _release_dirs
+
+- name: Prune old releases
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ (_release_dirs.files | sort(attribute='mtime'))[:((_release_dirs.files | length) - execution_releases_keep)] }}"
+  when: _release_dirs.files | length > execution_releases_keep
+
+# ── 7. Secrets env file (root-owned 0400) ──────────────────────────────────────
+
+- name: Template execution secrets env file
+  ansible.builtin.template:
+    src: execution.env.j2
+    dest: "{{ execution_secrets_dir }}/execution.env"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+
+# ── 8. systemd units ────────────────────────────────────────────────────────────
+
+- name: Template execution-engine systemd service unit
+  ansible.builtin.template:
+    src: execution-engine@.service.j2
+    dest: /etc/systemd/system/execution-engine@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart execution-engine
+
+- name: Template execution-engine paging unit
+  ansible.builtin.template:
+    src: execution-engine-page@.service.j2
+    dest: /etc/systemd/system/execution-engine-page@.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Flush handlers (systemd reload before enable/start)
+  ansible.builtin.meta: flush_handlers
+
+# ── 9. Enable + (re)start ───────────────────────────────────────────────────────
+
+- name: Enable execution-engine service
+  ansible.builtin.systemd:
+    name: "execution-engine@{{ execution_mode }}.service"
+    enabled: true
+    daemon_reload: false
+  when: execution_engine_enabled | bool
+
+- name: Start execution-engine service if not running
+  ansible.builtin.systemd:
+    name: "execution-engine@{{ execution_mode }}.service"
+    state: started
+    daemon_reload: false
+  when: execution_engine_enabled | bool
+
+# ── 10. Wait for readiness ──────────────────────────────────────────────────────
+
+- name: Wait for execution engine /ready
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ execution_health_port }}/ready"
+    status_code: 200
+  register: _ready
+  until: _ready.status == 200
+  retries: "{{ execution_health_ready_retries }}"
+  delay: "{{ execution_health_ready_delay }}"
+  when: execution_engine_enabled | bool

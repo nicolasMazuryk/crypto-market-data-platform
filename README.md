@@ -135,6 +135,10 @@ npm run autoresearch:list               # Show configured runs
 npm run autoresearch:dashboard          # Rebuild aggregated results
 ```
 
+## Strategy Execution Engine
+
+See [`src/execution/docs/README.md`](src/execution/docs/README.md) for the full execution-engine documentation (architecture, trading logic, commands, configuration, infrastructure, runbook).
+
 ## License
 
 MIT

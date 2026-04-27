@@ -3,7 +3,7 @@ import { createCcxtExchange } from './ccxt-client.js'
 import { extractListingDate } from './listing-date.js'
 import type { CcxtMarket, ExchangeConfig, Market } from './types.js'
 
-function isUsdtPerpetualMarket(market: CcxtMarket): boolean {
+export function isUsdtPerpetualMarket(market: CcxtMarket): boolean {
   if (market.swap !== true) {
     return false
   }

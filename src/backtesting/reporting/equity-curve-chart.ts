@@ -1,15 +1,7 @@
 import fs from 'fs'
 
 import { createCanvas } from '@napi-rs/canvas'
-import {
-  CategoryScale,
-  Chart,
-  Filler,
-  LineController,
-  LineElement,
-  LinearScale,
-  PointElement,
-} from 'chart.js'
+import { CategoryScale, Chart, Filler, LineController, LineElement, LinearScale, PointElement } from 'chart.js'
 
 Chart.register(CategoryScale, LinearScale, LineElement, PointElement, LineController, Filler)
 

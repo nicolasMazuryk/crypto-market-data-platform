@@ -1,0 +1,9 @@
+---
+postgres_image: postgres:18-alpine
+postgres_data_dir: /data/postgres
+postgres_port: 5432
+postgres_db: arbinet
+postgres_user: arbinet
+postgres_password: "<OBSERVABILITY_PASSWORD>"
+postgres_backup_dir: /data/backups/postgres
+postgres_backup_retention_days: 7

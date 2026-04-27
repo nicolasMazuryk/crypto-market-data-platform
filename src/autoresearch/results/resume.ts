@@ -1,7 +1,4 @@
-import {
-  getResultsTsvPath,
-  getStateJsonPath,
-} from '../paths.js'
+import { getResultsTsvPath, getStateJsonPath } from '../paths.js'
 import type { ResultRow, RunState } from '../types.js'
 
 import { reconstructState, readState, writeState } from './state.js'

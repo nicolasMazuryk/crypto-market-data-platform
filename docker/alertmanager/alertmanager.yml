@@ -1,0 +1,24 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: slack
+  group_by: [alertname, severity]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 1h
+
+receivers:
+  - name: slack
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/REPLACE/ME/HERE'
+        channel: '#alerts'
+        send_resolved: true
+        username: arbinet-alerts-dev
+        icon_emoji: ':fire:'
+        title: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        text: |-
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Detail:* {{ .Annotations.description }}
+          {{ end }}

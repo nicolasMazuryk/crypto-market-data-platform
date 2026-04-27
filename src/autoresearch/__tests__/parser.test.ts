@@ -121,7 +121,7 @@ describe('backtest parser', () => {
     const report = makeReport()
     delete (report as Partial<BacktestReport>).equity_curve_metrics
 
-    const metrics = extractMetrics(report as BacktestReport)
+    const metrics = extractMetrics(report)
 
     expect(metrics.ulcer_index).toBeNull()
     expect(metrics.equity_curve_quality_score).toBeNull()

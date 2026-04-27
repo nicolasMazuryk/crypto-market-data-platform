@@ -78,10 +78,7 @@ function liteToQuoteRow(row: OrderbookLiteRow): QuoteRow {
   }
 }
 
-export async function* readOrderbookLiteData(
-  exchange: string,
-  symbol: string
-): AsyncIterable<QuoteRow> {
+export async function* readOrderbookLiteData(exchange: string, symbol: string): AsyncIterable<QuoteRow> {
   for await (const row of streamOrderbookLiteRows(exchange, symbol)) {
     yield liteToQuoteRow(row)
   }

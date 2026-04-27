@@ -1,0 +1,4 @@
+---
+loki_image: grafana/loki:3.0.0
+promtail_image: grafana/promtail:3.0.0
+loki_retention_hours: 336

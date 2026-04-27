@@ -1,0 +1,101 @@
+---
+# Roll the execution engine back to a previously deployed git SHA.
+#
+# Usage:
+#   ansible-playbook playbooks/rollback-execution.yml -e target_sha=<sha>
+#
+# The target SHA must exist in {{ execution_releases_dir }}/<sha>/ (i.e. it was
+# deployed at least once before). The Docker image arbinet:<sha> must still be
+# present in the local Docker image store.
+
+- name: Roll back execution engine to a previous release
+  hosts: servers
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+
+  vars:
+    target_sha: ""
+
+  tasks:
+    - name: Validate target_sha is provided
+      ansible.builtin.fail:
+        msg: "target_sha is required. Pass -e target_sha=<git-sha>"
+      when: target_sha == ""
+
+    - name: Check that release directory exists for target SHA
+      ansible.builtin.stat:
+        path: "{{ execution_releases_dir }}/{{ target_sha }}"
+      register: _release_stat
+
+    - name: Fail if release directory does not exist
+      ansible.builtin.fail:
+        msg: >
+          Release {{ execution_releases_dir }}/{{ target_sha }} does not exist.
+          Only SHAs that were previously deployed can be rolled back to.
+      when: not _release_stat.stat.exists
+
+    - name: Check that Docker image exists for target SHA
+      ansible.builtin.command:
+        cmd: docker image inspect {{ app_name }}:{{ target_sha }}
+      register: _image_check
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if Docker image is not available
+      ansible.builtin.fail:
+        msg: >
+          Docker image {{ app_name }}:{{ target_sha }} not found locally.
+          The image may have been pruned. Re-deploy from that SHA to rebuild it.
+      when: _image_check.rc != 0
+
+    # ── Stop current service ──────────────────────────────────────────────────
+
+    - name: Stop execution engine gracefully before rollback
+      ansible.builtin.include_role:
+        name: execution-engine
+        tasks_from: stop
+
+    # ── Update symlink and re-template systemd unit ───────────────────────────
+
+    - name: Update current symlink to target release
+      ansible.builtin.file:
+        src: "{{ execution_releases_dir }}/{{ target_sha }}"
+        dest: "{{ execution_base_dir }}/current"
+        state: link
+        force: true
+
+    - name: Template execution-engine systemd unit with rollback SHA
+      ansible.builtin.template:
+        src: ../roles/execution-engine/templates/execution-engine@.service.j2
+        dest: /etc/systemd/system/execution-engine@.service
+        owner: root
+        group: root
+        mode: "0644"
+      vars:
+        execution_image_tag: "{{ target_sha }}"
+
+    - name: Reload systemd after unit update
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    # ── Start at rollback SHA ─────────────────────────────────────────────────
+
+    - name: Start execution engine at rollback SHA
+      ansible.builtin.systemd:
+        name: "execution-engine@{{ execution_mode }}.service"
+        state: started
+        daemon_reload: false
+
+    - name: Wait for execution engine /ready after rollback
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ execution_health_port }}/ready"
+        status_code: 200
+      register: _ready
+      until: _ready.status == 200
+      retries: "{{ execution_health_ready_retries }}"
+      delay: "{{ execution_health_ready_delay }}"
+
+    - name: Report rollback success
+      ansible.builtin.debug:
+        msg: "Rollback complete — execution-engine@{{ execution_mode }} is running {{ app_name }}:{{ target_sha }}"

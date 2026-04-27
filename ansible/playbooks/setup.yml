@@ -19,5 +19,9 @@
     - docker
     - hardening
     - app
+    - postgres
     - workers
     - monitoring
+    - observability
+    - log-shipping
+    - execution-engine

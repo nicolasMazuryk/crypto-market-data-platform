@@ -1,0 +1,16 @@
+---
+# All execution-engine variables are defined in ansible/group_vars/all.yml
+# so they're available to all playbooks (including rollback-execution.yml).
+# This file exists to document the expected keys; group_vars takes precedence.
+execution_engine_enabled: false
+execution_mode: dry-run
+execution_config_dir: "{{ app_dir }}/config"
+execution_wal_dir: /data/execution
+execution_base_dir: "{{ app_dir }}/execution"
+execution_releases_dir: "{{ app_dir }}/execution/releases"
+execution_secrets_dir: "{{ app_dir }}/execution/secrets"
+execution_releases_keep: 3
+execution_image_tag: ""
+execution_health_port: 9466
+execution_health_ready_retries: 60
+execution_health_ready_delay: 5

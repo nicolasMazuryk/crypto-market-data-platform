@@ -1,0 +1,72 @@
+# execution.live.yaml — real-money trading
+#
+# Merged on top of execution.base.yaml. Only keys that differ from the base
+# (or that are mode-specific) are listed here.
+#
+# Run:  npm run execution:live
+# Validate: npm run config:validate -- --config config/execution.live.yaml
+#
+# WARNING: This mode places real orders with real funds.
+#          Read CONFIG.md and DEPLOY.md before changing anything.
+
+mode: live
+
+# ── Strategies ───────────────────────────────────────────────────────────────
+strategies:
+  # strategy_1 kept for reference — disabled in live mode
+  - id: strategy_1
+    enabled: false
+    negativeFundingThresholdPercent: -0.3   # % — live threshold is tighter than dry-run
+    entryOffsetSeconds: 2                   # s
+    exitOffsetSeconds: 1                    # s
+    amountUsd: 20                           # USD
+    leverage: 4                             # x
+
+  # strategy_3a and strategy_3b are mutually exclusive — enable at most one.
+  # TP is computed from |fundingRate| at decision time (tpVariantAMultiplier / tpVariantBOffsetPercent).
+  - id: strategy_3a
+    enabled: true
+    negativeFundingThresholdPercent: -0.25  # % — entry threshold
+    entryOffsetSeconds: 2                   # s
+    stopLossPercent: 1.0                    # %
+    takeProfitPercent: 0                    # % — 0 = dynamic TP via tpVariantAMultiplier
+    tpVariantAMultiplier: 1.5              # x
+    tpVariantBOffsetPercent: 0.4           # % — unused in 3a
+    deadlineSeconds: 300                    # s — max position lifetime
+    amountUsd: 20                           # USD
+    leverage: 4                             # x
+
+  #- id: strategy_3b
+  #  enabled: false
+  #  negativeFundingThresholdPercent: -0.4
+  #  entryOffsetSeconds: 4
+  #  stopLossPercent: 1.0
+  #  takeProfitPercent: 0
+  #  tpVariantAMultiplier: 1.5
+  #  tpVariantBOffsetPercent: 0.4
+  #  deadlineSeconds: 300
+  #  amountUsd: 20
+  #  leverage: 4
+
+# ── Risk limits ───────────────────────────────────────────────────────────────
+risk:
+  globalMaxConcurrentIntents: 10000         # count
+  globalMaxNotionalUsd: 1000000             # USD ($1 M) — requires acknowledgeUncapped: true
+  acknowledgeUncapped: true                 # REQUIRED when globalMaxNotionalUsd > $100 k in live mode
+  perStrategy:
+    strategy_1:
+      maxConcurrentIntents: 2000            # count
+      maxNotionalUsd: 200000               # USD
+    strategy_3a:
+      maxConcurrentIntents: 2000            # count
+      maxNotionalUsd: 200000               # USD
+    strategy_3b:
+      maxConcurrentIntents: 2000            # count
+      maxNotionalUsd: 200000               # USD
+
+# ── Testing knobs ─────────────────────────────────────────────────────────────
+# Use with extreme care in live mode. Any override REQUIRES acknowledgeLiveOverride: true.
+# testing:
+#   fundingTimeOverride:
+#     time: "17:35:00"                      # UTC HH:MM:SS
+#     acknowledgeLiveOverride: true         # REQUIRED in live mode

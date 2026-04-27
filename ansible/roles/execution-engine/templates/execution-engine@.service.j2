@@ -1,0 +1,33 @@
+[Unit]
+Description=Arbinet Execution Engine (%i mode)
+After=docker.service network-online.target
+Requires=docker.service
+# %n is the full instance name (e.g. execution-engine@dry-run.service)
+OnFailure=execution-engine-page@%n.service
+
+[Service]
+Type=exec
+# Remove any leftover container from a previous crashed run
+ExecStartPre=-/usr/bin/docker rm -f arbinet-execution-%i
+ExecStart=/usr/bin/docker run \
+  --rm \
+  --name arbinet-execution-%i \
+  --network host \
+  --env-file {{ app_dir }}/.env \
+  --env-file {{ execution_secrets_dir }}/execution.env \
+  --volume {{ execution_wal_dir }}:/data/execution \
+  --volume {{ execution_config_dir }}:/opt/arbinet/config:ro \
+  {{ app_name }}:{{ execution_image_tag }} \
+  node dist/execution/index.js \
+  --config /opt/arbinet/config/execution.%i.yaml \
+  --health-port {{ execution_health_port }}
+# Send SIGTERM to the docker process (which propagates to the container's PID 1)
+KillMode=process
+TimeoutStopSec=30s
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Install]
+WantedBy=multi-user.target

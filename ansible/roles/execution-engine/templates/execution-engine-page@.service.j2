@@ -1,0 +1,7 @@
+[Unit]
+Description=Page on execution engine restart-burst failure (%i)
+
+[Service]
+Type=oneshot
+# %i is the full instance name passed from OnFailure= (e.g. execution-engine@dry-run.service)
+ExecStart={{ app_dir }}/notify-failure.sh %i

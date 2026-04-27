@@ -24,6 +24,115 @@ services:
         soft: 262144
         hard: 262144
 
+  postgres:
+    image: {{ postgres_image }}
+    container_name: arbinet-postgres
+    restart: always
+    ports:
+      - "127.0.0.1:{{ postgres_port }}:5432"
+    volumes:
+      - {{ postgres_data_dir }}:/var/lib/postgresql
+    environment:
+      POSTGRES_DB: {{ postgres_db }}
+      POSTGRES_USER: {{ postgres_user }}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_user }} -d {{ postgres_db }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Managed by systemd (execution-engine@<mode>.service) — profile guard prevents
+  # accidental start via `docker compose up -d`.
+  execution-engine:
+    image: {{ app_name }}:latest
+    container_name: arbinet-execution-engine
+    restart: unless-stopped
+    env_file: {{ app_dir }}/.env
+    command:
+      - node
+      - dist/execution/index.js
+      - --config
+      - "{{ execution_config_dir }}/execution.{{ execution_mode }}.yaml"
+    network_mode: host
+    volumes:
+      - {{ execution_wal_dir }}:/data/execution
+    profiles:
+      - execution
+
+  prometheus:
+    image: {{ prometheus_image }}
+    container_name: arbinet-prometheus
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - {{ app_dir }}/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - {{ app_dir }}/observability/prometheus-rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --storage.tsdb.retention.time={{ prometheus_retention_days }}d
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  alertmanager:
+    image: {{ alertmanager_image }}
+    container_name: arbinet-alertmanager
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - {{ app_dir }}/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    depends_on:
+      - prometheus
+
+  grafana:
+    image: {{ grafana_image }}
+    container_name: arbinet-grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - {{ app_dir }}/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - {{ app_dir }}/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+    depends_on:
+      - prometheus
+
+  loki:
+    image: {{ loki_image }}
+    container_name: arbinet-loki
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - {{ app_dir }}/log-shipping/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: {{ promtail_image }}
+    container_name: arbinet-promtail
+    restart: unless-stopped
+    volumes:
+      - {{ app_dir }}/log-shipping/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
   worker-market-sync:
     image: {{ app_name }}:latest
     env_file: {{ app_dir }}/.env
@@ -81,3 +190,11 @@ services:
     command: ["node", "dist/scripts/report-download-task-progress.js"]
     network_mode: host
     profiles: ["worker"]
+
+volumes:
+  prometheus_data:
+    name: arbinet_prometheus_data
+  grafana_data:
+    name: arbinet_grafana_data
+  loki_data:
+    name: arbinet_loki_data

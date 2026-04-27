@@ -1,0 +1,11 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart execution-engine
+  ansible.builtin.systemd:
+    name: "execution-engine@{{ execution_mode }}.service"
+    state: restarted
+    daemon_reload: false
+  when: execution_engine_enabled | bool

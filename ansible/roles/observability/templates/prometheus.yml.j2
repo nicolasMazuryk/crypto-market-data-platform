@@ -1,0 +1,30 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+scrape_configs:
+  - job_name: execution-engine-dryrun
+    static_configs:
+      - targets: ['host.docker.internal:9464']
+    relabel_configs:
+      - target_label: instance
+        replacement: execution-engine-dryrun
+      - target_label: env
+        replacement: production
+
+  - job_name: execution-engine-live
+    static_configs:
+      - targets: ['host.docker.internal:9465']
+    relabel_configs:
+      - target_label: instance
+        replacement: execution-engine-live
+      - target_label: env
+        replacement: production

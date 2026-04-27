@@ -30,58 +30,57 @@ function levelFilterStream(
   }
 }
 
-// Create logs directory if it doesn't exist
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true })
+// In production: stdout only (Docker/journald captures it; no unbounded local files).
+// In development: stdout (pino-pretty) + rotating file streams under logs/.
+let streams: pino.StreamEntry[]
+
+if (isProduction) {
+  // JSON logs to stdout in production for Docker/journald
+  streams = [{ stream: process.stdout, level: 'trace' }]
+} else {
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true })
+  }
+
+  const combinedFileStream = pino.destination({
+    dest: path.join(logsDir, 'combined.log'),
+    mkdir: true,
+  })
+  const warnFileStream = levelFilterStream(
+    pino.destination({
+      dest: path.join(logsDir, 'warn.log'),
+      mkdir: true,
+    }),
+    level => level === PINO_LEVEL_WARN
+  )
+  const errorFileStream = levelFilterStream(
+    pino.destination({
+      dest: path.join(logsDir, 'error.log'),
+      mkdir: true,
+    }),
+    level => level >= PINO_LEVEL_ERROR
+  )
+
+  const prettyTransport = pino.transport({
+    target: 'pino-pretty',
+    options: {
+      // Avoid ANSI in piped child output (autoresearch log files, CI) while
+      // keeping colors for interactive terminals.
+      colorize: process.stdout.isTTY,
+      translateTime: 'SYS:standard',
+      ignore: 'pid,hostname',
+      messageKey: 'message',
+      singleLine: false,
+    },
+  })
+
+  streams = [
+    { stream: combinedFileStream, level: 'trace' },
+    { stream: warnFileStream, level: 'warn' },
+    { stream: errorFileStream, level: 'error' },
+    { stream: prettyTransport, level: 'trace' },
+  ]
 }
-
-// Create file streams
-const combinedFileStream = pino.destination({
-  dest: path.join(logsDir, 'combined.log'),
-  mkdir: true,
-})
-const warnFileStream = levelFilterStream(
-  pino.destination({
-    dest: path.join(logsDir, 'warn.log'),
-    mkdir: true,
-  }),
-  level => level === PINO_LEVEL_WARN
-)
-const errorFileStream = levelFilterStream(
-  pino.destination({
-    dest: path.join(logsDir, 'error.log'),
-    mkdir: true,
-  }),
-  level => level >= PINO_LEVEL_ERROR
-)
-
-// Set up console transport
-// In development: use pino-pretty for colorized output
-// In production: use stdout with JSON format (for CloudWatch)
-const consoleTransport = !isProduction
-  ? pino.transport({
-      target: 'pino-pretty',
-      options: {
-        // Avoid ANSI in piped child output (autoresearch log files, CI) while
-        // keeping colors for interactive terminals.
-        colorize: process.stdout.isTTY === true,
-        translateTime: 'SYS:standard',
-        ignore: 'pid,hostname',
-        messageKey: 'message',
-        singleLine: false,
-      },
-    })
-  : process.stdout // JSON logs to stdout in production for CloudWatch
-
-// Configure multistream: console + file outputs
-const streams: pino.StreamEntry[] = [
-  { stream: combinedFileStream, level: 'trace' }, // All levels to combined.log
-  { stream: warnFileStream, level: 'warn' }, // Warnings only to warn.log
-  { stream: errorFileStream, level: 'error' }, // Errors and fatal to error.log
-]
-
-// Always add console output (pretty in dev, JSON to stdout in production)
-streams.push({ stream: consoleTransport, level: 'trace' })
 
 const multistream = pino.multistream(streams)
 
@@ -89,7 +88,15 @@ export const logger = pino(
   {
     level: config.logLevel,
     redact: {
-      paths: ['*.token', '*.secret', '*.password'],
+      paths: [
+        '*.token',
+        '*.secret',
+        '*.password',
+        '*.apiKey',
+        '*.passphrase',
+        '*.privateKey',
+        '*.cookie',
+      ],
       remove: true,
     },
     messageKey: 'message',

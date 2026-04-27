@@ -67,7 +67,12 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
       const pairs = await Promise.all(
         batch.map(async crossEvent => ({
           crossEvent,
-          windowB: await fetchOrderbookWindow(s5Config.exchange_b, crossEvent.symbol, crossEvent.funding_time, base.window),
+          windowB: await fetchOrderbookWindow(
+            s5Config.exchange_b,
+            crossEvent.symbol,
+            crossEvent.funding_time,
+            base.window
+          ),
         }))
       )
 

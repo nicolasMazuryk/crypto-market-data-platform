@@ -67,11 +67,7 @@ export async function diffNameOnlyHead(worktreePath: string): Promise<string[]> 
 }
 
 export async function listUntracked(worktreePath: string): Promise<string[]> {
-  const out = await run(
-    worktreePath,
-    ['ls-files', '--others', '--exclude-standard'],
-    'ls-files --others'
-  )
+  const out = await run(worktreePath, ['ls-files', '--others', '--exclude-standard'], 'ls-files --others')
   return out
     .split('\n')
     .map(line => line.trim())

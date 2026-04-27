@@ -1,0 +1,29 @@
+---
+- name: Ensure log-shipping config directory exists
+  ansible.builtin.file:
+    path: "{{ app_dir }}/log-shipping"
+    state: directory
+    owner: nicolas
+    group: nicolas
+    mode: "0755"
+
+- name: Template Loki config
+  ansible.builtin.template:
+    src: loki-config.yml.j2
+    dest: "{{ app_dir }}/log-shipping/loki-config.yml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
+- name: Template Promtail config
+  ansible.builtin.template:
+    src: promtail-config.yml.j2
+    dest: "{{ app_dir }}/log-shipping/promtail-config.yml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
+- name: Start log-shipping stack
+  ansible.builtin.command:
+    cmd: docker compose -f {{ docker_compose_file }} up -d loki promtail
+  changed_when: true

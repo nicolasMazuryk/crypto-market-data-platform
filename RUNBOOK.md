@@ -225,6 +225,10 @@ sudo systemctl start health-check
 sudo journalctl -u health-check -n 20 --no-pager
 ```
 
+## Execution Engine Deployment
+
+See **[src/execution/docs/runbook.md](src/execution/docs/runbook.md)** for the full execution-engine runbook (deploy, hotfix, rollback, on-call response, state recovery).
+
 ## Disaster Recovery
 
 If the server is destroyed, the Hetzner volume persists:

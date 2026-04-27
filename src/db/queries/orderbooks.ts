@@ -216,10 +216,7 @@ export async function countOrderbooks(exchange: string, symbol: string): Promise
   return Number(rows[0]?.count ?? 0)
 }
 
-export async function* streamOrderbookLiteRows(
-  exchange: string,
-  symbol: string
-): AsyncIterable<OrderbookLiteRow> {
+export async function* streamOrderbookLiteRows(exchange: string, symbol: string): AsyncIterable<OrderbookLiteRow> {
   const client = getClickHouseClient()
   const result = await client.query({
     query:
@@ -243,8 +240,7 @@ export async function* streamOrderbookLiteRows(
 
 const SPREAD_FILTER =
   'NOT is_interpolated AND bid_close IS NOT NULL AND ask_close IS NOT NULL AND isFinite(bid_close) AND isFinite(ask_close) AND (bid_close + ask_close) > 0'
-const SPREAD_BPS_EXPR =
-  '(ask_close - bid_close) / ((bid_close + ask_close) / 2) * 10000'
+const SPREAD_BPS_EXPR = '(ask_close - bid_close) / ((bid_close + ask_close) / 2) * 10000'
 
 export async function queryOrderbookAggregates(): Promise<OrderbookAggregateRow[]> {
   const client = getClickHouseClient()
@@ -386,9 +382,7 @@ ORDER BY exchange ASC, symbol ASC, day ASC
   return result.json<OrderbookPerDayRow>()
 }
 
-export async function queryOrderbookCrossExchangeOverlap(
-  symbols: string[]
-): Promise<OrderbookCrossExchangeRow[]> {
+export async function queryOrderbookCrossExchangeOverlap(symbols: string[]): Promise<OrderbookCrossExchangeRow[]> {
   if (symbols.length === 0) {
     return []
   }

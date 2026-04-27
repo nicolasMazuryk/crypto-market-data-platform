@@ -118,13 +118,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   const { proposal, error: proposalError } = readProposalSafe(proposalPath)
   if (proposalError !== null) {
     await revertWorktreeToHead(worktreePath)
-    return buildErrorRow(
-      iter,
-      timestamp,
-      preIterationHead,
-      `proposal_parse_error: ${proposalError}`,
-      startedAt
-    )
+    return buildErrorRow(iter, timestamp, preIterationHead, `proposal_parse_error: ${proposalError}`, startedAt)
   }
   const summary = proposal?.summary ?? ''
 
@@ -187,10 +181,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   // Copy the report into the per-iteration name so the TSV row points
   // somewhere stable.
   const iterReportPath = copyReport(backtest.reportPath, repoRoot, spec.tag, iter)
-  await renderEquityCurveChart(
-    report.equity_curve,
-    iterReportPath.replace(/\.json$/, '.png'),
-  ).catch((e: unknown) => {
+  await renderEquityCurveChart(report.equity_curve, iterReportPath.replace(/\.json$/, '.png')).catch((e: unknown) => {
     logWrite(`[chart] render failed: ${e instanceof Error ? e.message : String(e)}`)
   })
 
@@ -298,10 +289,7 @@ export async function runBaselineIteration(args: {
   }
 
   const iterReportPath = copyReport(backtest.reportPath, args.repoRoot, args.spec.tag, iter)
-  await renderEquityCurveChart(
-    report.equity_curve,
-    iterReportPath.replace(/\.json$/, '.png'),
-  ).catch((e: unknown) => {
+  await renderEquityCurveChart(report.equity_curve, iterReportPath.replace(/\.json$/, '.png')).catch((e: unknown) => {
     args.logWrite(`[chart] render failed: ${e instanceof Error ? e.message : String(e)}`)
   })
 

@@ -97,7 +97,12 @@ export async function queryCrossExchangeFundingEvents(
     format: 'JSONEachRow',
   })
 
-  const rows = await result.json<{ symbol: string; funding_time: string; funding_rate_a: number; funding_rate_b: number }>()
+  const rows = await result.json<{
+    symbol: string
+    funding_time: string
+    funding_rate_a: number
+    funding_rate_b: number
+  }>()
   return rows.map(r => ({
     symbol: r.symbol,
     funding_time: new Date(r.funding_time.includes('T') ? r.funding_time : `${r.funding_time.replace(' ', 'T')}Z`),

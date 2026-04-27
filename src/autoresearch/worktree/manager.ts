@@ -172,11 +172,7 @@ export async function ensureWorktree(opts: CreateWorktreeOptions): Promise<Workt
   const status = await runGit(worktreePath, ['status', '--porcelain'], 'status')
   if (status.trim().length > 0) {
     await runGit(worktreePath, ['add', '-A'], 'stage baseline')
-    await runGit(
-      worktreePath,
-      ['commit', '-m', `autoresearch ${spec.tag}: baseline setup`],
-      'commit baseline'
-    )
+    await runGit(worktreePath, ['commit', '-m', `autoresearch ${spec.tag}: baseline setup`], 'commit baseline')
   }
 
   const head = (await runGit(worktreePath, ['rev-parse', 'HEAD'], 'baseline rev-parse')).trim()

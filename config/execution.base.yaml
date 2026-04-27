@@ -1,0 +1,94 @@
+# execution.base.yaml — common settings shared across all execution modes
+#
+# Loaded automatically by the engine and by `npm run config:validate`.
+# Mode-specific files (execution.dry-run.yaml, execution.live.yaml) override
+# any key defined here. Arrays are replaced, not merged.
+#
+# Precedence (low → high):
+#   Zod defaults → this file → mode-specific file → env vars → CLI flags
+
+# ── Exchanges ────────────────────────────────────────────────────────────────
+exchanges:
+  - exchange: binance
+    enabled: true
+    credentialsEnvPrefix: BINANCE       # env prefix for BINANCE_API_KEY / BINANCE_API_SECRET
+    marketRefreshMs: 60000              # ms — how often to refresh market metadata
+    fundingPullMs: 15000                # ms — how often to poll funding rates
+    rateLimits:
+      criticalReservationFraction: 0.1  # fraction [0-1] — reserve 10 % for critical-path requests
+      criticalWindowSeconds: 60         # s — rolling window for critical reservation
+      buckets: []
+
+  - exchange: bybit
+    enabled: true
+    credentialsEnvPrefix: BYBIT
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+
+  - exchange: okx
+    enabled: true
+    credentialsEnvPrefix: OKX
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+
+  - exchange: bitget
+    enabled: true
+    credentialsEnvPrefix: BITGET
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+
+  - exchange: gateio
+    enabled: true
+    credentialsEnvPrefix: GATEIO
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+
+  - exchange: kucoin
+    enabled: true
+    credentialsEnvPrefix: KUCOIN
+    marketRefreshMs: 60000
+    fundingPullMs: 15000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+
+# ── Scheduler ────────────────────────────────────────────────────────────────
+scheduler:
+  wakeBeforeHourEndMs: 300000    # ms (5 min) — wake at HH:55:00 to prepare before funding
+  fundingWindowMs: 600000        # ms (10 min) — only schedule symbols with nextFunding ≤ window
+
+# ── Persistence ──────────────────────────────────────────────────────────────
+# postgresUrl is injected at runtime from EXECUTION_POSTGRES_URL env var.
+persistence:
+  writerQueueSize: 1000          # count — max in-flight DB writes before backpressure
+  walPath: ''                    # path — empty = no WAL file; set to /data/execution-wal.jsonl in prod
+  batchSize: 100                 # count — rows per DB batch write
+  flushIntervalMs: 250           # ms — max time between forced flushes
+  walMaxBytes: 52428800          # bytes (50 MiB) — WAL file size cap before rotation
+
+# ── Observability ─────────────────────────────────────────────────────────────
+observability:
+  metricsPort: 9464              # port — Prometheus /metrics scrape target
+  healthPort: 9466               # port — /health (liveness) and /ready (readiness) endpoints
+  tracing:
+    enabled: false
+    serviceName: execution-engine
+    sampler: parent              # 'always_on' | 'parent' | {ratio: 0.0–1.0}
+    # endpoint: http://localhost:4318/v1/traces  # OTLP HTTP collector

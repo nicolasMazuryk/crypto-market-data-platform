@@ -1,0 +1,68 @@
+# execution.dry-run.yaml — shadow trading (no real orders placed)
+#
+# Merged on top of execution.base.yaml. Only keys that differ from the base
+# (or that are mode-specific) are listed here.
+#
+# Run:  npm run execution:dry-run
+# Validate: npm run config:validate -- --config config/execution.dry-run.yaml
+
+mode: dry_run
+
+# ── Strategies ───────────────────────────────────────────────────────────────
+strategies:
+  - id: strategy_1
+    enabled: false
+    negativeFundingThresholdPercent: -0.5   # % — entry threshold (e.g. -0.5 = −0.5 % per 8 h)
+    entryOffsetSeconds: 2                   # s — enter N seconds before funding time
+    exitOffsetSeconds: 1                    # s — exit N seconds after funding time
+    amountUsd: 20                           # USD — notional per intent
+    leverage: 4                             # x — leverage applied at the exchange
+
+  # strategy_3a and strategy_3b are mutually exclusive — enable at most one.
+  - id: strategy_3a
+    enabled: true
+    negativeFundingThresholdPercent: -0.25  # % — minimum funding rate to trigger entry
+    entryOffsetSeconds: 2                   # s — enter N seconds before funding time
+    stopLossPercent: 1.0                    # % — stop-loss distance from entry price
+    takeProfitPercent: 0                    # % — 0 = compute from funding rate × tpVariantAMultiplier
+    tpVariantAMultiplier: 1.5              # x — TP = |fundingRate| × multiplier
+    tpVariantBOffsetPercent: 0.4           # % — TP offset for variant B (unused in 3a)
+    deadlineSeconds: 300                    # s — max time in position before forced exit
+    amountUsd: 20                           # USD — notional per intent
+    leverage: 4                             # x
+
+  #- id: strategy_3b
+  #  enabled: false
+  #  negativeFundingThresholdPercent: -0.4
+  #  entryOffsetSeconds: 4
+  #  stopLossPercent: 1.0
+  #  takeProfitPercent: 0
+  #  tpVariantAMultiplier: 1.5
+  #  tpVariantBOffsetPercent: 0.4
+  #  deadlineSeconds: 300
+  #  amountUsd: 20
+  #  leverage: 4
+
+# ── Risk limits ───────────────────────────────────────────────────────────────
+risk:
+  globalMaxConcurrentIntents: 10000         # count — engine-wide cap across all strategies
+  globalMaxNotionalUsd: 100000              # USD — engine-wide notional cap
+  perStrategy:
+    strategy_1:
+      maxConcurrentIntents: 2000            # count
+      maxNotionalUsd: 200000               # USD
+    strategy_3a:
+      maxConcurrentIntents: 20              # count — conservative for dry-run testing
+      maxNotionalUsd: 200000               # USD
+    strategy_3b:
+      maxConcurrentIntents: 2000            # count
+      maxNotionalUsd: 2000                 # USD
+
+# ── Testing knobs (uncomment to use) ─────────────────────────────────────────
+# testing:
+#   shadowFillDelayMs: 150                  # ms — delay before shadow adapter fills; large values
+#                                           #       (e.g. 30000) hold positions open for kill-switch tests
+#   fundingTimeOverride:
+#     time: "17:35:00"                      # UTC HH:MM:SS — resolved to next future occurrence
+#     # timestampMs: 1234567890000          # alternative: exact Unix-ms (deterministic CI fixtures)
+#     # acknowledgeLiveOverride: false      # must be true when running this in live mode

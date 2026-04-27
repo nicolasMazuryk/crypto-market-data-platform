@@ -1,0 +1,90 @@
+---
+- name: Ensure observability config directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: nicolas
+    group: nicolas
+    mode: "0755"
+  loop:
+    - "{{ app_dir }}/observability"
+    - "{{ app_dir }}/observability/prometheus-rules"
+    - "{{ app_dir }}/observability/grafana/provisioning/datasources"
+    - "{{ app_dir }}/observability/grafana/provisioning/dashboards"
+    - "{{ app_dir }}/observability/grafana/provisioning/alerting"
+    - "{{ app_dir }}/observability/grafana/dashboards"
+
+- name: Template Prometheus config
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ app_dir }}/observability/prometheus.yml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
+- name: Copy Prometheus alert rules
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/docker/prometheus/rules/execution-engine.yml"
+    dest: "{{ app_dir }}/observability/prometheus-rules/execution-engine.yml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+    remote_src: true
+
+- name: Template Alertmanager config
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ app_dir }}/observability/alertmanager.yml"
+    owner: nicolas
+    group: nicolas
+    mode: "0640"
+
+- name: Template Grafana Prometheus datasource
+  ansible.builtin.template:
+    src: grafana-datasource-prometheus.yml.j2
+    dest: "{{ app_dir }}/observability/grafana/provisioning/datasources/prometheus.yaml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
+- name: Template Grafana Loki datasource
+  ansible.builtin.template:
+    src: grafana-datasource-loki.yml.j2
+    dest: "{{ app_dir }}/observability/grafana/provisioning/datasources/loki.yaml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
+- name: Copy Grafana dashboard provision config
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/docker/grafana/provisioning/dashboards/provision.yaml"
+    dest: "{{ app_dir }}/observability/grafana/provisioning/dashboards/provision.yaml"
+    remote_src: true
+    mode: "0644"
+
+- name: Copy execution engine Grafana dashboard
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/docker/grafana/dashboards/execution-engine.json"
+    dest: "{{ app_dir }}/observability/grafana/dashboards/execution-engine.json"
+    remote_src: true
+    mode: "0644"
+
+- name: Template Grafana alerting contact points
+  ansible.builtin.template:
+    src: grafana-contact-points.yml.j2
+    dest: "{{ app_dir }}/observability/grafana/provisioning/alerting/contact-points.yaml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
+- name: Copy Grafana alerting notification policies
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/docker/grafana/provisioning/alerting/policies.yaml"
+    dest: "{{ app_dir }}/observability/grafana/provisioning/alerting/policies.yaml"
+    remote_src: true
+    mode: "0644"
+
+- name: Start observability stack
+  ansible.builtin.command:
+    cmd: docker compose -f {{ docker_compose_file }} up -d prometheus alertmanager grafana
+  changed_when: true

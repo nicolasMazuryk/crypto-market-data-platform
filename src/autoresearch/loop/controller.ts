@@ -3,12 +3,7 @@ import path from 'path'
 
 import { commitExists, isAncestor, resetHard, revParseHead } from '../git/ratchet.js'
 import { createTagLogger, stripAnsi } from '../logging.js'
-import {
-  getLockPath,
-  getLogPath,
-  getResultsTsvPath,
-  getStateJsonPath,
-} from '../paths.js'
+import { getLockPath, getLogPath, getResultsTsvPath, getStateJsonPath } from '../paths.js'
 import { writeState } from '../results/state.js'
 import { reconcileState } from '../results/resume.js'
 import { appendRow, ensureTsv } from '../results/tsv.js'

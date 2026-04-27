@@ -1,0 +1,26 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+rule_files:
+  - "rules/*.yml"
+
+scrape_configs:
+  - job_name: execution-engine
+    static_configs:
+      - targets: ['host.docker.internal:9465']
+    relabel_configs:
+      - target_label: instance
+        replacement: execution-engine-live
+
+  - job_name: execution-engine-dryrun
+    static_configs:
+      - targets: ['host.docker.internal:9464']
+    relabel_configs:
+      - target_label: instance
+        replacement: execution-engine-dryrun

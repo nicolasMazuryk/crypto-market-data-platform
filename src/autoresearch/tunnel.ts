@@ -16,12 +16,18 @@ const RECONNECT_MAX_DELAY_MS = 60_000
 
 const SSH_ARGS = [
   '-N',
-  '-o', 'StrictHostKeyChecking=accept-new',
-  '-o', 'ExitOnForwardFailure=yes',
-  '-o', 'ServerAliveInterval=30',
-  '-o', 'ServerAliveCountMax=3',
-  '-i', SSH_KEY,
-  '-L', `${String(LOCAL_TUNNEL_PORT)}:127.0.0.1:${String(REMOTE_CH_HTTP_PORT)}`,
+  '-o',
+  'StrictHostKeyChecking=accept-new',
+  '-o',
+  'ExitOnForwardFailure=yes',
+  '-o',
+  'ServerAliveInterval=30',
+  '-o',
+  'ServerAliveCountMax=3',
+  '-i',
+  SSH_KEY,
+  '-L',
+  `${String(LOCAL_TUNNEL_PORT)}:127.0.0.1:${String(REMOTE_CH_HTTP_PORT)}`,
   `${SSH_USER}@${REMOTE_HOST}`,
 ]
 
@@ -38,9 +44,17 @@ function isPortReachable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const sock = net.connect(port, '127.0.0.1')
     sock.setTimeout(500)
-    sock.on('connect', () => { sock.destroy(); resolve(true) })
-    sock.on('error', () => { resolve(false) })
-    sock.on('timeout', () => { sock.destroy(); resolve(false) })
+    sock.on('connect', () => {
+      sock.destroy()
+      resolve(true)
+    })
+    sock.on('error', () => {
+      resolve(false)
+    })
+    sock.on('timeout', () => {
+      sock.destroy()
+      resolve(false)
+    })
   })
 }
 
@@ -49,8 +63,14 @@ function waitForPort(port: number, timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs
     function attempt(): void {
       void isPortReachable(port).then(ok => {
-        if (ok) { resolve(); return }
-        if (Date.now() > deadline) { reject(new Error(`Tunnel port ${String(port)} not ready after ${String(timeoutMs)}ms`)); return }
+        if (ok) {
+          resolve()
+          return
+        }
+        if (Date.now() > deadline) {
+          reject(new Error(`Tunnel port ${String(port)} not ready after ${String(timeoutMs)}ms`))
+          return
+        }
         setTimeout(attempt, 300)
       })
     }
@@ -61,8 +81,12 @@ function waitForPort(port: number, timeoutMs: number): Promise<void> {
 function spawnSsh(): { proc: ChildProcess; procExit: Promise<void> } {
   const proc = spawn('ssh', SSH_ARGS, { stdio: ['ignore', 'ignore', 'ignore'] })
   const procExit = new Promise<void>(resolve => {
-    proc.on('close', () => { resolve() })
-    proc.on('error', () => { resolve() })
+    proc.on('close', () => {
+      resolve()
+    })
+    proc.on('error', () => {
+      resolve()
+    })
   })
   return { proc, procExit }
 }
@@ -89,10 +113,16 @@ export async function startTunnel(): Promise<TunnelHandle> {
   try {
     await Promise.race([
       waitForPort(LOCAL_TUNNEL_PORT, READY_TIMEOUT_MS),
-      firstExit.then(() => { throw new Error('SSH process exited before tunnel was ready') }),
+      firstExit.then(() => {
+        throw new Error('SSH process exited before tunnel was ready')
+      }),
     ])
   } catch (err) {
-    try { firstProc.kill() } catch { /* ignore */ }
+    try {
+      firstProc.kill()
+    } catch {
+      /* ignore */
+    }
     throw err
   }
 
@@ -115,12 +145,18 @@ export async function startTunnel(): Promise<TunnelHandle> {
       try {
         await Promise.race([
           waitForPort(LOCAL_TUNNEL_PORT, READY_TIMEOUT_MS),
-          procExit.then(() => { throw new Error('SSH process exited before tunnel was ready') }),
+          procExit.then(() => {
+            throw new Error('SSH process exited before tunnel was ready')
+          }),
         ])
         console.error('[autoresearch] SSH tunnel reconnected')
         retryMs = RECONNECT_INITIAL_DELAY_MS
       } catch {
-        try { proc.kill() } catch { /* ignore */ }
+        try {
+          proc.kill()
+        } catch {
+          /* ignore */
+        }
         retryMs = Math.min(retryMs * 2, RECONNECT_MAX_DELAY_MS)
         console.error(`[autoresearch] SSH tunnel reconnect failed; retrying in ${String(retryMs / 1000)}s`)
       }
@@ -131,7 +167,11 @@ export async function startTunnel(): Promise<TunnelHandle> {
     localPort: LOCAL_TUNNEL_PORT,
     close: () => {
       state.closed = true
-      try { state.proc?.kill() } catch { /* ignore */ }
+      try {
+        state.proc?.kill()
+      } catch {
+        /* ignore */
+      }
     },
   }
 }

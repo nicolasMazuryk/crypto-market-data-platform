@@ -14,8 +14,8 @@ data/
 !src/backtesting/data/
 
 tasks/
-!ansible/roles/workers/tasks/
-!ansible/roles/workers/tasks/main.yml
+!ansible/roles/*/tasks/
+!ansible/roles/*/tasks/*.yml
 src/markets/snapshots/
 
 .playwright-cli/

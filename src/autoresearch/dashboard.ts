@@ -62,9 +62,6 @@ export function writeDashboard(repoRoot: string): string {
   const rows = buildDashboard(repoRoot)
   const dashPath = getDashboardJsonPath(repoRoot)
   fs.mkdirSync(path.dirname(dashPath), { recursive: true })
-  fs.writeFileSync(
-    dashPath,
-    JSON.stringify({ generated_at: new Date().toISOString(), runs: rows }, null, 2)
-  )
+  fs.writeFileSync(dashPath, JSON.stringify({ generated_at: new Date().toISOString(), runs: rows }, null, 2))
   return dashPath
 }

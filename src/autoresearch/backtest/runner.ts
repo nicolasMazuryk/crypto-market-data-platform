@@ -38,15 +38,11 @@ export function runBacktest(opts: BacktestRunOptions): Promise<BacktestRunResult
     const before = listJsonFiles(reportsDir)
 
     const started = Date.now()
-    const proc = spawn(
-      'npx',
-      ['tsx', 'src/scripts/run-backtest.ts', '--strategy', strategy],
-      {
-        cwd,
-        env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
-        detached: true,
-      }
-    )
+    const proc = spawn('npx', ['tsx', 'src/scripts/run-backtest.ts', '--strategy', strategy], {
+      cwd,
+      env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      detached: true,
+    })
 
     let stdout = ''
     let stderr = ''

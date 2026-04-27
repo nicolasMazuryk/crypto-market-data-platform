@@ -6,6 +6,32 @@
     - ../group_vars/all.yml
 
   tasks:
+    # ── Safety: block in-hours deploys unless explicitly acknowledged ─────────
+    - name: Check if execution engine is running (live mode)
+      ansible.builtin.command:
+        cmd: systemctl is-active execution-engine@live.service
+      register: _live_active
+      failed_when: false
+      changed_when: false
+      check_mode: false
+
+    - name: Fail if deploying while live engine is running without acknowledgement
+      ansible.builtin.fail:
+        msg: >
+          STOP: execution-engine@live.service is currently active.
+          Deploying now will interrupt live trading.
+          To proceed during trading hours, re-run with: -e allow_in_hours_deploy=true
+          Record the rollback SHA first: ssh server "cat /opt/arbinet/execution/current/release"
+      when:
+        - _live_active.rc == 0
+        - not (allow_in_hours_deploy | default(false) | bool)
+
+    # ── Pre-deploy: stop execution engine before touching infra ───────────────
+    - name: Stop execution engine gracefully before deploy
+      ansible.builtin.include_role:
+        name: execution-engine
+        tasks_from: stop
+
     - name: Ensure persistent quote validation reports directory exists
       ansible.builtin.file:
         path: "{{ quotes_validation_reports_dir }}"
@@ -49,6 +75,7 @@
         group: nicolas
         mode: "0600"
 
+    # ── Infrastructure restart (safe: execution engine is stopped above) ──────
     - name: Restart ClickHouse
       ansible.builtin.command:
         cmd: docker compose -f {{ docker_compose_file }} up -d clickhouse
@@ -62,3 +89,34 @@
       until: healthcheck.status == 200
       retries: 30
       delay: 2
+
+    - name: Restart Postgres
+      ansible.builtin.command:
+        cmd: docker compose -f {{ docker_compose_file }} up -d postgres
+      changed_when: true
+
+    - name: Wait for Postgres to be healthy
+      ansible.builtin.command:
+        cmd: >
+          docker exec arbinet-postgres
+          pg_isready -U {{ postgres_user | default('arbinet') }} -d {{ postgres_db | default('arbinet') }}
+      register: pg_ready
+      until: pg_ready.rc == 0
+      retries: 30
+      delay: 2
+      changed_when: false
+
+    # ── Observability + log-shipping configs ──────────────────────────────────
+    - name: Deploy observability stack
+      ansible.builtin.include_role:
+        name: observability
+
+    - name: Deploy log-shipping stack
+      ansible.builtin.include_role:
+        name: log-shipping
+
+    # ── Execution engine: restart if was running or deploy_execution=true ─────
+    - name: Deploy execution engine
+      ansible.builtin.include_role:
+        name: execution-engine
+      when: execution_engine_enabled | default(false) | bool or deploy_execution | default(false) | bool

@@ -9,11 +9,7 @@ import {
   queryOrderbookCrossExchangeOverlap,
   queryOrderbookPerDayStats,
 } from '../db/queries/orderbooks.js'
-import type {
-  OrderbookAggregateRow,
-  OrderbookCrossExchangeRow,
-  OrderbookPerDayRow,
-} from '../db/queries/orderbooks.js'
+import type { OrderbookAggregateRow, OrderbookCrossExchangeRow, OrderbookPerDayRow } from '../db/queries/orderbooks.js'
 import { VALIDATION_CONCURRENCY } from '../quotes/config.js'
 import {
   InterpolationAnalysisAccumulator,
@@ -134,10 +130,7 @@ function buildSpreadResult(agg: OrderbookAggregateRow): SpreadValidityResult {
   }
 }
 
-function buildSchemaMetadataResult(
-  agg: OrderbookAggregateRow,
-  descriptor: QuoteDataDescriptor
-): SchemaMetadataResult {
+function buildSchemaMetadataResult(agg: OrderbookAggregateRow, descriptor: QuoteDataDescriptor): SchemaMetadataResult {
   const exchangeValues = toSorted(agg.exchange_values)
   const symbolValues = toSorted(agg.symbol_values)
   const sourceTypeValues = toSorted(agg.source_type_values)
@@ -153,9 +146,7 @@ function buildSchemaMetadataResult(
 
   const expectedSourceType = EXPECTED_SOURCE_TYPE_BY_EXCHANGE[descriptor.exchange]
   const sourceTypeMatchesExpectedForExchange =
-    expectedSourceType === undefined
-      ? true
-      : sourceTypeConsistent && sourceTypeValues[0] === expectedSourceType
+    expectedSourceType === undefined ? true : sourceTypeConsistent && sourceTypeValues[0] === expectedSourceType
 
   const confidenceMatchesSourceType = toNumber(agg.confidence_mismatch_count) === 0
 
@@ -188,10 +179,7 @@ function buildSchemaMetadataResult(
   }
 }
 
-function buildSpreadDistributionResult(
-  agg: OrderbookAggregateRow,
-  symbol: string
-): SpreadDistributionResult {
+function buildSpreadDistributionResult(agg: OrderbookAggregateRow, symbol: string): SpreadDistributionResult {
   const MAJOR_BASE_ASSETS = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP']
   const isMajor = MAJOR_BASE_ASSETS.some(asset => symbol.toUpperCase().startsWith(asset))
   const thresholdBps = isMajor ? 100 : 500
@@ -348,7 +336,15 @@ function buildDayBoundaryResult(dayRows: OrderbookPerDayRow[]): DayBoundaryConti
   const PRICE_JUMP_THRESHOLD_PERCENT = 0.25
 
   if (dayRows.length === 0) {
-    return { dayCount: 0, checkedBoundaryCount: 0, gapAtBoundaryCount: 0, midnightMissingCount: 0, priceJumpCount: 0, examples: [], pass: true }
+    return {
+      dayCount: 0,
+      checkedBoundaryCount: 0,
+      gapAtBoundaryCount: 0,
+      midnightMissingCount: 0,
+      priceJumpCount: 0,
+      examples: [],
+      pass: true,
+    }
   }
 
   let checkedBoundaryCount = 0
@@ -384,7 +380,9 @@ function buildDayBoundaryResult(dayRows: OrderbookPerDayRow[]): DayBoundaryConti
     }
 
     if (
-      (gapDetected || midnightMissing || (priceJumpPercent !== null && priceJumpPercent > PRICE_JUMP_THRESHOLD_PERCENT)) &&
+      (gapDetected ||
+        midnightMissing ||
+        (priceJumpPercent !== null && priceJumpPercent > PRICE_JUMP_THRESHOLD_PERCENT)) &&
       examples.length < 20
     ) {
       examples.push({
@@ -530,10 +528,7 @@ interface ConsecutiveResult {
   extremeTickExamples: PriceReasonablenessResult['extremeTickExamples']
 }
 
-async function runConsecutiveAccumulators(
-  exchange: string,
-  symbol: string
-): Promise<ConsecutiveResult> {
+async function runConsecutiveAccumulators(exchange: string, symbol: string): Promise<ConsecutiveResult> {
   const stream = readOrderbookLiteData(exchange, symbol)
 
   const timeContinuityAccumulator = new TimeContinuityAccumulator()
@@ -608,7 +603,16 @@ function computeCrossExchangeFromRows(rows: OrderbookCrossExchangeRow[]): CrossE
 
   const bySymbol = new Map<
     string,
-    { exchanges: Set<string>; stats: { divergenceSum: number; maxDivergence: number; overlapping: number; aboveOne: number; examples: CrossExchangeResult['examples'] } }
+    {
+      exchanges: Set<string>
+      stats: {
+        divergenceSum: number
+        maxDivergence: number
+        overlapping: number
+        aboveOne: number
+        examples: CrossExchangeResult['examples']
+      }
+    }
   >()
 
   for (const row of rows) {
@@ -620,7 +624,10 @@ function computeCrossExchangeFromRows(rows: OrderbookCrossExchangeRow[]): CrossE
 
     let entry = bySymbol.get(row.symbol)
     if (!entry) {
-      entry = { exchanges: new Set(), stats: { divergenceSum: 0, maxDivergence: 0, overlapping: 0, aboveOne: 0, examples: [] } }
+      entry = {
+        exchanges: new Set(),
+        stats: { divergenceSum: 0, maxDivergence: 0, overlapping: 0, aboveOne: 0, examples: [] },
+      }
       bySymbol.set(row.symbol, entry)
     }
 
@@ -689,10 +696,7 @@ export async function runValidateQuotes(): Promise<void> {
   console.log(`Found ${String(pairs.length)} dataset(s). Running batch SQL aggregation…`)
 
   // Run batch SQL queries (covers 10 of 12 accumulators) — no per-symbol streaming
-  const [aggregateRows, perDayRows] = await Promise.all([
-    queryOrderbookAggregates(),
-    queryOrderbookPerDayStats(),
-  ])
+  const [aggregateRows, perDayRows] = await Promise.all([queryOrderbookAggregates(), queryOrderbookPerDayStats()])
 
   // Index by exchange/symbol
   const aggregateMap = new Map<string, OrderbookAggregateRow>()
@@ -714,9 +718,7 @@ export async function runValidateQuotes(): Promise<void> {
   // Lightweight concurrent streaming: 4 columns only (ts, bid_close, ask_close, is_interpolated)
   // for the 4 accumulators that require consecutive-row state
   const workerCount = Math.max(1, Math.min(VALIDATION_CONCURRENCY, pairs.length))
-  console.log(
-    `SQL aggregation complete. Running consecutive-row checks with concurrency=${String(workerCount)}…`
-  )
+  console.log(`SQL aggregation complete. Running consecutive-row checks with concurrency=${String(workerCount)}…`)
 
   const consecutiveMap = new Map<string, ConsecutiveResult>()
   let nextIndex = 0
@@ -818,9 +820,7 @@ export async function runValidateQuotes(): Promise<void> {
   for (const pair of pairs) {
     symbolCountMap.set(pair.symbol, (symbolCountMap.get(pair.symbol) ?? 0) + 1)
   }
-  const multiExchangeSymbols = [...symbolCountMap.entries()]
-    .filter(([, count]) => count >= 2)
-    .map(([symbol]) => symbol)
+  const multiExchangeSymbols = [...symbolCountMap.entries()].filter(([, count]) => count >= 2).map(([symbol]) => symbol)
 
   console.log(`Running cross-exchange validation for ${String(multiExchangeSymbols.length)} symbol(s)…`)
   const crossExchangeRows = await queryOrderbookCrossExchangeOverlap(multiExchangeSymbols)

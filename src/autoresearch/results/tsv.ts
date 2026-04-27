@@ -123,8 +123,8 @@ export function parseTsvContent(content: string): ResultRow[] {
 
     let iter: string, timestamp: string, commit_hash: string, pnl: string, sharpe: string
     let win: string, trades: string, status: string, desc: string, report: string, dur: string, err: string
-    let ulcer: string = '',
-      ecq: string = ''
+    let ulcer = '',
+      ecq = ''
 
     if (isLegacy) {
       ;[iter, timestamp, commit_hash, pnl, sharpe, win, trades, status, desc, report, dur, err] = fields as [

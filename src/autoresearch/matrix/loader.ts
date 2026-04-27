@@ -82,9 +82,7 @@ function normalizeRow(raw: Record<string, unknown>, idx: number): MatrixRow {
     throw new Error(`matrix.yaml runs[${String(idx)}]: '${strategy}' requires 'exchange'`)
   }
   if ('exchange_a' in raw || 'exchange_b' in raw) {
-    throw new Error(
-      `matrix.yaml runs[${String(idx)}]: only strategy_5 uses 'exchange_a'/'exchange_b'`
-    )
+    throw new Error(`matrix.yaml runs[${String(idx)}]: only strategy_5 uses 'exchange_a'/'exchange_b'`)
   }
   return {
     strategy,

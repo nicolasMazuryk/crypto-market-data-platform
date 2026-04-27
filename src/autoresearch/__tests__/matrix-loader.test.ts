@@ -87,7 +87,10 @@ runs:
   })
 
   it('accepts agent: codex', () => {
-    const content = VALID.replace('  - strategy: strategy_1\n    exchange: binance', '  - strategy: strategy_1\n    exchange: binance\n    agent: codex')
+    const content = VALID.replace(
+      '  - strategy: strategy_1\n    exchange: binance',
+      '  - strategy: strategy_1\n    exchange: binance\n    agent: codex'
+    )
     const matrix = parseMatrixContent(content)
     const row = matrix.runs[0]
     if (row === undefined) throw new Error('expected run')
@@ -96,7 +99,10 @@ runs:
   })
 
   it('rejects unknown agent values', () => {
-    const content = VALID.replace('  - strategy: strategy_1\n    exchange: binance', '  - strategy: strategy_1\n    exchange: binance\n    agent: foo')
+    const content = VALID.replace(
+      '  - strategy: strategy_1\n    exchange: binance',
+      '  - strategy: strategy_1\n    exchange: binance\n    agent: foo'
+    )
     expect(() => parseMatrixContent(content)).toThrow(/agent.*must be 'claude' or 'codex'/i)
   })
 
