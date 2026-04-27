@@ -34,7 +34,7 @@
 | **Alert dispatcher** | [`src/execution/observability/alerts.ts`](../observability/alerts.ts) | Slack webhook dispatcher. `page` severity prefixes with `<!channel>`. Subscribes to WS disconnect events (pages after 30 s of sustained disconnect) and to `ops.event` bus events (pages on `fatal`/`error`, notifies on `warn`). No-op when `SLACK_WEBHOOK_URL` is absent. |
 | **Tracer** | [`src/execution/observability/tracing.ts`](../observability/tracing.ts) | OpenTelemetry OTLP exporter (targeting Jaeger). Falls back to a no-op tracer when tracing is disabled in config. Supports `always_on`, `parent`, and `ratio` sampler modes. |
 | **Market metadata** | [`src/execution/markets/`](../markets/) | CCXT-backed provider for lot sizes, tick sizes, min-notional, and exchange symbol maps. Used by preflight for quantity rounding and cost validation. |
-| **Config loader** | [`src/execution/config/loader.ts`](../config/loader.ts) | Loads `execution.base.yaml` then the mode-specific YAML (`dry-run`, `live`, `kstest`); deep-merges in precedence order (schema defaults → base → mode → env vars → CLI flags); injects API credentials from env; hashes the merged config for run versioning. See [configuration.md](./configuration.md) for full reference *(Step 3)*. |
+| **Config loader** | [`src/execution/config/loader.ts`](../config/loader.ts) | Loads `execution.base.yaml` then the mode-specific YAML (`dry-run` or `live`); deep-merges in precedence order (schema defaults → base → mode → env vars → CLI flags); injects API credentials from env; hashes the merged config for run versioning. See [configuration.md](./configuration.md) for full reference *(Step 3)*. |
 
 ---
 
