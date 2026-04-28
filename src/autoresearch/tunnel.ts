@@ -79,7 +79,7 @@ function waitForPort(port: number, timeoutMs: number): Promise<void> {
 }
 
 function spawnSsh(): { proc: ChildProcess; procExit: Promise<void> } {
-  const proc = spawn('ssh', SSH_ARGS, { stdio: ['ignore', 'ignore', 'ignore'] })
+  const proc = spawn('ssh', SSH_ARGS, { detached: true, stdio: ['ignore', 'ignore', 'ignore'] })
   const procExit = new Promise<void>(resolve => {
     proc.on('close', () => {
       resolve()

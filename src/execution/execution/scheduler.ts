@@ -6,7 +6,7 @@ import type { SchedulerConfig } from '../config/types.js'
 import type { StrategyConfig, StrategyEvaluator, StrategyId } from '../strategies/types.js'
 import type { Exchange } from '../types/exchange.js'
 
-const DEFAULT_EVALUATE_LEAD_MS = 1500
+const DEFAULT_EVALUATE_LEAD_MS = 0 // 1500
 const HOUR_MS = 3_600_000
 
 export interface FundingEventSchedulerOptions {

@@ -27,7 +27,7 @@ strategies:
   - id: strategy_3a
     enabled: true
     negativeFundingThresholdPercent: -0.4  # % — entry threshold
-    entryOffsetSeconds: 1                   # s
+    entryOffsetSeconds: 2                   # s
     stopLossPercent: 2.0                    # %
     tpVariantAMultiplier: 1.5              # x
     tpVariantBOffsetPercent: 0.4           # % — unused in 3a

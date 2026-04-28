@@ -237,7 +237,7 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         funding_threshold: requirePositiveNumber(merged, 'funding_threshold', ctx),
         entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
         retracement_pct: requirePositiveNumber(merged, 'retracement_pct', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, 180, ctx),
+        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
       }
 
     case 'strategy_3a':
@@ -269,7 +269,7 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         ladder_top_mult: requirePositiveNumber(merged, 'ladder_top_mult', ctx),
         ladder_bottom_mult: requirePositiveNumber(merged, 'ladder_bottom_mult', ctx),
         take_profit: requirePositiveNumber(merged, 'take_profit', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, 180, ctx),
+        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
         include_funding: requireBoolean(merged, 'include_funding', ctx),
       }
 
@@ -282,7 +282,7 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
         limit_offset_mult: requirePositiveNumber(merged, 'limit_offset_mult', ctx),
         take_profit: requirePositiveNumber(merged, 'take_profit', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, 180, ctx),
+        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
         include_funding: requireBoolean(merged, 'include_funding', ctx),
       }
 
@@ -296,7 +296,7 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         entry_mult: requirePositiveNumber(merged, 'entry_mult', ctx),
         sl_mult: requirePositiveNumber(merged, 'sl_mult', ctx),
         take_profit: requirePositiveNumber(merged, 'take_profit', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, 180, ctx),
+        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
         include_funding: requireBoolean(merged, 'include_funding', ctx),
       }
 
@@ -310,7 +310,7 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         funding_max_b: requirePositiveNumber(merged, 'funding_max_b', ctx),
         funding_spread_threshold: requirePositiveNumber(merged, 'funding_spread_threshold', ctx),
         entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, 180, ctx),
+        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
         vol_ratio_threshold: requirePositiveNumber(merged, 'vol_ratio_threshold', ctx),
       }
   }
