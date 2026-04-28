@@ -1,4 +1,4 @@
-export type IterationStatus = 'keep' | 'discard' | 'noop' | 'error'
+export type IterationStatus = 'keep' | 'discard' | 'error'
 
 export type AgentKind = 'claude' | 'codex'
 

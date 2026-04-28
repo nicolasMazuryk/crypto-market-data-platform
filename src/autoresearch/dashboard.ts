@@ -16,7 +16,6 @@ interface DashboardRow {
   keep_count: number
   discard_count: number
   error_count: number
-  noop_count: number
 }
 
 export function buildDashboard(repoRoot: string): DashboardRow[] {
@@ -38,7 +37,6 @@ export function buildDashboard(repoRoot: string): DashboardRow[] {
     const keep = tsv.filter(r => r.status === 'keep').length
     const discard = tsv.filter(r => r.status === 'discard').length
     const error = tsv.filter(r => r.status === 'error').length
-    const noop = tsv.filter(r => r.status === 'noop').length
 
     rows.push({
       tag,
@@ -51,7 +49,6 @@ export function buildDashboard(repoRoot: string): DashboardRow[] {
       keep_count: keep,
       discard_count: discard,
       error_count: error,
-      noop_count: noop,
     })
   }
   rows.sort((a, b) => a.tag.localeCompare(b.tag))

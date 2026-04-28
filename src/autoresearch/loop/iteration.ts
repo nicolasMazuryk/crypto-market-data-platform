@@ -100,8 +100,8 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     logWrite,
   })
 
-  const agentTokensUsed = agentResult.tokensUsed
-  const agentCostUsd = agentResult.costUsd
+  let agentTokensUsed: number | null = agentResult.tokensUsed
+  let agentCostUsd: number | null = agentResult.costUsd
 
   if (agentResult.timedOut || agentResult.code !== 0) {
     // Defensive: revert any partial edits before recording error.
@@ -140,24 +140,44 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   }
 
   if (afterHash === beforeHash) {
-    // No change at all — skip backtest entirely.
-    return {
-      iter,
-      timestamp,
-      commit_hash: preIterationHead,
-      total_net_pnl: null,
-      sharpe: null,
-      win_rate: null,
-      trades: null,
-      ulcer_index: null,
-      equity_curve_quality_score: null,
-      status: 'noop',
-      description: truncate(summary || 'no-op (yaml unchanged)', 240),
-      report_path: '',
-      duration_s: (Date.now() - startedAt) / 1000,
-      error_message: '',
-      tokens_used: agentTokensUsed,
-      cost_usd: agentCostUsd,
+    const retryPrompt =
+      prompt +
+      '\n\nIMPORTANT: Your previous attempt this iteration did not modify' +
+      ` config/strategies/${spec.strategy}.yaml. Writing proposal.json alone` +
+      ' is not sufficient — you MUST also Edit the YAML to apply the change' +
+      ' described in your summary. Retry now.'
+    const retryResult = await invokeAgent({
+      agent: spec.agent,
+      prompt: retryPrompt,
+      cwd: worktreePath,
+      addDirs: [getResultsDir(repoRoot, spec.tag)],
+      timeoutMs: spec.iteration_timeout_ms,
+      logWrite,
+    })
+    agentTokensUsed = (agentTokensUsed ?? 0) + (retryResult.tokensUsed ?? 0)
+    agentCostUsd = (agentCostUsd ?? 0) + (retryResult.costUsd ?? 0)
+    if (retryResult.timedOut || retryResult.code !== 0) {
+      await revertWorktreeToHead(worktreePath)
+      const err = retryResult.timedOut
+        ? 'agent_timeout_on_retry'
+        : `agent_exit_code_on_retry=${String(retryResult.code)}`
+      return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt, agentTokensUsed, agentCostUsd)
+    }
+    const gate2 = await enforceScope(worktreePath, spec)
+    if (gate2.errorMessage !== null) {
+      return buildErrorRow(iter, timestamp, preIterationHead, gate2.errorMessage, startedAt, agentTokensUsed, agentCostUsd)
+    }
+    if (hashFile(yamlPath) === beforeHash) {
+      await revertWorktreeToHead(worktreePath)
+      return buildErrorRow(
+        iter,
+        timestamp,
+        preIterationHead,
+        'agent_no_yaml_change',
+        startedAt,
+        agentTokensUsed,
+        agentCostUsd
+      )
     }
   }
 

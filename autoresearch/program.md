@@ -16,6 +16,9 @@ the parameter space that the history has not yet sampled.
 
 Exactly one file per iteration: `config/strategies/<strategy>.yaml`.
 
+**CRITICAL: You MUST edit `config/strategies/<strategy>.yaml` every iteration.**
+Writing `proposal.json` without modifying the YAML is a failure.
+
 You may change **numeric parameters only** — thresholds, offsets, multipliers,
 deadlines, take-profit / stop-loss, etc. All existing fields must remain, and
 you may not add new top-level fields the loader does not already know about.
@@ -26,6 +29,18 @@ For `strategy_5`, the fields `exchange_a` and `exchange_b` are pinned by the
 matrix row. The harness will revert your edit if it detects a change to either
 field; do not touch them.
 
+## Working directory
+
+Your CWD is the per-row worktree, e.g. `.autoresearch/worktrees/<tag>/`.
+The only paths you may touch are **relative to that CWD**:
+
+- Strategy YAML to edit: `config/strategies/<strategy>.yaml`
+- Proposal file to create: `.autoresearch/results/<tag>/proposal.json`
+  (the harness has created the directory; just write the file)
+
+Do **not** read or write under `/Users/.../datapipeline/config/...` or any
+other absolute path outside the worktree
+
 ## What you must not do
 
 - Do NOT edit any file other than `config/strategies/<strategy>.yaml`.
@@ -34,6 +49,14 @@ field; do not touch them.
 - Do NOT write to `results.tsv` — that is the harness's authoritative record.
 - Do NOT query ClickHouse or any external database — you have no read access.
 - Do NOT reason about stopping — the harness enforces the iteration cap.
+- Do NOT call Read, Glob, Grep, find, ls, cat, or any tool that inspects the
+  filesystem. The YAML in your prompt IS the current state of the file. The
+  only tools you should call are Edit (on the strategy YAML) and Write (on
+  proposal.json).
+- Do NOT call Bash for any reason — not `cat`, `ls`, `find`, `git`, or
+  anything else. The harness rejects shell output and you do not need it.
+- Do NOT verify your edit after applying it. The Edit tool errors loudly if
+  the change failed; trust it and stop.
 
 ## Hard parameter bounds
 
@@ -57,6 +80,22 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 
 **IMPORTANT:** `ladder_top_mult` MUST always be strictly less than `ladder_bottom_mult` (`ladder_top_mult < ladder_bottom_mult`).
 
+## Response shape (keep it tight)
+
+Per iteration, your full response should be:
+
+1. ≤3 sentences of plain-text reasoning naming (a) the parameter you'll
+   change, (b) the new value, (c) one-line why. No multi-paragraph essays,
+   no enumerating alternatives you rejected, no restating the bounds table.
+2. One Edit tool call on the strategy YAML.
+3. One Write tool call on proposal.json.
+4. A one-sentence "done" line. Nothing more.
+
+The TSV history already records what was tried. Future-you will read the
+TSV's `description` column and the `rationale` from proposal.json — that
+is the only persistent record. Long thinking blocks are not preserved and
+not useful; resist the urge to draft them.
+
 ## Output per iteration
 
 1. Save an updated strategy YAML in place. Preserve indentation and comments
@@ -66,21 +105,32 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 
    ```json
    {
-     "rationale": "...what you're trying and why, short paragraph...",
+     "rationale": "...the hypothesis you're testing, what you're changing now and why...",
      "summary":   "one-line diff summary, used as the TSV description"
    }
    ```
 
-   The `summary` must be a single line (no newlines), under ~200 characters.
+   - `rationale`: ≤2 sentences. The hypothesis you're testing in this one
+     edit. Do NOT restate metrics already in the TSV (trade counts, PnL,
+     baseline). Do NOT explain coupling theory in general — only what
+     you're changing now and why.
+   - `summary`: one line, ≤120 chars, used as the TSV description.
+     Format: `<param> <old> → <new> (<reason in ≤40 words>)`.
 
 ## Context you receive each iteration
 
+The harness injects everything you need into this prompt:
+
 - This file (stable, cacheable prefix).
-- The current strategy YAML.
+- **The full current strategy YAML, inline** — treat it as authoritative.
+  Do NOT call Read on the YAML; you already have its exact contents.
 - The last 100 rows of the results TSV (iter number, status, total_net_pnl,
   sharpe, trades, a one-line description of what was tried, and the rationale
   from the saved proposal where available).
-- The baseline PnL (from iter 0), the current best PnL, and `iter N of M`.
+- The baseline PnL (iter 0), the current best PnL, and `iter N of M`.
+
+Go straight to Edit. Do not Read, Glob, Grep, or otherwise inspect the
+filesystem before editing — every such call is wasted tokens and time.
 
 ## How to search the parameter space
 

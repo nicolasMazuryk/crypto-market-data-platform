@@ -117,9 +117,10 @@ function parseNumber(val: string): number | null {
 }
 
 function parseStatus(val: string): IterationStatus {
-  if (val === 'keep' || val === 'discard' || val === 'noop' || val === 'error') {
+  if (val === 'keep' || val === 'discard' || val === 'error') {
     return val
   }
+  if (val === 'noop') return val as IterationStatus // legacy rows from before noop was removed
   throw new Error(`Invalid status in results.tsv: '${val}'`)
 }
 
