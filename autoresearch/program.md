@@ -14,9 +14,9 @@ the parameter space that the history has not yet sampled.
 
 ## What you may edit
 
-Exactly one file per iteration: `config/strategies/<strategy>.yaml`.
+Exactly one file per iteration: `.autoresearch/worktrees/<tag>/config/strategies/<strategy>.yaml`.
 
-**CRITICAL: You MUST edit `config/strategies/<strategy>.yaml` every iteration.**
+**CRITICAL: You MUST edit `.autoresearch/worktrees/<tag>/config/strategies/<strategy>.yaml` every iteration.**
 Writing `proposal.json` without modifying the YAML is a failure.
 
 You may change **numeric parameters only** — thresholds, offsets, multipliers,
@@ -34,16 +34,16 @@ field; do not touch them.
 Your CWD is the per-row worktree, e.g. `.autoresearch/worktrees/<tag>/`.
 The only paths you may touch are **relative to that CWD**:
 
-- Strategy YAML to edit: `config/strategies/<strategy>.yaml`
+- Strategy YAML to edit: `.autoresearch/worktrees/<tag>/config/strategies/<strategy>.yaml`
 - Proposal file to create: `.autoresearch/results/<tag>/proposal.json`
   (the harness has created the directory; just write the file)
 
-Do **not** read or write under `/Users/.../datapipeline/config/...` or any
+Do **not** read or write under `/Users/nicolas/Documents/datapipeline/config/strategies/...` or any
 other absolute path outside the worktree
 
 ## What you must not do
 
-- Do NOT edit any file other than `config/strategies/<strategy>.yaml`.
+- Do NOT edit any file other than `.autoresearch/worktrees/<tag>/config/strategies/<strategy>.yaml`.
 - Do NOT create, rename, or delete files (other than writing `proposal.json`).
 - Do NOT run any shell commands. The harness will reject anything outside YAML + proposal.json edits.
 - Do NOT write to `results.tsv` — that is the harness's authoritative record.
