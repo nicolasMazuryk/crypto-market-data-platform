@@ -26,133 +26,36 @@ For `strategy_5`, the fields `exchange_a` and `exchange_b` are pinned by the
 matrix row. The harness will revert your edit if it detects a change to either
 field; do not touch them.
 
-## What you may read
-
-Spend a minute grounding each proposal in the strategy math and the data
-distribution before editing. Recommended reads:
-
-- `docs-strategy/strategies/_globals.md` — global variable glossary, P&L
-  decomposition, and hard parameter bounds. Read this first.
-- `docs-strategy/strategies/<family>.md` for your assigned tag — extracted spec
-  for your specific strategy (family derived from `strategy_id`; the exact path
-  is shown in `docs_for_this_run` in the Run identity block above).
-- `src/backtesting/index.ts`, `src/backtesting/engine/backtest-runner.ts` —
-  how a backtest is driven end-to-end.
-- `src/backtesting/strategies/strategy-<n>.ts` (plus `strategy-4-1.ts`,
-  `strategy-4-2.ts`, `strategy-4-3.ts`, `strategy-5.ts`) — the execution logic
-  for your assigned tag. Read the one that matches.
-- `src/backtesting/config/loader.ts`, `src/backtesting/config/schema.ts` —
-  what fields the loader accepts and how YAML maps to runtime params. Avoid
-  proposing edits the loader will ignore.
-- `src/backtesting/pnl/calculator.ts`, `src/backtesting/reporting/metrics.ts` —
-  how `total_net_pnl` is computed from trades.
-- `src/backtesting/orders/*.ts`, `src/backtesting/data/orderbook-window.ts` —
-  how orders are filled against historical bid/ask bars. Relevant when reasoning
-  about whether a threshold is tradable.
-
-## Historical market data access (ClickHouse)
-
-Historical data lives on the remote Hetzner server, not locally. The firewall
-is SSH-only, so queries must go through SSH. Two ways to run a query:
-
-1. **Preferred wrapper**:
-
-   ```bash
-   npm run remote:clickhouse:query -- "SELECT count() FROM arbinet.orderbooks"
-   ```
-
-   This wrapper uses `REMOTE_SERVER_HOST` as the primary host/IP source.
-
-2. **Direct** (if you need finer control over flags):
-
-   ```bash
-   ssh -i ~/.ssh/nicolas nicolas@${REMOTE_SERVER_HOST} \
-     "docker exec -i arbinet-clickhouse clickhouse-client --database=arbinet --query=\"<SQL>\""
-   ```
-
-### Tables
-
-- **`arbinet.orderbooks`** — *the most important table for backtesting.* Columns:
-  `exchange`, `symbol`, `ts`, `bid_open/high/low/close`, `ask_open/high/low/close`,
-  `source_type`, `is_interpolated`, `confidence_score`, `missing_reason`. This is
-  the OHLC bid/ask bar data the backtester's order simulator uses to fill
-  market / limit / stop orders. Schema:
-  `src/db/migrations/005_create_orderbooks.sql`. Use it to inspect per-symbol
-  liquidity coverage, spread distributions, interpolation density, and ts
-  ranges — this directly informs which symbols and thresholds are realistically
-  tradable.
-- **`arbinet.funding_rates`** — `exchange`, `symbol`, `exchange_symbol`,
-  `funding_time`, `funding_rate`, `mark_price`. Use for funding-rate
-  distribution and `F_threshold` sizing.
-- **`arbinet.markets`** — `exchange`, `symbol`, `exchange_symbol`, `type`,
-  `listing_date`, `delisting_date`, `is_active`. Use for symbol universe and
-  listing/delisting windows.
-
-Full schemas for `markets` and `funding_rates` live in `.claude/CLAUDE.md`;
-`orderbooks` is in its migration file above.
-
-### Query examples
-
-```sql
--- Funding-rate distribution for the assigned exchange
-SELECT quantiles(0.01, 0.5, 0.9, 0.99)(funding_rate)
-FROM arbinet.funding_rates
-WHERE exchange = 'binanceusdm';
-
--- Symbol count meeting a candidate F_threshold
-SELECT count(DISTINCT symbol)
-FROM arbinet.funding_rates
-WHERE exchange = 'binanceusdm' AND abs(funding_rate) >= 0.001;
-
--- Median bid/ask spread on the orderbook (partition-pruned on ts)
-SELECT symbol, median((ask_close - bid_close) / bid_close) AS rel_spread
-FROM arbinet.orderbooks
-WHERE exchange = 'binanceusdm'
-  AND ts BETWEEN '2025-01-01' AND '2025-02-01'
-  AND is_interpolated = false
-GROUP BY symbol
-ORDER BY rel_spread
-LIMIT 20;
-```
-
-### Query discipline
-
-- **Read-only.** `SELECT` and `DESCRIBE` only. Never `INSERT`, `ALTER`, `DROP`,
-  `TRUNCATE`, `CREATE`, or otherwise mutate.
-- **Don't over-query.** A handful of targeted queries beats many exploratory
-  scans.
-
-## Allowed shell commands
-
-The harness scopes your Bash tool to a read-only allowlist:
-
-- `cat`, `head`, `tail`, `ls`, `wc` — inspect files.
-- `grep`, `rg`, `find` (without `-delete` / `-exec`) — search the tree.
-- `curl` — HTTP GET only; do not POST or upload.
-- `ssh`, `terraform output`, `npm run remote:clickhouse:query` — the
-  ClickHouse access paths above.
-
-Everything else (including `git`, `rm`, `mv`, `npm install`, editors) is
-blocked. Do not attempt it.
-
 ## What you must not do
 
 - Do NOT edit any file other than `config/strategies/<strategy>.yaml`.
 - Do NOT create, rename, or delete files (other than writing `proposal.json`).
-- Do NOT run `git`, `rm`, package installs, or any write-path shell command. Run only the read-only commands from the allowlist above.
+- Do NOT run any shell commands. The harness will reject anything outside YAML + proposal.json edits.
 - Do NOT write to `results.tsv` — that is the harness's authoritative record.
-- Do NOT mutate ClickHouse; `SELECT`/`DESCRIBE` only.
+- Do NOT query ClickHouse or any external database — you have no read access.
 - Do NOT reason about stopping — the harness enforces the iteration cap.
 
 ## Hard parameter bounds
 
-These are enforced by the config loader. Proposals that violate them will
-fail the backtest and the iteration will be reverted:
+Proposals outside any of these ranges will be rejected by the loader. Do not propose values outside these ranges, ever.
 
-- `entry_offset_seconds >= 2` (market-order latency)
-- `exit_offset_seconds  >= 2`
-- `deadline_seconds`: 2 <= value <= 180
-- `ladder_count >= 2`
+- `funding_threshold`:    >= 0.001  AND <  0.025
+- `stop_loss`:            >= 0.002  AND <  0.04
+- `tp_multiplier`:        >= 1.2    AND <  10
+- `tp_addend`:            >= 0.002  AND <  0.04
+- `entry_offset_seconds`: >= 2      AND <  5
+- `exit_offset_seconds`:  >= 1      AND <  10
+- `deadline_seconds`:     >= 1      AND <= 1800
+- `ladder_count`:         >= 2      AND <  8
+- `ladder_top_mult`:      >= 0.4    AND <  3
+- `ladder_bottom_mult`:   >= 1      AND <  4
+- `retracement_pct`:      >= 0.1    AND <  1.5
+- `take_profit`:          >= 0.001  AND <  0.03
+- `limit_offset_mult`:    >= 1.1    AND <  4
+- `entry_mult`:           >= 1.1    AND <  4
+- `sl_mult`:              >= 0.2    AND <  3
+
+**IMPORTANT:** `ladder_top_mult` MUST always be strictly less than `ladder_bottom_mult` (`ladder_top_mult < ladder_bottom_mult`).
 
 ## Output per iteration
 
@@ -179,6 +82,36 @@ fail the backtest and the iteration will be reverted:
   from the saved proposal where available).
 - The baseline PnL (from iter 0), the current best PnL, and `iter N of M`.
 
+## How to search the parameter space
+
+1. **No micro-tweaks once a direction plateaus.** If the last 2–3 steps along
+   one parameter stopped producing meaningful PnL gains, do **not** propose
+   another tiny step on the same parameter (e.g. `0.35% → 0.34%`). Instead,
+   either:
+   - **Jump magnitudes on the same parameter.** Try a value that is
+     multiplicatively (not incrementally) different — e.g. if you've been
+     searching `funding_threshold` between 0.30%–0.60%, try `1.0%` or `0.05%`.
+     The point is to *gauge the regime*, not to refine the local minimum.
+   - **Switch parameters.** Move to a different field — `stop_loss`,
+     `tp_multiplier`, `entry_offset_seconds`, etc. — and tune it from scratch.
+
+2. **Parameters are coupled — re-tune after every change.** The optimum of one
+   parameter depends on the values of the others. If you found
+   `funding_threshold = 0.3%` was best, then changed `tp_multiplier` from 1.5
+   to 2 and improved further, the *original* funding_threshold optimum is no
+   longer trustworthy. After any improvement on parameter B, return to
+   parameter A and re-search it under the new B. The general loop:
+   - improve A → improve B → re-improve A under new B → re-improve B under
+     new A → … until the cycle stops yielding improvements.
+
+3. **Different magnitudes of one parameter imply different optima for the
+   others.** A high-funding regime (e.g. `funding_threshold = 1%`) may want
+   `stop_loss = 3%` and `tp_multiplier = 2`. A low-funding regime (e.g.
+   `funding_threshold = 0.3%`) may want `stop_loss = 0.8%` and
+   `tp_multiplier = 1.4`. When you make a magnitude jump on one parameter,
+   expect the others' optima to also move — don't assume the previously-good
+   values still hold. Probe widely.
+
 ## Strategy: pick one edit per iteration
 
 - If history shows improvement trending in one direction, step further in that
@@ -193,5 +126,4 @@ fail the backtest and the iteration will be reverted:
 
 The harness runs everything outside the YAML edit. You produce two artifacts
 per iteration: the edited YAML and the proposal file. Anything else you write
-will be reverted by the diff-gate; anything outside the read-only shell
-allowlist will be blocked.
+will be reverted by the diff-gate.

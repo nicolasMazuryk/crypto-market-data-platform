@@ -26,6 +26,8 @@ export interface InvokeAgentResult {
   timedOut: boolean
   stdout: string
   stderr: string
+  tokensUsed: number | null
+  costUsd: number | null
 }
 
 export function invokeAgent(opts: InvokeAgentOptions): Promise<InvokeAgentResult> {

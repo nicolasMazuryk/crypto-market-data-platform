@@ -23,6 +23,8 @@ function makeRow(overrides: Partial<ResultRow> = {}): ResultRow {
     report_path: '.autoresearch/reports/x/iter_1.json',
     duration_s: 12.3,
     error_message: '',
+    tokens_used: null,
+    cost_usd: null,
     ...overrides,
   }
 }
@@ -76,7 +78,21 @@ describe('results tsv', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]?.ulcer_index).toBeNull()
     expect(rows[0]?.equity_curve_quality_score).toBeNull()
+    expect(rows[0]?.tokens_used).toBeNull()
+    expect(rows[0]?.cost_usd).toBeNull()
     expect(rows[0]?.total_net_pnl).toBeCloseTo(0.1)
+  })
+
+  it('parseTsvContent accepts 14-column mid format with null tokens/cost', () => {
+    const midHeader =
+      'iter\ttimestamp\tcommit_hash\ttotal_net_pnl\tsharpe\twin_rate\ttrades\tulcer_index\tequity_curve_quality_score\tstatus\tdescription\treport_path\tduration_s\terror_message'
+    const midRow = '1\t2026-01-01T00:00:00Z\tabc\t0.1\t1.5\t0.6\t10\t2.5\t80\tkeep\tbaseline\treports/x.json\t5.0\t'
+    const rows = parseTsvContent(`${midHeader}\n${midRow}\n`)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.tokens_used).toBeNull()
+    expect(rows[0]?.cost_usd).toBeNull()
+    expect(rows[0]?.ulcer_index).toBeCloseTo(2.5)
+    expect(rows[0]?.equity_curve_quality_score).toBeCloseTo(80)
   })
 
   it('treats empty numeric fields as null', () => {

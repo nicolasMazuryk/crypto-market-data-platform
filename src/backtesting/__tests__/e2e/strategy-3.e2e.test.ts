@@ -15,6 +15,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         tp_mode: 'A',
         tp_multiplier: 1.5,
         tp_addend: 0.004,
+        deadline_seconds: 60,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -56,6 +57,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         tp_mode: 'A',
         tp_multiplier: 1.5,
         tp_addend: 0.004,
+        deadline_seconds: 60,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -95,6 +97,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         tp_mode: 'A',
         tp_multiplier: 1.5,
         tp_addend: 0.004,
+        deadline_seconds: 60,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -133,5 +136,42 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
     const result = strategy.execute(event, window)
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('SL_HIT') // Worst case
+  })
+
+  it('Scenario 8: Deadline exit — flat price, neither SL nor TP fires', () => {
+    const strategy = new Strategy3('strategy_3a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_3a',
+        direction: 'short',
+        funding_threshold: 0.004,
+        entry_offset_seconds: 5,
+        stop_loss: 0.01,
+        tp_mode: 'A',
+        tp_multiplier: 1.5,
+        tp_addend: 0.004,
+        deadline_seconds: 60,
+      },
+      BINANCE_FEES,
+      DEFAULT_SLIPPAGE
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    // Entry: SELL at 50000, F=1%, TP_A=1.5% → tpPrice=49250, slPrice=50500
+    // Flat price at 50000: neither SL nor TP fires → deadline exit at T+60
+
+    const window = buildWindow({
+      fundingTime,
+      basePrice: 50000,
+      priceFn: () => 50000, // flat
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('DEADLINE')
+    expect(result.exit_price).toBeGreaterThan(0)
+    expect(result.hold_duration).toBeCloseTo(65, 0) // 5s entry offset + 60s deadline
   })
 })

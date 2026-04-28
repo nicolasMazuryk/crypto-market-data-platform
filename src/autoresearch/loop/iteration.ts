@@ -100,17 +100,20 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     logWrite,
   })
 
+  const agentTokensUsed = agentResult.tokensUsed
+  const agentCostUsd = agentResult.costUsd
+
   if (agentResult.timedOut || agentResult.code !== 0) {
     // Defensive: revert any partial edits before recording error.
     await revertWorktreeToHead(worktreePath)
     const err = agentResult.timedOut ? 'agent_timeout' : `agent_exit_code=${String(agentResult.code)}`
-    return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt)
+    return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt, agentTokensUsed, agentCostUsd)
   }
 
   // Step 2: diff-gate.
   const gate = await enforceScope(worktreePath, spec)
   if (gate.errorMessage !== null) {
-    return buildErrorRow(iter, timestamp, preIterationHead, gate.errorMessage, startedAt)
+    return buildErrorRow(iter, timestamp, preIterationHead, gate.errorMessage, startedAt, agentTokensUsed, agentCostUsd)
   }
 
   // Step 3: check for noop (YAML unchanged).
@@ -118,7 +121,15 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   const { proposal, error: proposalError } = readProposalSafe(proposalPath)
   if (proposalError !== null) {
     await revertWorktreeToHead(worktreePath)
-    return buildErrorRow(iter, timestamp, preIterationHead, `proposal_parse_error: ${proposalError}`, startedAt)
+    return buildErrorRow(
+      iter,
+      timestamp,
+      preIterationHead,
+      `proposal_parse_error: ${proposalError}`,
+      startedAt,
+      agentTokensUsed,
+      agentCostUsd
+    )
   }
   const summary = proposal?.summary ?? ''
 
@@ -145,6 +156,8 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
       report_path: '',
       duration_s: (Date.now() - startedAt) / 1000,
       error_message: '',
+      tokens_used: agentTokensUsed,
+      cost_usd: agentCostUsd,
     }
   }
 
@@ -164,7 +177,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     // Backtest failed — revert YAML edits so we stay on last keep.
     await revertWorktreeToHead(worktreePath)
     const err = backtest.timedOut ? 'backtest_timeout' : `backtest_exit_code=${String(backtest.code)}`
-    return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt)
+    return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt, agentTokensUsed, agentCostUsd)
   }
 
   let metrics
@@ -175,7 +188,15 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   } catch (err) {
     await revertWorktreeToHead(worktreePath)
     const message = err instanceof Error ? err.message : String(err)
-    return buildErrorRow(iter, timestamp, preIterationHead, `report_parse_error: ${message}`, startedAt)
+    return buildErrorRow(
+      iter,
+      timestamp,
+      preIterationHead,
+      `report_parse_error: ${message}`,
+      startedAt,
+      agentTokensUsed,
+      agentCostUsd
+    )
   }
 
   // Copy the report into the per-iteration name so the TSV row points
@@ -217,6 +238,8 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     report_path: path.relative(repoRoot, iterReportPath),
     duration_s: (Date.now() - startedAt) / 1000,
     error_message: '',
+    tokens_used: agentTokensUsed,
+    cost_usd: agentCostUsd,
   }
 }
 
@@ -231,7 +254,9 @@ function buildErrorRow(
   timestamp: string,
   commitHash: string,
   errorMessage: string,
-  startedAt: number
+  startedAt: number,
+  tokensUsed: number | null = null,
+  costUsd: number | null = null
 ): ResultRow {
   return {
     iter,
@@ -248,6 +273,8 @@ function buildErrorRow(
     report_path: '',
     duration_s: (Date.now() - startedAt) / 1000,
     error_message: errorMessage,
+    tokens_used: tokensUsed,
+    cost_usd: costUsd,
   }
 }
 
@@ -308,6 +335,8 @@ export async function runBaselineIteration(args: {
     report_path: path.relative(args.repoRoot, iterReportPath),
     duration_s: (Date.now() - startedAt) / 1000,
     error_message: '',
+    tokens_used: null,
+    cost_usd: null,
   }
 }
 

@@ -113,6 +113,8 @@ export interface Strategy3Config {
   tp_multiplier: number
   /** TP addend for mode B (e.g., 0.004 for 0.4%) */
   tp_addend: number
+  /** Max seconds after T_funding before forced exit (>= 2) */
+  deadline_seconds: number
 }
 
 /** Strategy 4.1: Negative Funding Ladder LONG - Post-Funding Entry */

@@ -255,6 +255,7 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         tp_mode,
         tp_multiplier: requirePositiveNumber(merged, 'tp_multiplier', ctx),
         tp_addend: requirePositiveNumber(merged, 'tp_addend', ctx),
+        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 2, Number.MAX_SAFE_INTEGER, ctx),
       }
     }
 

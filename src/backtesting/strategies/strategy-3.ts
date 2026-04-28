@@ -60,10 +60,10 @@ export class Strategy3 implements BaseStrategy {
     const tpPrice = entryPrice * (1 - tpDistance)
     const slPrice = entryPrice * (1 + this.config.stop_loss)
 
-    // Get candles after entry
-    const lastTs = data.getLastTs()
-    if (!lastTs) return null
-    const postEntryRows = data.getRowsInRange(entryTs, lastTs)
+    // Get candles after entry up to deadline
+    const deadlineTime = new Date(event.funding_time.getTime() + this.config.deadline_seconds * 1000)
+    const deadlineTs = toClickHouseDateTime(deadlineTime)
+    const postEntryRows = data.getRowsInRange(entryTs, deadlineTs)
     // Remove entry candle (orders placed IMMEDIATELY after entry)
     const orderCandles = postEntryRows.slice(1)
 
@@ -119,8 +119,23 @@ export class Strategy3 implements BaseStrategy {
       exitFeeType = 'maker'
       exitTs = tpFill.timestamp
     } else {
-      // No SL or TP hit — shouldn't happen in normal data, treat as no trade
-      return null
+      // Deadline exit — market buy to close short
+      const deadlineCandle = data.getRowAt(deadlineTs)
+      if (deadlineCandle) {
+        const deadlineFillResult = fillMarketOrder('buy', deadlineCandle, 1, 'deadline')
+        if (!deadlineFillResult) return null
+        exitPrice = deadlineFillResult.price
+        exitReason = 'DEADLINE'
+        exitFeeType = 'taker'
+        exitTs = deadlineTs
+      } else {
+        const lastFillResult = fillMarketOrder('buy', lastOrderCandle, 1, 'deadline')
+        if (!lastFillResult) return null
+        exitPrice = lastFillResult.price
+        exitReason = 'DEADLINE'
+        exitFeeType = 'taker'
+        exitTs = deadlineTs
+      }
     }
 
     const pnl = calculatePnl({

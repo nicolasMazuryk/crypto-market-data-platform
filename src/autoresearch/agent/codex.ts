@@ -2,6 +2,45 @@ import { spawn } from 'child_process'
 
 import type { InvokeAgentOptions, InvokeAgentResult } from './invoke.js'
 
+interface CodexTurnEvent {
+  type?: string
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    cache_creation_input_tokens?: number
+    cache_read_input_tokens?: number
+  }
+  cost?: number
+  total_cost?: number
+}
+
+function parseCodexUsage(stdout: string): { tokensUsed: number | null; costUsd: number | null } {
+  let totalTokens = 0
+  let costUsd: number | null = null
+  let hasTokens = false
+  for (const line of stdout.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      const event = JSON.parse(trimmed) as CodexTurnEvent
+      if (event.usage !== undefined) {
+        const { input_tokens = 0, output_tokens = 0, cache_creation_input_tokens = 0, cache_read_input_tokens = 0 } =
+          event.usage
+        totalTokens += input_tokens + output_tokens + cache_creation_input_tokens + cache_read_input_tokens
+        hasTokens = true
+      }
+      if (typeof event.total_cost === 'number') {
+        costUsd = event.total_cost
+      } else if (typeof event.cost === 'number') {
+        costUsd = (costUsd ?? 0) + event.cost
+      }
+    } catch {
+      // non-JSON line, skip
+    }
+  }
+  return { tokensUsed: hasTokens ? totalTokens : null, costUsd }
+}
+
 /** Build the codex exec argument list (exported for testing). */
 export function buildCodexArgs(opts: Pick<InvokeAgentOptions, 'cwd' | 'addDirs' | 'extraArgs' | 'prompt'>): string[] {
   const model = 'gpt-5.4'
@@ -20,6 +59,7 @@ export function buildCodexArgs(opts: Pick<InvokeAgentOptions, 'cwd' | 'addDirs' 
     model,
     '-c',
     `model_reasoning_effort="${reasoningEffort}"`,
+    '--json',
   ]
   for (const dir of opts.addDirs) {
     args.push('--add-dir', dir)
@@ -71,23 +111,29 @@ export function invokeCodex(opts: InvokeAgentOptions): Promise<InvokeAgentResult
 
     proc.on('close', (code: number | null) => {
       clearTimeout(timer)
+      const { tokensUsed, costUsd } = parseCodexUsage(stdout)
       resolve({
         code: code ?? -1,
         durationMs: Date.now() - started,
         timedOut,
         stdout,
         stderr,
+        tokensUsed,
+        costUsd,
       })
     })
 
     proc.on('error', (err: Error) => {
       clearTimeout(timer)
+      const { tokensUsed, costUsd } = parseCodexUsage(stdout)
       resolve({
         code: -1,
         durationMs: Date.now() - started,
         timedOut: false,
         stdout,
         stderr: `${stderr}\n${err.message}`,
+        tokensUsed,
+        costUsd,
       })
     })
   })

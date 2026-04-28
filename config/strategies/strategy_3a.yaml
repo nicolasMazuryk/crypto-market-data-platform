@@ -9,3 +9,4 @@ stop_loss: 0.020              # 2.0%
 tp_mode: "A"
 tp_multiplier: 1.5          # TP = F * 1.5
 tp_addend: 0.004              # Not used in mode A, but required
+deadline_seconds: 60          # Max seconds after T_funding before forced exit

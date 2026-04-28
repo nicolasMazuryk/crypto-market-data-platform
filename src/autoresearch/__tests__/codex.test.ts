@@ -30,6 +30,7 @@ describe('buildCodexArgs', () => {
     expect(args).toContain('--skip-git-repo-check')
     expect(args).toContain('--model')
     expect(args[args.indexOf('--model') + 1]).toBe('gpt-5.4')
+    expect(args).toContain('--json')
   })
 
   it('appends the prompt as the last positional argument', () => {

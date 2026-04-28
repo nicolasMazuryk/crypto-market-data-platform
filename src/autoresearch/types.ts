@@ -57,6 +57,8 @@ export interface ResultRow {
   report_path: string
   duration_s: number
   error_message: string
+  tokens_used: number | null
+  cost_usd: number | null
 }
 
 export interface RunState {

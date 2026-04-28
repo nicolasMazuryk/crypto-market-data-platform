@@ -2,6 +2,40 @@ import { spawn } from 'child_process'
 
 import type { InvokeAgentOptions, InvokeAgentResult } from './invoke.js'
 
+interface ClaudeResultEvent {
+  type: string
+  total_cost_usd?: number
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    cache_creation_input_tokens?: number
+    cache_read_input_tokens?: number
+  }
+}
+
+function parseClaudeUsage(stdout: string): { tokensUsed: number | null; costUsd: number | null } {
+  let tokensUsed: number | null = null
+  let costUsd: number | null = null
+  for (const line of stdout.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      const event = JSON.parse(trimmed) as ClaudeResultEvent
+      if (event.type === 'result') {
+        if (typeof event.total_cost_usd === 'number') costUsd = event.total_cost_usd
+        if (event.usage !== undefined) {
+          const { input_tokens = 0, output_tokens = 0, cache_creation_input_tokens = 0, cache_read_input_tokens = 0 } =
+            event.usage
+          tokensUsed = input_tokens + output_tokens + cache_creation_input_tokens + cache_read_input_tokens
+        }
+      }
+    } catch {
+      // non-JSON line, skip
+    }
+  }
+  return { tokensUsed, costUsd }
+}
+
 export function invokeClaude(opts: InvokeAgentOptions): Promise<InvokeAgentResult> {
   return new Promise(resolve => {
     const bin = opts.claudeBinary ?? 'claude'
@@ -36,6 +70,9 @@ export function invokeClaude(opts: InvokeAgentOptions): Promise<InvokeAgentResul
       'acceptEdits',
       '--allowedTools',
       allowedTools.join(' '),
+      '--output-format',
+      'stream-json',
+      '--verbose',
     ]
     if (disallowedTools.length > 0) {
       args.push('--disallowedTools', disallowedTools.join(' '))
@@ -82,23 +119,29 @@ export function invokeClaude(opts: InvokeAgentOptions): Promise<InvokeAgentResul
 
     proc.on('close', (code: number | null) => {
       clearTimeout(timer)
+      const { tokensUsed, costUsd } = parseClaudeUsage(stdout)
       resolve({
         code: code ?? -1,
         durationMs: Date.now() - started,
         timedOut,
         stdout,
         stderr,
+        tokensUsed,
+        costUsd,
       })
     })
 
     proc.on('error', (err: Error) => {
       clearTimeout(timer)
+      const { tokensUsed, costUsd } = parseClaudeUsage(stdout)
       resolve({
         code: -1,
         durationMs: Date.now() - started,
         timedOut: false,
         stdout,
         stderr: `${stderr}\n${err.message}`,
+        tokensUsed,
+        costUsd,
       })
     })
   })

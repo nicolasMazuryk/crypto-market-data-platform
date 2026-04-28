@@ -18,6 +18,8 @@ const HEADER = [
   'report_path',
   'duration_s',
   'error_message',
+  'tokens_used',
+  'cost_usd',
 ] as const
 
 // Legacy header (12 columns, before equity curve metrics were added)
@@ -29,6 +31,24 @@ const LEGACY_HEADER = [
   'sharpe',
   'win_rate',
   'trades',
+  'status',
+  'description',
+  'report_path',
+  'duration_s',
+  'error_message',
+].join('\t')
+
+// Mid header (14 columns, before token/cost tracking was added)
+const MID_HEADER = [
+  'iter',
+  'timestamp',
+  'commit_hash',
+  'total_net_pnl',
+  'sharpe',
+  'win_rate',
+  'trades',
+  'ulcer_index',
+  'equity_curve_quality_score',
   'status',
   'description',
   'report_path',
@@ -64,6 +84,8 @@ function formatRow(row: ResultRow): string {
     escapeField(row.report_path),
     formatNumber(row.duration_s),
     escapeField(row.error_message),
+    formatNumber(row.tokens_used),
+    formatNumber(row.cost_usd),
   ]
   return fields.join('\t')
 }
@@ -106,10 +128,11 @@ export function parseTsvContent(content: string): ResultRow[] {
   if (lines.length === 0) return []
   const header = lines[0]
   const isLegacy = header === LEGACY_HEADER
-  if (header !== RESULTS_HEADER_LINE && !isLegacy) {
+  const isMid = header === MID_HEADER
+  if (header !== RESULTS_HEADER_LINE && !isLegacy && !isMid) {
     throw new Error(`results.tsv header mismatch. Expected '${RESULTS_HEADER_LINE}', got '${header ?? ''}'`)
   }
-  const expectedCols = isLegacy ? 12 : HEADER.length
+  const expectedCols = isLegacy ? 12 : isMid ? 14 : HEADER.length
   const rows: ResultRow[] = []
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]
@@ -124,7 +147,9 @@ export function parseTsvContent(content: string): ResultRow[] {
     let iter: string, timestamp: string, commit_hash: string, pnl: string, sharpe: string
     let win: string, trades: string, status: string, desc: string, report: string, dur: string, err: string
     let ulcer = '',
-      ecq = ''
+      ecq = '',
+      tokensRaw = '',
+      costRaw = ''
 
     if (isLegacy) {
       ;[iter, timestamp, commit_hash, pnl, sharpe, win, trades, status, desc, report, dur, err] = fields as [
@@ -141,7 +166,7 @@ export function parseTsvContent(content: string): ResultRow[] {
         string,
         string,
       ]
-    } else {
+    } else if (isMid) {
       ;[iter, timestamp, commit_hash, pnl, sharpe, win, trades, ulcer, ecq, status, desc, report, dur, err] =
         fields as [
           string,
@@ -159,6 +184,42 @@ export function parseTsvContent(content: string): ResultRow[] {
           string,
           string,
         ]
+    } else {
+      ;[
+        iter,
+        timestamp,
+        commit_hash,
+        pnl,
+        sharpe,
+        win,
+        trades,
+        ulcer,
+        ecq,
+        status,
+        desc,
+        report,
+        dur,
+        err,
+        tokensRaw,
+        costRaw,
+      ] = fields as [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
     }
 
     const iterNum = Number(iter)
@@ -184,6 +245,8 @@ export function parseTsvContent(content: string): ResultRow[] {
       report_path: report,
       duration_s: parseNumber(dur) ?? 0,
       error_message: err,
+      tokens_used: parseNumber(tokensRaw),
+      cost_usd: parseNumber(costRaw),
     })
   }
   return rows
