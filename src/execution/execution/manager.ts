@@ -1,5 +1,8 @@
+import { createHash } from 'node:crypto'
+
 import type { Logger } from 'pino'
 
+import { normalizeSymbol } from '../../utils/symbol-normalizer.js'
 import type { Clock, EventBus, OrderPlacedEvent, OrderFilledEvent, PositionOpenedEvent } from '../core/types.js'
 import type { ExecutionIds } from '../core/ids.js'
 import type { ExecutionMetrics } from '../observability/metrics.js'
@@ -133,7 +136,14 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
   function setError(s: IntentState, code: string, message: string): void {
     if (TERMINAL.has(s.status)) return
     logger.warn(
-      { event: 'intent.error', intentId: s.intent.id, exchange: s.intent.exchange, strategy: s.intent.strategy, code, errorMessage: message },
+      {
+        event: 'intent.error',
+        intentId: s.intent.id,
+        exchange: s.intent.exchange,
+        strategy: s.intent.strategy,
+        code,
+        errorMessage: message,
+      },
       'intent.error'
     )
     s.error = { code, message, at: clock.now() }
@@ -157,13 +167,47 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       if (price <= 0) {
         logger.warn(
-          { event: 'handleEntryFilled.no_price', intentId: intent.id, exchange: intent.exchange, symbol: intent.symbol },
+          {
+            event: 'handleEntryFilled.no_price',
+            intentId: intent.id,
+            exchange: intent.exchange,
+            symbol: intent.symbol,
+          },
           'handleEntryFilled: zero ref price — SL/TP not placed, deadline-only exit'
         )
       }
       if (price > 0) {
         const slPrice = intent.side === 'long' ? price * (1 - slPct / 100) : price * (1 + slPct / 100)
         const tpPrice = intent.side === 'long' ? price * (1 + tpPct / 100) : price * (1 - tpPct / 100)
+
+        // Size SL/TP from actual exchange position rather than s.filledQty alone.
+        // If a duplicate entry slipped past idempotency (Binance allows clientOrderId reuse
+        // after the first order closes), the exchange-side position can be larger than what
+        // we recorded. Using max(restQty, s.filledQty) ensures TP closes everything.
+        let exitQty = s.filledQty
+        try {
+          const positions = await rest.getPositions(intent.exchangeSymbol)
+          const pos = positions.find(p => p.symbol === intent.symbol || p.symbol === intent.exchangeSymbol)
+          if (pos && pos.qty > s.filledQty) {
+            logger.error(
+              {
+                event: 'handleEntryFilled.position_oversized',
+                intentId: intent.id,
+                exchange: intent.exchange,
+                symbol: intent.symbol,
+                expectedQty: s.filledQty,
+                actualQty: pos.qty,
+              },
+              'handleEntryFilled: REST position exceeds recorded fill — sizing SL/TP to actual'
+            )
+            exitQty = pos.qty
+          }
+        } catch (err) {
+          logger.warn(
+            { intentId: intent.id, err },
+            'handleEntryFilled: getPositions failed — using s.filledQty for SL/TP'
+          )
+        }
 
         const [slResult, tpResult] = await Promise.allSettled([
           rest.createOrder({
@@ -173,7 +217,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             symbol: intent.exchangeSymbol,
             side: exitSide,
             type: 'stop_market',
-            qty: s.filledQty,
+            qty: exitQty,
             stopPrice: slPrice,
             reduceOnly: true,
           }),
@@ -184,7 +228,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             symbol: intent.exchangeSymbol,
             side: exitSide,
             type: 'limit',
-            qty: s.filledQty,
+            qty: exitQty,
             price: tpPrice,
             reduceOnly: true,
           }),
@@ -199,7 +243,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             kind: 'sl',
             side: exitSide,
             orderType: 'stop_market',
-            qty: s.filledQty,
+            qty: exitQty,
             stopPrice: slPrice,
             reduceOnly: true,
             ...(slResult.value.exchangeOrderId ? { exchangeOrderId: slResult.value.exchangeOrderId } : {}),
@@ -219,7 +263,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             kind: 'tp',
             side: exitSide,
             orderType: 'limit',
-            qty: s.filledQty,
+            qty: exitQty,
             price: tpPrice,
             reduceOnly: true,
             ...(tpResult.value.exchangeOrderId ? { exchangeOrderId: tpResult.value.exchangeOrderId } : {}),
@@ -270,7 +314,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
     if (order.status === 'filled') {
       // Guard: WS adapters can replay fill events on reconnect. Only process from pre-fill states.
-      if (s.status !== 'working' && s.status !== 'partially_filled' && s.status !== 'acked' && s.status !== 'submitted') return
+      if (s.status !== 'working' && s.status !== 'partially_filled' && s.status !== 'acked' && s.status !== 'submitted')
+        return
       const now = clock.now()
       metrics.intentEntryLatencyMs.observe(now - s.intent.decidedAt, {
         exchange: s.intent.exchange,
@@ -299,7 +344,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
   const POLL_GET_ORDER_TIMEOUT_MS = 3_000
 
-  function withGetOrderTimeout(promise: Promise<import('../adapters/rest/types.js').Order | undefined>): Promise<import('../adapters/rest/types.js').Order | undefined> {
+  function withGetOrderTimeout(
+    promise: Promise<import('../adapters/rest/types.js').Order | undefined>
+  ): Promise<import('../adapters/rest/types.js').Order | undefined> {
     return Promise.race([
       promise,
       new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), POLL_GET_ORDER_TIMEOUT_MS)),
@@ -370,7 +417,11 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       { intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol },
       'manager: close poll exhausted — intent stuck in exiting, manual intervention required'
     )
-    metrics.intentRejectedTotal.inc(1, { exchange: s.intent.exchange, strategy: s.intent.strategy, code: 'close_poll_exhausted' })
+    metrics.intentRejectedTotal.inc(1, {
+      exchange: s.intent.exchange,
+      strategy: s.intent.strategy,
+      code: 'close_poll_exhausted',
+    })
   }
 
   async function pollForSlTpFill(s: IntentState): Promise<void> {
@@ -380,7 +431,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     const [slId, tpId] = s.exitOrderIds
 
     const POLL_INTERVAL_MS = 15_000
-    const MAX_POLLS = 50  // 50 × 15s = ~12 min, well within any deadline
+    const MAX_POLLS = 50 // 50 × 15s = ~12 min, well within any deadline
 
     for (let i = 0; i < MAX_POLLS; i++) {
       await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS))
@@ -388,7 +439,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       try {
         if (slId) {
-          const slOrder = await withGetOrderTimeout(rest.getOrder({ symbol: intent.exchangeSymbol, clientOrderId: slId }))
+          const slOrder = await withGetOrderTimeout(
+            rest.getOrder({ symbol: intent.exchangeSymbol, clientOrderId: slId })
+          )
           if (slOrder?.status === 'filled' && s.status === 'monitoring') {
             monitor.disarm(intent.id)
             await handleMonitorExit(s, 'sl')
@@ -397,7 +450,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         }
         if (s.status !== 'monitoring') return
         if (tpId) {
-          const tpOrder = await withGetOrderTimeout(rest.getOrder({ symbol: intent.exchangeSymbol, clientOrderId: tpId }))
+          const tpOrder = await withGetOrderTimeout(
+            rest.getOrder({ symbol: intent.exchangeSymbol, clientOrderId: tpId })
+          )
           if (tpOrder?.status === 'filled' && s.status === 'monitoring') {
             monitor.disarm(intent.id)
             await handleMonitorExit(s, 'tp')
@@ -426,7 +481,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (!order || !OPEN_ORDER_STATUSES.has(order.status)) return
       if (attempt < 2) await new Promise<void>(r => setTimeout(r, 200))
     }
-    logger.error({ intentId, symbol, clientOrderId }, 'manager: cancel failed after retries — orphan order may remain on exchange')
+    logger.error(
+      { intentId, symbol, clientOrderId },
+      'manager: cancel failed after retries — orphan order may remain on exchange'
+    )
   }
 
   async function sweepReduceOnlyOrders(
@@ -451,7 +509,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               ...(o.exchangeOrderId ? { exchangeOrderId: o.exchangeOrderId } : {}),
             })
             .catch((err: unknown) =>
-              logger.warn({ intentId, exchange: rest.exchange, orderId: o.clientOrderId, err }, 'manager: post-exit cancel failed')
+              logger.warn(
+                { intentId, exchange: rest.exchange, orderId: o.clientOrderId, err },
+                'manager: post-exit cancel failed'
+              )
             )
         )
       )
@@ -485,6 +546,11 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           await cancelWithVerify(rest, intent.exchangeSymbol, residualId, intent.id)
         }
       }
+      // Defense in depth: sweep any remaining reduce-only orders for this symbol.
+      // The targeted cancelWithVerify above can fail silently after 3 retries; a duplicate
+      // SL placement may also have slipped through. The sweep ensures no orphaned reduce-only
+      // orders remain after exit on any exchange.
+      await sweepReduceOnlyOrders(rest, intent.exchangeSymbol, intent.id)
       recordExitMetrics(s, reason)
       transition(s, 'exited')
     } else {
@@ -572,7 +638,12 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
   function preemptSynchronously(s: IntentState): void {
     const rest = restAdapters.get(s.intent.exchange)
     logger.info(
-      { intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, fundingRate: s.intent.fundingRate },
+      {
+        intentId: s.intent.id,
+        exchange: s.intent.exchange,
+        symbol: s.intent.symbol,
+        fundingRate: s.intent.fundingRate,
+      },
       'intent.preempted'
     )
     metrics.intentRejectedTotal.inc(1, { exchange: s.intent.exchange, strategy: s.intent.strategy, code: 'preempted' })
@@ -598,6 +669,128 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         .catch((err: unknown) =>
           logger.warn({ intentId: s.intent.id, err }, 'preempt: cancel order failed (best effort)')
         )
+    }
+  }
+
+  // Tracks in-flight orphan-flatten ops to prevent concurrent reduce-only orders for the
+  // same (exchange, symbol) when reconcile fires desync events repeatedly.
+  const flattenInFlight = new Set<string>()
+  // Tracks in-flight orphan reduce-only order cancellations to dedupe repeated reconcile passes.
+  const orphanCancelInFlight = new Set<string>()
+
+  async function cancelOrphanReduceOnlyOrder(
+    exchange: Exchange,
+    details: { symbol: string; clientOrderId: string; exchangeOrderId?: string }
+  ): Promise<void> {
+    const rest = restAdapters.get(exchange)
+    if (!rest) return
+    const key = `${exchange}:${details.clientOrderId}`
+    if (orphanCancelInFlight.has(key)) return
+    orphanCancelInFlight.add(key)
+    logger.warn(
+      {
+        event: 'orphan_reduce_only_order.cancel',
+        exchange,
+        symbol: details.symbol,
+        clientOrderId: details.clientOrderId,
+        exchangeOrderId: details.exchangeOrderId,
+      },
+      'orphan_reduce_only_order: cancelling stale reduce-only order with no matching position'
+    )
+    try {
+      await rest.cancelOrder({
+        symbol: details.symbol,
+        clientOrderId: details.clientOrderId,
+        ...(details.exchangeOrderId ? { exchangeOrderId: details.exchangeOrderId } : {}),
+      })
+    } catch (err) {
+      logger.warn(
+        { event: 'orphan_reduce_only_order.cancel_failed', exchange, symbol: details.symbol, err },
+        'orphan_reduce_only_order: cancel failed (best effort)'
+      )
+    } finally {
+      orphanCancelInFlight.delete(key)
+    }
+  }
+
+  async function flattenOrphanPosition(
+    exchange: Exchange,
+    details: { symbol: string; localQty: number; restQty: number; restSide?: 'long' | 'short' | 'flat' }
+  ): Promise<void> {
+    if (details.restSide === 'flat' || details.restQty <= 0) return
+    if (details.restQty <= details.localQty) return
+
+    const rest = restAdapters.get(exchange)
+    if (!rest) return
+
+    const desyncSymbol = details.symbol
+    const normalized = normalizeSymbol(desyncSymbol)
+    const key = `${exchange}:${normalized}`
+    if (flattenInFlight.has(key)) return
+
+    // Sum recorded fills across all active intents for this symbol+exchange so we don't
+    // close legitimate concurrent positions — only the surplus.
+    const expectedQty = Array.from(intentStates.values())
+      .filter(
+        s =>
+          s.intent.exchange === exchange &&
+          normalizeSymbol(s.intent.symbol) === normalized &&
+          (s.status === 'filled' ||
+            s.status === 'monitoring' ||
+            s.status === 'exiting' ||
+            s.status === 'partially_filled') &&
+          s.filledQty > 0
+      )
+      .reduce((acc, s) => acc + s.filledQty, 0)
+
+    const surplus = details.restQty - expectedQty
+    if (surplus <= 1e-9) return
+
+    const flattenSide: OrderSide = details.restSide === 'long' ? 'sell' : details.restSide === 'short' ? 'buy' : 'buy'
+    // Deterministic clientOrderId per minute prevents thundering herd if reconcile re-fires.
+    const minuteBucket = Math.floor(clock.now() / 60_000)
+    const clientOrderId = createHash('sha256')
+      .update(`flatten|${exchange}|${normalized}|${String(minuteBucket)}`)
+      .digest('hex')
+      .slice(0, 28)
+
+    flattenInFlight.add(key)
+    logger.error(
+      {
+        event: 'orphan_flatten.start',
+        exchange,
+        symbol: desyncSymbol,
+        normalized,
+        restQty: details.restQty,
+        expectedQty,
+        surplus,
+        flattenSide,
+        clientOrderId,
+      },
+      'orphan_flatten: closing surplus position detected by reconciler'
+    )
+    try {
+      await rest.createOrder({
+        intentId: `orphan_flatten:${exchange}:${normalized}`,
+        clientOrderId,
+        exchange,
+        symbol: desyncSymbol,
+        side: flattenSide,
+        type: 'market',
+        qty: surplus,
+        reduceOnly: true,
+      })
+      logger.warn(
+        { event: 'orphan_flatten.placed', exchange, symbol: desyncSymbol, surplus, clientOrderId },
+        'orphan_flatten: reduce-only market order placed'
+      )
+    } catch (err) {
+      logger.error(
+        { event: 'orphan_flatten.failed', exchange, symbol: desyncSymbol, surplus, err },
+        'orphan_flatten: failed to place reduce-only market'
+      )
+    } finally {
+      flattenInFlight.delete(key)
     }
   }
 
@@ -656,6 +849,34 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (s) void handleMonitorExit(s, reason)
         })
       )
+
+      // Auto-flatten orphan exchange-side positions and cancel orphan reduce-only orders
+      // detected by the reconciler. Together these guarantee that when SL or TP fills, no
+      // stale orders or position residuals remain on any exchange.
+      busUnsubs.push(
+        opts.state.onDesync(event => {
+          if (event.kind === 'position_qty_mismatch') {
+            const details = event.details as {
+              symbol: string
+              localQty: number
+              restQty: number
+              restSide?: 'long' | 'short' | 'flat'
+            }
+            if (typeof details?.symbol !== 'string') return
+            void flattenOrphanPosition(event.exchange, details)
+            return
+          }
+          if (event.kind === 'orphan_reduce_only_order') {
+            const details = event.details as {
+              symbol: string
+              clientOrderId: string
+              exchangeOrderId?: string
+            }
+            if (typeof details?.symbol !== 'string' || typeof details?.clientOrderId !== 'string') return
+            void cancelOrphanReduceOnlyOrder(event.exchange, details)
+          }
+        })
+      )
     },
 
     stop(): void {
@@ -683,7 +904,16 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       }
       intentStates.set(intent.id, s)
       bus.emit('intent.created', s)
-      logger.info({ event: 'intent.created', intentId: intent.id, exchange: intent.exchange, symbol: intent.symbol, strategy: intent.strategy }, 'intent.created')
+      logger.info(
+        {
+          event: 'intent.created',
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          strategy: intent.strategy,
+        },
+        'intent.created'
+      )
       emitState(s)
 
       if (price === undefined) {
@@ -763,7 +993,16 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       transition(s, 'submitted')
       bus.emit('intent.submitted', s)
-      logger.info({ event: 'intent.submitted', intentId: intent.id, exchange: intent.exchange, symbol: intent.symbol, strategy: intent.strategy }, 'intent.submitted')
+      logger.info(
+        {
+          event: 'intent.submitted',
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          strategy: intent.strategy,
+        },
+        'intent.submitted'
+      )
 
       const entrySide: 'buy' | 'sell' = intent.side === 'long' ? 'buy' : 'sell'
 
@@ -782,7 +1021,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             reduceOnly: false,
           })
         } catch (err) {
-          logger.warn({ intentId: intent.id, err }, 'manager: durability write failed — proceeding without pre-submit persistence')
+          logger.warn(
+            { intentId: intent.id, err },
+            'manager: durability write failed — proceeding without pre-submit persistence'
+          )
         }
       }
 
@@ -841,11 +1083,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       // clientOrderId before byEntryExchangeOrderId is registered).
       // Search by clientOrderId first, then exchangeOrderId from the ACK.
       if (!TERMINAL.has(s.status) && s.status === 'working') {
-        const existing = opts.state.orders(intent.exchange).find(
-          o =>
-            o.clientOrderId === clientOrderId ||
-            (ack.exchangeOrderId !== '' && o.exchangeOrderId === ack.exchangeOrderId)
-        )
+        const existing = opts.state
+          .orders(intent.exchange)
+          .find(
+            o =>
+              o.clientOrderId === clientOrderId ||
+              (ack.exchangeOrderId !== '' && o.exchangeOrderId === ack.exchangeOrderId)
+          )
         if (existing) {
           handleEntryOrderEvent(s, existing)
         }

@@ -8,6 +8,7 @@ export type DesyncKind =
   | 'position_qty_mismatch'
   | 'balance_mismatch'
   | 'sequence_gap'
+  | 'orphan_reduce_only_order'
 
 export interface DesyncEvent {
   exchange: Exchange

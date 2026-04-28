@@ -134,7 +134,7 @@ export async function runReconcile(ctx: ReconcileContext): Promise<void> {
       ctx.emitDesync({
         exchange,
         kind: 'position_qty_mismatch',
-        details: { symbol: restPos.symbol, localQty, restQty: restPos.qty },
+        details: { symbol: restPos.symbol, localQty, restQty: restPos.qty, restSide: restPos.side },
         detectedAt: now,
       })
       ctx.applyPosition(restPos)
@@ -148,12 +148,33 @@ export async function runReconcile(ctx: ReconcileContext): Promise<void> {
       ctx.emitDesync({
         exchange,
         kind: 'position_qty_mismatch',
-        details: { symbol, localQty: localPos.qty, restQty: 0 },
+        details: { symbol, localQty: localPos.qty, restQty: 0, restSide: 'flat' },
         detectedAt: now,
       })
       ctx.applyPosition(flat)
       ctx.emitSyntheticPosition({ exchange, position: flat, seq: ctx.nextSeq(), receivedAt })
     }
+  }
+
+  // --- Orphan reduce-only orders ---
+  // Reduce-only orders left on the exchange after the position they were guarding has
+  // closed are stale: when SL fills, TP must be cancelled (and vice versa). The targeted
+  // cancellation in the manager can fail silently; this is the catch-all.
+  const restPositionSymbols = new Set(restPositions.filter(p => p.qty > EPSILON).map(p => p.symbol))
+  for (const restOrder of restOrders) {
+    if (!restOrder.reduceOnly) continue
+    if (restPositionSymbols.has(restOrder.symbol)) continue
+    ctx.emitDesync({
+      exchange,
+      kind: 'orphan_reduce_only_order',
+      details: {
+        symbol: restOrder.symbol,
+        clientOrderId: restOrder.clientOrderId,
+        exchangeOrderId: restOrder.exchangeOrderId,
+        type: restOrder.type,
+      },
+      detectedAt: now,
+    })
   }
 
   // --- Balances ---
