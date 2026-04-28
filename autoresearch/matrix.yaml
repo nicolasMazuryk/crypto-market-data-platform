@@ -9,40 +9,40 @@
 #   agent: claude | codex   (default: claude) — which coding agent drives the propose step
 #
 # Settings applied to every row unless overridden by a per-row field.
-default_iterations: 55
-max_parallel: 4            # concurrent runs
-max_parallel_backtests: 4  # concurrent ClickHouse-hitting backtests
+default_iterations: 10
+max_parallel: 5            # concurrent runs
+max_parallel_backtests: 5  # concurrent ClickHouse-hitting backtests
 iteration_timeout_ms: 600000
 backtest_timeout_ms: 600000
 per_iteration_budget_usd: 0.50
 
 runs:
   - strategy: strategy_1
-    exchange: binance
+    exchange: bybit
     agent: claude
   - strategy: strategy_2
-    exchange: binance
+    exchange: bybit
     agent: claude
   - strategy: strategy_3a
-    exchange: binance
+    exchange: bybit
     agent: claude
   - strategy: strategy_3b
-    exchange: binance
+    exchange: bybit
     agent: claude
   - strategy: strategy_4_1a
-    exchange: binance
+    exchange: bybit
     agent: claude
   # - strategy: strategy_4_1b
   #   exchange: binance
   #   agent: codex
   - strategy: strategy_4_2a
-    exchange: binance
+    exchange: bybit
     agent: claude
   # - strategy: strategy_4_2b
   #   exchange: binance
   #   agent: codex
   - strategy: strategy_4_3a
-    exchange: binance
+    exchange: bybit
     agent: claude
   # - strategy: strategy_4_3b
   #   exchange: binance

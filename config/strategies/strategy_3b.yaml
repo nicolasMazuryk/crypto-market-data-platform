@@ -3,9 +3,9 @@
 
 strategy_id: "strategy_3b"
 direction: "short"
-funding_threshold: 0.002      # 0.20%
+funding_threshold: 0.004      # 0.4%
 entry_offset_seconds: 2       # Enter at T_funding - 2s
-stop_loss: 0.0265             # 2.65%
+stop_loss: 0.020             # 2.0%
 tp_mode: "B"
 tp_multiplier: 1.5            # Not used in mode B, but required
-tp_addend: 0.0060             # TP = F + 0.60%
+tp_addend: 0.004             # TP = F + 0.4%
