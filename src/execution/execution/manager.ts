@@ -12,12 +12,11 @@ import type { MarketMetadataProvider } from '../markets/types.js'
 import type { KillSwitch } from '../risk/types.js'
 import type { Exchange, Unsubscribe } from '../types/exchange.js'
 import type { TradeIntent } from '../strategies/types.js'
-import type { ExecutionManager, ExitReason, IntentState, IntentStatus, PositionMonitor } from './types.js'
+import type { ExecutionManager, ExitOrderRef, ExitReason, IntentState, IntentStatus, PositionMonitor } from './types.js'
 import type { PreflightResult } from './preflight.js'
 import type { RiskConfig } from '../config/types.js'
 
 const TERMINAL: ReadonlySet<IntentStatus> = new Set(['exited', 'error', 'cancelled'])
-const OPEN_ORDER_STATUSES = new Set<string>(['new', 'open', 'untriggered'])
 
 export interface ExecutionManagerInitialState {
   intentStates: Map<string, IntentState>
@@ -250,6 +249,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           }
           bus.emit('order.placed', slPlaced)
           logger.info({ event: 'order.placed', ...slPlaced }, 'order.placed')
+          s.exitOrderRefs = {
+            ...s.exitOrderRefs,
+            sl: {
+              clientOrderId: canonicalize(intent.exchange, slId),
+              ...(slResult.value.exchangeOrderId ? { exchangeOrderId: slResult.value.exchangeOrderId } : {}),
+            },
+          }
         } else {
           logger.warn({ intentId: intent.id, err: slResult.reason }, 'manager: sl order placement failed')
         }
@@ -270,13 +276,16 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           }
           bus.emit('order.placed', tpPlaced)
           logger.info({ event: 'order.placed', ...tpPlaced }, 'order.placed')
+          s.exitOrderRefs = {
+            ...s.exitOrderRefs,
+            tp: {
+              clientOrderId: canonicalize(intent.exchange, tpId),
+              ...(tpResult.value.exchangeOrderId ? { exchangeOrderId: tpResult.value.exchangeOrderId } : {}),
+            },
+          }
         } else {
           logger.warn({ intentId: intent.id, err: tpResult.reason }, 'manager: tp order placement failed')
         }
-
-        // exitOrderIds: [0]=sl, [1]=tp (convention used by monitor)
-        // Store canonical form so WS event clientOrderIds match on all exchanges (e.g. OKX).
-        s.exitOrderIds = [canonicalize(intent.exchange, slId), canonicalize(intent.exchange, tpId)]
       }
     }
 
@@ -294,7 +303,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     transition(s, 'monitoring')
     monitor.arm(s)
     // REST fallback: poll for SL/TP fills in case a WS reconnect gap causes the monitor to miss them
-    if (intent.exitPolicy.kind === 'sl_tp_deadline' && s.exitOrderIds && s.exitOrderIds.length > 0) {
+    if (intent.exitPolicy.kind === 'sl_tp_deadline' && s.exitOrderRefs && (s.exitOrderRefs.sl || s.exitOrderRefs.tp)) {
       void pollForSlTpFill(s)
     }
   }
@@ -427,8 +436,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
   async function pollForSlTpFill(s: IntentState): Promise<void> {
     const { intent } = s
     const rest = restAdapters.get(intent.exchange)
-    if (!rest || !s.exitOrderIds || s.exitOrderIds.length === 0) return
-    const [slId, tpId] = s.exitOrderIds
+    if (!rest || !s.exitOrderRefs) return
+    const { sl: slRef, tp: tpRef } = s.exitOrderRefs
+    if (!slRef && !tpRef) return
 
     const POLL_INTERVAL_MS = 15_000
     const MAX_POLLS = 50 // 50 × 15s = ~12 min, well within any deadline
@@ -438,9 +448,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (s.status !== 'monitoring') return
 
       try {
-        if (slId) {
+        if (slRef) {
           const slOrder = await withGetOrderTimeout(
-            rest.getOrder({ symbol: intent.exchangeSymbol, clientOrderId: slId })
+            rest.getOrder({
+              symbol: intent.exchangeSymbol,
+              clientOrderId: slRef.clientOrderId,
+              ...(slRef.exchangeOrderId ? { exchangeOrderId: slRef.exchangeOrderId } : {}),
+            })
           )
           if (slOrder?.status === 'filled' && s.status === 'monitoring') {
             monitor.disarm(intent.id)
@@ -449,9 +463,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           }
         }
         if (s.status !== 'monitoring') return
-        if (tpId) {
+        if (tpRef) {
           const tpOrder = await withGetOrderTimeout(
-            rest.getOrder({ symbol: intent.exchangeSymbol, clientOrderId: tpId })
+            rest.getOrder({
+              symbol: intent.exchangeSymbol,
+              clientOrderId: tpRef.clientOrderId,
+              ...(tpRef.exchangeOrderId ? { exchangeOrderId: tpRef.exchangeOrderId } : {}),
+            })
           )
           if (tpOrder?.status === 'filled' && s.status === 'monitoring') {
             monitor.disarm(intent.id)
@@ -465,42 +483,26 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     }
   }
 
-  async function cancelWithVerify(
-    rest: ExchangeRestAdapter,
-    symbol: string,
-    clientOrderId: string,
-    intentId: string
-  ): Promise<void> {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        await rest.cancelOrder({ symbol, clientOrderId })
-      } catch {
-        // swallow — getOrder gives ground truth
-      }
-      const order = await rest.getOrder({ symbol, clientOrderId }).catch(() => undefined)
-      if (!order || !OPEN_ORDER_STATUSES.has(order.status)) return
-      if (attempt < 2) await new Promise<void>(r => setTimeout(r, 200))
-    }
-    logger.error(
-      { intentId, symbol, clientOrderId },
-      'manager: cancel failed after retries — orphan order may remain on exchange'
-    )
-  }
-
   async function sweepReduceOnlyOrders(
     rest: ExchangeRestAdapter,
     exchangeSymbol: string,
     intentId: string
   ): Promise<void> {
+    logger.info(
+      { event: 'oco.sweep.start', intentId, exchange: rest.exchange, symbol: exchangeSymbol },
+      'oco.sweep.start'
+    )
     try {
       const open = await rest.getOpenOrders(exchangeSymbol)
       const reduceOnly = open.filter(o => o.reduceOnly)
-      if (reduceOnly.length === 0) return
-      logger.info(
-        { intentId, exchange: rest.exchange, symbol: exchangeSymbol, count: reduceOnly.length },
-        'manager: sweeping residual reduce-only orders'
-      )
-      await Promise.allSettled(
+      if (reduceOnly.length === 0) {
+        logger.info(
+          { event: 'oco.sweep.complete', intentId, exchange: rest.exchange, symbol: exchangeSymbol, foundCount: 0, cancelledCount: 0 },
+          'oco.sweep.complete'
+        )
+        return
+      }
+      const results = await Promise.allSettled(
         reduceOnly.map(o =>
           rest
             .cancelOrder({
@@ -516,13 +518,90 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             )
         )
       )
+      const cancelledCount = results.filter(r => r.status === 'fulfilled').length
+      logger.info(
+        { event: 'oco.sweep.complete', intentId, exchange: rest.exchange, symbol: exchangeSymbol, foundCount: reduceOnly.length, cancelledCount },
+        'oco.sweep.complete'
+      )
     } catch (err) {
       logger.warn({ intentId, exchange: rest.exchange, symbol: exchangeSymbol, err }, 'manager: post-exit sweep failed')
     }
   }
 
+  async function cancelSiblingExit(
+    rest: ExchangeRestAdapter,
+    intent: TradeIntent,
+    ref: ExitOrderRef
+  ): Promise<'cancelled' | 'not_open' | 'failed'> {
+    const { exchange, symbol, exchangeSymbol } = intent
+    const intentId = intent.id
+    const ctx = { intentId, exchange, symbol, clientOrderId: ref.clientOrderId, exchangeOrderId: ref.exchangeOrderId }
+    logger.info({ event: 'oco.cancel.start', ...ctx }, 'oco.cancel.start')
+
+    async function isStillOpen(): Promise<boolean> {
+      try {
+        const open = await rest.getOpenOrders(exchangeSymbol)
+        return open.some(
+          o =>
+            o.clientOrderId === ref.clientOrderId ||
+            (ref.exchangeOrderId !== undefined && o.exchangeOrderId === ref.exchangeOrderId)
+        )
+      } catch {
+        return true // assume open if check fails
+      }
+    }
+
+    // Strategy A: cancel by clientOrderId
+    logger.info({ event: 'oco.cancel.attempt', strategy: 'A', ...ctx }, 'oco.cancel.attempt')
+    try {
+      await rest.cancelOrder({ symbol: exchangeSymbol, clientOrderId: ref.clientOrderId })
+    } catch {
+      // swallow — open-orders list is ground truth
+    }
+    if (!(await isStillOpen())) {
+      logger.info({ event: 'oco.cancel.success', strategy: 'A', ...ctx }, 'oco.cancel.success')
+      return 'cancelled'
+    }
+    logger.warn({ event: 'oco.cancel.strategy_failed', strategy: 'A', ...ctx }, 'oco.cancel.strategy_A_failed')
+
+    // Strategy B: cancel by exchangeOrderId (fallback when clientOrderId path silently no-ops)
+    if (ref.exchangeOrderId) {
+      logger.info({ event: 'oco.cancel.attempt', strategy: 'B', ...ctx }, 'oco.cancel.attempt')
+      try {
+        await rest.cancelOrder({ symbol: exchangeSymbol, exchangeOrderId: ref.exchangeOrderId })
+      } catch {
+        // swallow
+      }
+      if (!(await isStillOpen())) {
+        logger.info({ event: 'oco.cancel.success', strategy: 'B', ...ctx }, 'oco.cancel.success')
+        return 'cancelled'
+      }
+      logger.warn({ event: 'oco.cancel.strategy_failed', strategy: 'B', ...ctx }, 'oco.cancel.strategy_B_failed')
+    }
+
+    // Strategy C: sweep all reduce-only orders for symbol
+    logger.info({ event: 'oco.cancel.attempt', strategy: 'C', ...ctx }, 'oco.cancel.attempt')
+    await sweepReduceOnlyOrders(rest, exchangeSymbol, intentId)
+    if (!(await isStillOpen())) {
+      logger.info({ event: 'oco.cancel.success', strategy: 'C', ...ctx }, 'oco.cancel.success')
+      return 'cancelled'
+    }
+
+    logger.error(
+      { event: 'oco.cancel.exhausted', ...ctx },
+      'oco.cancel.exhausted: sibling order may remain on exchange'
+    )
+    return 'failed'
+  }
+
   async function handleMonitorExit(s: IntentState, reason: ExitReason): Promise<void> {
     if (TERMINAL.has(s.status) || s.status === 'exiting') return
+
+    const exitStartedAt = clock.now()
+    logger.info(
+      { event: 'intent.exiting.start', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, reason },
+      'intent.exiting.start'
+    )
 
     s.exitReason = reason
     transition(s, 'exiting')
@@ -538,26 +617,26 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
     if (reason === 'sl' || reason === 'tp') {
       // One exit order already filled (detected by monitor). Cancel the residual.
-      if (s.exitOrderIds) {
-        // sl=index 0, tp=index 1
-        const residualIdx = reason === 'sl' ? 1 : 0
-        const residualId = s.exitOrderIds[residualIdx]
-        if (residualId) {
-          await cancelWithVerify(rest, intent.exchangeSymbol, residualId, intent.id)
-        }
+      const residualRef = reason === 'sl' ? s.exitOrderRefs?.tp : s.exitOrderRefs?.sl
+      if (residualRef) {
+        await cancelSiblingExit(rest, intent, residualRef)
       }
       // Defense in depth: sweep any remaining reduce-only orders for this symbol.
-      // The targeted cancelWithVerify above can fail silently after 3 retries; a duplicate
-      // SL placement may also have slipped through. The sweep ensures no orphaned reduce-only
-      // orders remain after exit on any exchange.
+      // cancelSiblingExit above can exhaust all strategies; a duplicate SL placement may also
+      // have slipped through. The sweep ensures no orphaned reduce-only orders remain after exit.
       await sweepReduceOnlyOrders(rest, intent.exchangeSymbol, intent.id)
       recordExitMetrics(s, reason)
       transition(s, 'exited')
+      logger.info(
+        { event: 'intent.exited.complete', intentId: intent.id, exchange: intent.exchange, symbol: intent.symbol, exitReason: reason, durationMs: clock.now() - exitStartedAt },
+        'intent.exited.complete'
+      )
     } else {
       // timed / deadline / kill_switch → cancel existing exit orders, place market close
-      if (s.exitOrderIds) {
-        for (const cid of s.exitOrderIds) {
-          await cancelWithVerify(rest, intent.exchangeSymbol, cid, intent.id)
+      if (s.exitOrderRefs) {
+        const refs = [s.exitOrderRefs.sl, s.exitOrderRefs.tp].filter((r): r is ExitOrderRef => r !== undefined)
+        for (const ref of refs) {
+          await cancelSiblingExit(rest, intent, ref)
         }
       }
 
@@ -565,7 +644,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const closeId = ids.forExit(intent.id, closeKind)
       const canonCloseId = canonicalize(intent.exchange, closeId)
       // Register BEFORE placing so racing WS fill events are not missed.
-      s.exitOrderIds = [closeId]
+      s.exitOrderRefs = { close: { clientOrderId: closeId } }
       byCloseOrderId.set(canonCloseId, intent.id)
       try {
         const closeAck = await rest.createOrder({
@@ -580,6 +659,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         })
         if (closeAck.exchangeOrderId) {
           byCloseExchangeOrderId.set(closeAck.exchangeOrderId, intent.id)
+          s.exitOrderRefs = { close: { clientOrderId: closeId, exchangeOrderId: closeAck.exchangeOrderId } }
         }
         const closePlaced: OrderPlacedEvent = {
           intentId: intent.id,
@@ -599,7 +679,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         void pollForCloseFill(s, closeId, closeAck.exchangeOrderId, rest)
       } catch (err) {
         byCloseOrderId.delete(canonCloseId)
-        delete s.exitOrderIds
+        delete s.exitOrderRefs
         logger.error({ intentId: intent.id, err }, 'manager: market close placement failed')
         setError(s, 'close_failed', String(err))
       }

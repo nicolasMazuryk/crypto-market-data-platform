@@ -553,3 +553,158 @@ describe('ExecutionManager', () => {
     expect(vi.mocked(rest.setLeverage)).toHaveBeenCalledTimes(2)
   })
 })
+
+// OCO cancel: cancelSiblingExit strategies
+// The logic is exchange-agnostic — all 6 adapters expose the same cancelOrder/getOpenOrders
+// surface, so testing with the binance mock covers all exchanges.
+describe('OCO cancel strategies', () => {
+  function makeSlTpIntent(): TradeIntent {
+    return makeIntent({
+      exitPolicy: {
+        kind: 'sl_tp_deadline',
+        slPct: 1,
+        tpPct: 1.5,
+        deadlineAt: Date.now() + 60000,
+        tpVariant: 'A',
+      },
+    })
+  }
+
+  async function setupMonitoringIntent(
+    restAdapter: ExchangeRestAdapter,
+    monitor: ReturnType<typeof makeMonitor>
+  ) {
+    // Use per-clientOrderId exchangeOrderId so SL and TP get distinct exchange IDs.
+    vi.mocked(restAdapter.createOrder).mockImplementation(async params => ({
+      clientOrderId: params.clientOrderId,
+      exchangeOrderId: `eid-${params.clientOrderId}`,
+      status: 'accepted',
+      submittedAt: Date.now(),
+      ackedAt: Date.now(),
+    }))
+
+    const { manager, bus, ids } = makeManager({ restAdapter, monitor })
+    const intent = makeSlTpIntent()
+    await manager.submit(intent)
+
+    const entryCid = ids.forIntent(intent.id, 0)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(entryCid, { status: 'filled', filledQty: 0.001, avgFillPrice: 50000 }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+    // Allow handleEntryFilled (SL+TP placement) to settle
+    await new Promise(r => setTimeout(r, 10))
+
+    return { manager, intent }
+  }
+
+  // (a) TP fill → SL cancel succeeds via Strategy A
+  it('TP fill → SL cancel succeeds via Strategy A (getOpenOrders returns empty after cancel)', async () => {
+    const rest = makeRestAdapter()
+    // getOpenOrders returns [] — order is gone after Strategy A's cancelOrder
+    vi.mocked(rest.getOpenOrders).mockResolvedValue([])
+
+    const monitor = makeMonitor()
+    const { manager, intent } = await setupMonitoringIntent(rest, monitor)
+
+    expect(manager.get(intent.id)!.status).toBe('monitoring')
+    const slRef = manager.get(intent.id)!.exitOrderRefs!.sl!
+
+    monitor.triggerExit(intent.id, 'tp')
+    await new Promise(r => setTimeout(r, 10))
+
+    expect(manager.get(intent.id)!.status).toBe('exited')
+    // cancelOrder called for Strategy A (SL clientOrderId)
+    const cancelCalls = vi.mocked(rest.cancelOrder).mock.calls
+    expect(cancelCalls.some(c => c[0].clientOrderId === slRef.clientOrderId)).toBe(true)
+  })
+
+  // (b) Strategy A silent fail → Strategy B (exchangeOrderId) succeeds
+  it('Strategy A silent no-op → Strategy B (exchangeOrderId cancel) succeeds', async () => {
+    const rest = makeRestAdapter()
+    const monitor = makeMonitor()
+    const { manager, intent } = await setupMonitoringIntent(rest, monitor)
+
+    const slRef = manager.get(intent.id)!.exitOrderRefs!.sl!
+
+    // getOpenOrders: order present after Strategy A attempt, gone after Strategy B
+    vi.mocked(rest.getOpenOrders)
+      .mockResolvedValueOnce([makeOrder(slRef.clientOrderId, { reduceOnly: true, exchangeOrderId: slRef.exchangeOrderId })])
+      .mockResolvedValue([])
+
+    monitor.triggerExit(intent.id, 'tp')
+    await new Promise(r => setTimeout(r, 10))
+
+    expect(manager.get(intent.id)!.status).toBe('exited')
+    // Strategy B should have been attempted with exchangeOrderId
+    const cancelCalls = vi.mocked(rest.cancelOrder).mock.calls
+    expect(cancelCalls.some(c => c[0].exchangeOrderId === slRef.exchangeOrderId)).toBe(true)
+  })
+
+  // (c) Strategy A+B both fail → Strategy C sweep finds and cancels
+  it('Strategy A+B fail → Strategy C sweep cancels the residual order', async () => {
+    const rest = makeRestAdapter()
+    const monitor = makeMonitor()
+    const { manager, intent } = await setupMonitoringIntent(rest, monitor)
+
+    const slRef = manager.get(intent.id)!.exitOrderRefs!.sl!
+    const residualOrder = makeOrder(slRef.clientOrderId, {
+      reduceOnly: true,
+      exchangeOrderId: slRef.exchangeOrderId,
+    })
+
+    // getOpenOrders: order present for A-verify, B-verify, and inside sweep; gone on final check
+    let getOpenOrdersCount = 0
+    vi.mocked(rest.getOpenOrders).mockImplementation(() => {
+      getOpenOrdersCount++
+      // 1: after Strategy A verify; 2: after Strategy B verify; 3: inside sweepReduceOnlyOrders
+      return Promise.resolve(getOpenOrdersCount <= 3 ? [residualOrder] : [])
+    })
+
+    monitor.triggerExit(intent.id, 'tp')
+    await new Promise(r => setTimeout(r, 10))
+
+    expect(manager.get(intent.id)!.status).toBe('exited')
+    // cancelOrder called at least 3 times (A, B, sweep)
+    expect(vi.mocked(rest.cancelOrder).mock.calls.length).toBeGreaterThanOrEqual(3)
+  })
+
+  // (d) All three strategies fail → logs oco.cancel.exhausted, intent still exits
+  it('all strategies exhausted → intent still exits (position was already flat)', async () => {
+    const rest = makeRestAdapter()
+    const monitor = makeMonitor()
+    const { manager, intent } = await setupMonitoringIntent(rest, monitor)
+
+    const slRef = manager.get(intent.id)!.exitOrderRefs!.sl!
+    // getOpenOrders always returns the order (cancel never takes effect)
+    vi.mocked(rest.getOpenOrders).mockResolvedValue([
+      makeOrder(slRef.clientOrderId, { reduceOnly: true, exchangeOrderId: slRef.exchangeOrderId }),
+    ])
+
+    monitor.triggerExit(intent.id, 'tp')
+    await new Promise(r => setTimeout(r, 10))
+
+    // Position was flat (TP filled), so intent must still reach exited
+    expect(manager.get(intent.id)!.status).toBe('exited')
+  })
+
+  // (e) SL fill → TP cancel (symmetric path)
+  it('SL fill → TP cancel succeeds via Strategy A', async () => {
+    const rest = makeRestAdapter()
+    vi.mocked(rest.getOpenOrders).mockResolvedValue([])
+
+    const monitor = makeMonitor()
+    const { manager, intent } = await setupMonitoringIntent(rest, monitor)
+
+    const tpRef = manager.get(intent.id)!.exitOrderRefs!.tp!
+
+    monitor.triggerExit(intent.id, 'sl')
+    await new Promise(r => setTimeout(r, 10))
+
+    expect(manager.get(intent.id)!.status).toBe('exited')
+    const cancelCalls = vi.mocked(rest.cancelOrder).mock.calls
+    expect(cancelCalls.some(c => c[0].clientOrderId === tpRef.clientOrderId)).toBe(true)
+  })
+})

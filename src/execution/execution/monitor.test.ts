@@ -16,7 +16,7 @@ function makeState(
   intentId: string,
   kind: 'timed' | 'sl_tp_deadline',
   now: number,
-  exitOrderIds?: string[]
+  slTpIds?: [string, string]
 ): IntentState {
   const exitPolicy =
     kind === 'timed'
@@ -52,7 +52,9 @@ function makeState(
     status: 'monitoring',
     filledQty: 0.001,
     updatedAt: now,
-    ...(exitOrderIds !== undefined ? { exitOrderIds } : {}),
+    ...(slTpIds !== undefined
+      ? { exitOrderRefs: { sl: { clientOrderId: slTpIds[0] }, tp: { clientOrderId: slTpIds[1] } } }
+      : {}),
   }
 }
 

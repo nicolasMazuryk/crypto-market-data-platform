@@ -16,12 +16,17 @@ export type IntentStatus =
 
 export type ExitReason = 'timed' | 'tp' | 'sl' | 'deadline' | 'kill_switch' | 'error'
 
+export interface ExitOrderRef {
+  clientOrderId: string
+  exchangeOrderId?: string
+}
+
 export interface IntentState {
   intent: TradeIntent
   status: IntentStatus
   entryOrderId?: string
   entryExchangeOrderId?: string
-  exitOrderIds?: string[]
+  exitOrderRefs?: { sl?: ExitOrderRef; tp?: ExitOrderRef; close?: ExitOrderRef }
   filledQty: number
   avgEntryPrice?: number
   avgExitPrice?: number

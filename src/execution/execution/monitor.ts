@@ -78,10 +78,8 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         logger.debug({ intentId, delay }, 'monitor.armed.timed')
       } else {
         // sl_tp_deadline
-        const exitOrderIds = state.exitOrderIds ?? []
-        // exitOrderIds[0] = sl, exitOrderIds[1] = tp (by manager convention)
-        const slId = exitOrderIds[0]
-        const tpId = exitOrderIds[1]
+        const slId = state.exitOrderRefs?.sl?.clientOrderId
+        const tpId = state.exitOrderRefs?.tp?.clientOrderId
 
         let settled = false
 

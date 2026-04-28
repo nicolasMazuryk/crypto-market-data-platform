@@ -6,7 +6,7 @@ import type { EventBus } from '../core/types.js'
 import type { ExchangeRestAdapter, OrderSide } from '../adapters/rest/types.js'
 import type { Exchange } from '../types/exchange.js'
 import { normalizeSymbol } from '../../utils/symbol-normalizer.js'
-import type { IntentState, IntentStatus } from '../execution/types.js'
+import type { ExitOrderRef, IntentState, IntentStatus } from '../execution/types.js'
 import type { TradeIntent, ExitPolicy } from '../strategies/types.js'
 import type { ExecutionManagerInitialState } from '../execution/manager.js'
 import type { PersistenceMetrics } from '../observability/metrics.js'
@@ -177,13 +177,18 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
       }
 
       if (exitOrders.length > 0) {
-        // Convention: [0]=SL (stop_market), [1]=TP (limit).
-        const sortedExitOrders = [...exitOrders].sort((a, b) => {
-          if (a.type === 'stop_market') return -1
-          if (b.type === 'stop_market') return 1
-          return 0
+        const toRef = (o: OrderRow): ExitOrderRef => ({
+          clientOrderId: o.clientOrderId,
+          ...(o.exchangeOrderId ? { exchangeOrderId: o.exchangeOrderId } : {}),
         })
-        state.exitOrderIds = sortedExitOrders.map(o => o.clientOrderId)
+        const slOrder = exitOrders.find(o => o.type === 'stop_market')
+        const tpOrder = exitOrders.find(o => o.type === 'limit')
+        const closeOrder = exitOrders.find(o => o.type === 'market')
+        state.exitOrderRefs = {
+          ...(slOrder ? { sl: toRef(slOrder) } : {}),
+          ...(tpOrder ? { tp: toRef(tpOrder) } : {}),
+          ...(closeOrder ? { close: toRef(closeOrder) } : {}),
+        }
         for (const o of exitOrders) {
           byCloseOrderId.set(o.clientOrderId, intent.id)
           if (o.exchangeOrderId) {
