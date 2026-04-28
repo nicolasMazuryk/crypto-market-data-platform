@@ -3,9 +3,8 @@ import type { ExecutionIds } from '../core/ids.js'
 import { computeOrderQty } from './shared/sizing.js'
 import type { EvalContext, StrategyRule, TradeIntent } from './types.js'
 
-// takeProfitPercent from config is intentionally ignored — TP is computed from the
-// funding rate at decision time (variant A: |F|*1.5, variant B: |F|+0.4).
-// The field exists in config/schema for spec compatibility only.
+// TP is computed from the funding rate at decision time
+// (variant A: |F|*1.5, variant B: |F|+0.4).
 export function createStrategy3Rule(opts: {
   variant: 'A' | 'B'
   ids: ExecutionIds

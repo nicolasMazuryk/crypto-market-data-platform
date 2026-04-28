@@ -3,11 +3,11 @@
 
 strategy_id: "strategy_4_1a"
 direction: "long"
-funding_threshold: 0.006      # 0.6%
-entry_offset_seconds: 5       # Setup at T_funding - 5s
-ladder_count: 5
-ladder_top_mult: 0.4
-ladder_bottom_mult: 1.5
-take_profit: 0.002            # 0.2% above P_avg
-deadline_seconds: 60
+funding_threshold: 0.024      # 2.4%
+entry_offset_seconds: 4       # Setup at T_funding - 4s
+ladder_count: 2
+ladder_top_mult: 1.4
+ladder_bottom_mult: 1.6
+take_profit: 0.0031           # 0.31% above P_avg
+deadline_seconds: 25
 include_funding: false

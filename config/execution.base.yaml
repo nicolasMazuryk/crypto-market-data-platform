@@ -88,7 +88,7 @@ observability:
   metricsPort: 9464              # port — Prometheus /metrics scrape target
   healthPort: 9466               # port — /health (liveness) and /ready (readiness) endpoints
   tracing:
-    enabled: false
+    enabled: true
     serviceName: execution-engine
     sampler: parent              # 'always_on' | 'parent' | {ratio: 0.0–1.0}
     # endpoint: http://localhost:4318/v1/traces  # OTLP HTTP collector

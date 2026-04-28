@@ -22,6 +22,3 @@ The Strategy Execution Engine evaluates funding-rate arbitrage opportunities acr
 - **Canonical strategy specs**: [`docs-strategy/funding_rate_strategies.md`](../../../docs-strategy/funding_rate_strategies.md) — original business-level strategy specifications and profit thesis
 - **Pipeline-side ops** (market sync, funding sync, quote sync): [`RUNBOOK.md`](../../../RUNBOOK.md)
 
-## Open questions
-
-- `.context/plans/document-the-strategy-execution-engine-4-step-roll.md`, `.context/plans/deploy-execution-engine-to-hetzner-multi-step-impl.md`, `.context/attachments/plan-v26.md`, and `.context/attachments/pasted_text_*.txt` all contain historical references to `DEPLOY.md` and `CONFIG.md`. These are internal planning artifacts in a read-only path; they have not been updated.

@@ -69,8 +69,6 @@ tpPct = |fundingRatePercent| × tpVariantAMultiplier   (default multiplier: 1.5)
 TP price = P_entry × (1 − tpPct / 100)
 ```
 
-The `takeProfitPercent` config key is **not used at runtime** — the actual TP is computed dynamically from the funding rate at decision time. `takeProfitPercent` exists only for spec-compatibility.
-
 **Stop loss** (stop_market order, reduce-only):
 
 ```
@@ -89,7 +87,6 @@ The first exit to trigger (SL, TP, or deadline) causes the manager to cancel the
 | `negativeFundingThresholdPercent` | number | `-0.5` | Same signal filter as strategy_1 |
 | `entryOffsetSeconds` | number | `10` | Same as strategy_1 |
 | `stopLossPercent` | number | `1` | SL distance from entry in % (exits short if price rises by this %) |
-| `takeProfitPercent` | number | `1` | **Not used at runtime** — exists for spec compatibility only |
 | `tpVariantAMultiplier` | number | `1.5` | TP distance = \|fundingRatePercent\| × this multiplier |
 | `tpVariantBOffsetPercent` | number | `0.4` | Used by strategy_3b only; ignored here |
 | `deadlineSeconds` | number | `300` | Max hold from `nextFundingTimestamp` before forced market close |

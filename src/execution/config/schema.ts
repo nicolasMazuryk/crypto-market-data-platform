@@ -58,7 +58,6 @@ const Strategy3SharedFields = {
   negativeFundingThresholdPercent: z.number().default(-0.5),
   entryOffsetSeconds: z.number().default(10),
   stopLossPercent: z.number().default(1),
-  takeProfitPercent: z.number().default(1),
   tpVariantAMultiplier: z.number().default(1.5),
   tpVariantBOffsetPercent: z.number().default(0.4),
   deadlineSeconds: z.number().default(300),

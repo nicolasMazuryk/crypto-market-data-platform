@@ -24,7 +24,6 @@ strategies:
     negativeFundingThresholdPercent: -0.25  # % — minimum funding rate to trigger entry
     entryOffsetSeconds: 2                   # s — enter N seconds before funding time
     stopLossPercent: 1.0                    # % — stop-loss distance from entry price
-    takeProfitPercent: 0                    # % — 0 = compute from funding rate × tpVariantAMultiplier
     tpVariantAMultiplier: 1.5              # x — TP = |fundingRate| × multiplier
     tpVariantBOffsetPercent: 0.4           # % — TP offset for variant B (unused in 3a)
     deadlineSeconds: 300                    # s — max time in position before forced exit
@@ -36,7 +35,6 @@ strategies:
   #  negativeFundingThresholdPercent: -0.4
   #  entryOffsetSeconds: 4
   #  stopLossPercent: 1.0
-  #  takeProfitPercent: 0
   #  tpVariantAMultiplier: 1.5
   #  tpVariantBOffsetPercent: 0.4
   #  deadlineSeconds: 300

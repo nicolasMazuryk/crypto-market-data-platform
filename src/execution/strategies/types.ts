@@ -21,7 +21,6 @@ export interface Strategy3SharedConfig {
   negativeFundingThresholdPercent: number
   entryOffsetSeconds: number
   stopLossPercent: number
-  takeProfitPercent: number
   tpVariantAMultiplier: number
   tpVariantBOffsetPercent: number
   deadlineSeconds: number

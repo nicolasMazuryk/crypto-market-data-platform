@@ -27,12 +27,11 @@ strategies:
   - id: strategy_3a
     enabled: true
     negativeFundingThresholdPercent: -0.4  # % — entry threshold
-    entryOffsetSeconds: 2                   # s
+    entryOffsetSeconds: 1                   # s
     stopLossPercent: 2.0                    # %
-    takeProfitPercent: 0                    # % — 0 = dynamic TP via tpVariantAMultiplier
     tpVariantAMultiplier: 1.5              # x
     tpVariantBOffsetPercent: 0.4           # % — unused in 3a
-    deadlineSeconds: 600                    # s — max position lifetime
+    deadlineSeconds: 3300                   # s — max position lifetime (55 minutes)
     amountUsd: 20                           # USD
     leverage: 5                             # x
 
@@ -41,7 +40,6 @@ strategies:
   #  negativeFundingThresholdPercent: -0.4
   #  entryOffsetSeconds: 4
   #  stopLossPercent: 1.0
-  #  takeProfitPercent: 0
   #  tpVariantAMultiplier: 1.5
   #  tpVariantBOffsetPercent: 0.4
   #  deadlineSeconds: 300
