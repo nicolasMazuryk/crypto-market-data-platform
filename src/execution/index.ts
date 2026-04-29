@@ -189,6 +189,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
       logger: logger.childFor('funding'),
       metrics: fundingMetrics,
       exchanges: fundingExchanges,
+      ...(marketsHandle ? { markets: marketsHandle.provider } : {}),
       ...(config.testing?.fundingTimeOverride
         ? { fundingTimeOverrideMs: config.testing.fundingTimeOverride.resolvedMs }
         : {}),

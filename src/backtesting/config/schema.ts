@@ -96,6 +96,8 @@ export interface Strategy2Config {
   retracement_pct: number
   /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
+  /** Stop-loss multiplier: SL at entry_price × (1 − |F| × sl_mult) */
+  sl_mult: number
 }
 
 /** Strategy 3: Negative Funding SHORT - Ride the Drop */
@@ -136,6 +138,8 @@ export interface Strategy41Config {
   deadline_seconds: number
   /** Whether funding fee is applied to the position */
   include_funding: boolean
+  /** Stop-loss multiplier: SL at P_avg × (1 − |F| × sl_mult) */
+  sl_mult: number
 }
 
 /** Strategy 4.2: Negative Funding Single LONG - Post-Funding Entry */
@@ -151,6 +155,8 @@ export interface Strategy42Config {
   /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
   include_funding: boolean
+  /** Stop-loss multiplier: SL at entry_price × (1 − |F| × sl_mult); must be > limit_offset_mult */
+  sl_mult: number
 }
 
 /** Strategy 4.3: Negative Funding LONG - Limit Entry with SL/TP */

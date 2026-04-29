@@ -11,3 +11,4 @@ ladder_bottom_mult: 1.5
 take_profit: 0.002           # 0.2% above P_avg
 deadline_seconds: 600         # Max hold after T_funding (10 minutes)
 include_funding: false
+sl_mult: 1.5                  # SL at P_avg × (1 − F × 1.5)

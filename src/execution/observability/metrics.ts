@@ -276,6 +276,7 @@ export interface FundingMetrics {
   snapshotsTotal: Gauge
   snapshotsStale: Gauge
   overrideAppliedTotal: Counter
+  evictedTotal: Counter
 }
 
 export function registerFundingMetrics(registry: MetricsRegistry): FundingMetrics {
@@ -293,6 +294,11 @@ export function registerFundingMetrics(registry: MetricsRegistry): FundingMetric
       'funding_override_applied_total',
       'Funding snapshots rewritten by time override',
       ['exchange']
+    ),
+    evictedTotal: registry.counter(
+      'funding_snapshots_evicted_total',
+      'Funding snapshots evicted from store',
+      ['exchange', 'reason']
     ),
   }
 }

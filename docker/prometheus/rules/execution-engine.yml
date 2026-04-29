@@ -32,8 +32,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Intents decided but no fills in last 15 minutes"
-          description: "Strategy is deciding intents but none are filling — check adapters and WS connection"
+          summary: "No fills in 15 min on {{ $labels.exchange }}/{{ $labels.strategy }}"
+          description: "Intents are being decided but none are filling — check order adapter and WS connection for {{ $labels.exchange }}"
 
       # WS reconnect storm
       - alert: WsReconnectStorm
@@ -93,5 +93,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Stale funding snapshots on {{ $labels.exchange }}"
-          description: "{{ $value }} stale funding snapshots — funding puller may be stuck"
+          summary: "{{ $value }} stale funding snapshots on {{ $labels.exchange }}"
+          description: "Funding data not refreshing for {{ $value }} symbol(s) — symbols may have been delisted on {{ $labels.exchange }} or the funding puller is stuck"

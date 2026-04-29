@@ -74,9 +74,9 @@ function injectCredentials(
     const prefix = ec.credentialsEnvPrefix
     const apiKey = env[`${prefix}_API_KEY`]
     const apiSecret = env[`${prefix}_API_SECRET`]
-    const apiPassphrase = env[`${prefix}_API_PASSPHRASE`]
+    const apiPassphrase = env[`${prefix}_API_PASSPHRASE`] ?? env[`${prefix}_API_PASS`]
     if (!apiKey || !apiSecret) {
-      if (mode !== 'dry_run') {
+      if (mode !== 'dry_run' && ec.enabled) {
         throw new Error(
           `missing credentials for exchange ${ec.exchange} (expected ${prefix}_API_KEY and ${prefix}_API_SECRET)`
         )

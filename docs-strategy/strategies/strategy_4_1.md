@@ -30,6 +30,7 @@ file. For global variables and hard bounds, see `_globals.md`.
 | Ladder top | `ladder_top_mult` | 0.4 |
 | Ladder bottom | `ladder_bottom_mult` | 1.5 |
 | Take-profit | `TP` | 0.2% above average filled price |
+| Stop-loss multiplier | `sl_mult` | 1.5 — SL at `P_avg × (1 − F × sl_mult)` |
 | Deadline | `T_deadline` | `T_funding + 60s` |
 
 ### Selection Logic
@@ -56,10 +57,13 @@ THEN trigger strategy
 
 3. AFTER fills (or partial fills):
    → Compute P_avg = weighted average of filled order prices
+   → Place STOP-LOSS: SELL STOP at P_avg × (1 − F × sl_mult)
    → Place TAKE-PROFIT: SELL LIMIT at P_avg × (1 + TP)
+   → Both active from the first candle after the last fill (OCO pair)
 
-4. EXIT:
-   → TP hit, OR
+4. EXIT (whichever comes first):
+   → SL hit: SELL STOP fires (taker fee)
+   → TP hit: SELL LIMIT fills (maker fee)
    → T_deadline reached → SELL MARKET (reduce-only) + cancel unfilled limits
 ```
 
@@ -109,8 +113,8 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 
 | | Direction | Entry | Exit | Profits From | Costs | Key Risk |
 |---|---|---|---|---|---|---|
-| **S4.1a** | LONG | Ladder limits (−5s) | Limit (TP) or Market (deadline) | Delta recovery | Fees, unfilled orders | No recovery, full drop |
-| **S4.1b** | LONG | Ladder limits (−5s) | Limit (TP) or Market (deadline) | Delta recovery + funding | Fees, unfilled orders | No recovery, full drop |
+| **S4.1a** | LONG | Ladder limits (−5s) | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery | Fees, unfilled orders | No recovery; sharp drop triggers SL |
+| **S4.1b** | LONG | Ladder limits (−5s) | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery + funding | Fees, unfilled orders | No recovery; sharp drop triggers SL |
 
 ---
 

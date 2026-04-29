@@ -1,5 +1,5 @@
 /**
- * Live driver for strategy_3a / strategy_3b against Binance mainnet.
+ * Live driver for strategy_3a / strategy_3b against exchange mainnet.
  * Runs the engine for one funding cycle on a manually-chosen symbol and prints a post-trade summary.
  *
  * Usage:
@@ -7,8 +7,10 @@
  *   tsx --env-file=.env src/execution/scripts/live-strategy-3.ts --config config/execution.dry-run.yaml --symbol ETHUSDT
  *   tsx --env-file=.env src/execution/scripts/live-strategy-3.ts --config config/execution.live.yaml --symbol ETHUSDT --timeout-minutes 90
  *   tsx --env-file=.env src/execution/scripts/live-strategy-3.ts --config config/execution.live.yaml --symbol ETHUSDT --funding-fee-grace-seconds 10
+ *   tsx --env-file=.env src/execution/scripts/live-strategy-3.ts --config config/execution.live-gateio-test.yaml --exchange gateio --symbol BTCUSDT
+ *   tsx --env-file=.env src/execution/scripts/live-strategy-3.ts --config config/execution.live-okx-test.yaml --exchange okx --symbol ETHUSDT --funding 17:30:00 --ack-live-funding-override
  *
- * Prerequisites: BINANCE_API_KEY and BINANCE_API_SECRET set in .env (for live config)
+ * Prerequisites: exchange API key and secret set in .env (e.g. BINANCE_API_KEY / GATEIO_API_KEY).
  * Config must have exactly one of strategy_3a or strategy_3b enabled (they are mutually exclusive).
  *
  * Strategy 3 goes short on high-negative-funding symbols — the position pays funding,
@@ -19,6 +21,7 @@
 import { parseArgs } from 'node:util'
 
 import { startEngine } from '../index.js'
+import type { Exchange } from '../types/exchange.js'
 import type { FundingFeeEvent } from '../adapters/privatews/types.js'
 import type { IntentState } from '../execution/types.js'
 import { createIds } from '../core/ids.js'
@@ -33,6 +36,11 @@ async function main(): Promise<void> {
     options: {
       symbol: { type: 'string' },
       config: { type: 'string' },
+      exchange: { type: 'string' },
+      funding: { type: 'string' },
+      'ack-live-funding-override': { type: 'boolean' },
+      'metrics-port': { type: 'string' },
+      'health-port': { type: 'string' },
       'timeout-minutes': { type: 'string' },
       'funding-fee-grace-seconds': { type: 'string' },
     },
@@ -63,12 +71,18 @@ async function main(): Promise<void> {
     return
   }
 
-  console.log(JSON.stringify({ event: 'driver.starting', symbol, configPath }))
+  const exchange = (values.exchange ?? 'binance') as Exchange
+
+  console.log(JSON.stringify({ event: 'driver.starting', symbol, configPath, exchange }))
 
   const handle = await startEngine({
     configPath,
-    exchangeFilter: ['binance'],
+    exchangeFilter: [exchange],
     symbolFilter: [symbol],
+    ...(values.funding !== undefined ? { fundingTimeOverride: values.funding } : {}),
+    ...(values['ack-live-funding-override'] ? { ackLiveFundingOverride: true } : {}),
+    ...(values['metrics-port'] !== undefined ? { metricsPort: parseInt(values['metrics-port'], 10) } : {}),
+    ...(values['health-port'] !== undefined ? { healthPort: parseInt(values['health-port'], 10) } : {}),
   })
 
   const { bus, manager } = handle

@@ -3,6 +3,7 @@ import type { Logger } from 'pino'
 import type { CcxtExchange } from '../../exchanges/types.js'
 import type { ExchangeConfig } from '../config/types.js'
 import type { EventBus } from '../core/types.js'
+import type { MarketMetadataProvider } from '../markets/types.js'
 import type { FundingMetrics } from '../observability/metrics.js'
 import type { Exchange, Unsubscribe } from '../types/exchange.js'
 import { createBinancePuller } from './binance.js'
@@ -18,6 +19,7 @@ export interface FundingRateSourceOptions {
   logger: Logger
   metrics: FundingMetrics
   exchanges: ExchangeConfig[]
+  markets?: MarketMetadataProvider
   ccxtFactory?: (exchange: Exchange) => CcxtExchange
   fundingTimeOverrideMs?: number
 }
@@ -58,6 +60,7 @@ export function createFundingRateSource(options: FundingRateSourceOptions): Fund
   let overrideWarned = false
   const timers = new Map<Exchange, ReturnType<typeof setInterval>>()
   const inFlight = new Map<Exchange, boolean>()
+  let unsubMarkets: Unsubscribe | undefined
 
   const pullers = buildPullers(options.exchanges, options.ccxtFactory)
 
@@ -153,6 +156,20 @@ export function createFundingRateSource(options: FundingRateSourceOptions): Fund
       }
       metrics.snapshotsStale.set(staleCount, { exchange })
 
+      if (options.markets) {
+        const listedSymbols = new Set(options.markets.list(exchange).map(m => m.symbol))
+        const orphans: string[] = []
+        for (const symbol of exchangeStore.keys()) {
+          if (!listedSymbols.has(symbol)) orphans.push(symbol)
+        }
+        if (orphans.length > 0) {
+          for (const symbol of orphans) exchangeStore.delete(symbol)
+          logger.info({ exchange, count: orphans.length, reason: 'reconcile_orphan' }, 'funding.snapshot.evicted')
+          metrics.evictedTotal.inc(orphans.length, { exchange, reason: 'reconcile_orphan' })
+          metrics.snapshotsTotal.set(exchangeStore.size, { exchange })
+        }
+      }
+
       logger.info({ exchange, total: snapshots.length, emitted, durationMs }, 'funding.refreshed')
     } catch (err) {
       const durationMs = Date.now() - startMs
@@ -174,6 +191,34 @@ export function createFundingRateSource(options: FundingRateSourceOptions): Fund
     },
 
     async start(): Promise<void> {
+      if (options.markets) {
+        unsubMarkets = options.markets.onUpdate(delta => {
+          if (delta.removed.length === 0) return
+          const byExchange = new Map<Exchange, string[]>()
+          for (const m of delta.removed) {
+            const list = byExchange.get(m.exchange) ?? []
+            list.push(m.symbol)
+            byExchange.set(m.exchange, list)
+          }
+          for (const [exchange, symbols] of byExchange) {
+            const exchangeStore = store.get(exchange)
+            if (!exchangeStore) continue
+            const evicted: string[] = []
+            for (const symbol of symbols) {
+              if (exchangeStore.delete(symbol)) evicted.push(symbol)
+            }
+            if (evicted.length > 0) {
+              logger.info(
+                { exchange, symbols: evicted, count: evicted.length, reason: 'market_removed' },
+                'funding.snapshot.evicted'
+              )
+              metrics.evictedTotal.inc(evicted.length, { exchange, reason: 'market_removed' })
+              metrics.snapshotsTotal.set(exchangeStore.size, { exchange })
+            }
+          }
+        })
+      }
+
       await Promise.allSettled(pullers.map(p => pullOne(p)))
 
       for (const puller of pullers) {
@@ -191,6 +236,8 @@ export function createFundingRateSource(options: FundingRateSourceOptions): Fund
     stop(): Promise<void> {
       for (const timer of timers.values()) clearInterval(timer)
       timers.clear()
+      unsubMarkets?.()
+      unsubMarkets = undefined
       return Promise.resolve()
     },
   }

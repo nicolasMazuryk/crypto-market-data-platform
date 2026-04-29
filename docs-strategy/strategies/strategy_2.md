@@ -19,6 +19,7 @@ file. For global variables and hard bounds, see `_globals.md`.
 | Entry offset | `T_entry` | `T_funding − 5s` |
 | Retracement level | `retracement_pct` | 0.50 (50%), range: [0.3, 0.618] |
 | Deadline exit | `T_deadline` | `T_funding + 60s` |
+| Stop-loss multiplier | `sl_mult` | 1.5 — SL at `P_entry × (1 − F × sl_mult)` |
 
 ### Selection Logic
 
@@ -34,26 +35,34 @@ THEN trigger strategy
 1. AT T_funding - 5s:
    → ENTRY: BUY MARKET at best ask
    → Record P_entry
+   → Place STOP-LOSS: SELL STOP at P_entry × (1 − F × sl_mult)
+     (active immediately from entry+1s)
 
 2. AFTER T_funding (price drop occurs):
    → Observe P_funding (price at HH:MM:00)
    → Observe P_low (lowest price in the drop)
    → Compute retracement target:
      P_target = P_low + (P_funding - P_low) × retracement_pct
+   → Place TAKE-PROFIT: SELL LIMIT at P_target
+     (active from T_low+1s — TP only valid after P_low is identified)
 
 3. EXIT (whichever comes first):
-   → SELL LIMIT at P_target (placed after P_low is identified)
-   → OR if T_deadline reached and limit not filled:
-     SELL MARKET (reduce-only) at T_deadline
+   → SL hit: SELL STOP triggers at P_SL (taker fee)
+   → TP hit: SELL LIMIT at P_target (maker fee)
+   → T_deadline reached and neither filled:
+     SELL MARKET (reduce-only) at T_deadline (taker fee)
 ```
 
 ### P&L Formula
 
 ```
-IF limit order filled:
+IF SL hit:
+  DELTA_PNL = (P_SL_fill - P_entry) / P_entry   # P_SL_fill = sl_price × (1 - slippage)
+  FEES      = taker_fee × 2                      # market entry + stop-market exit
+IF TP hit (limit order filled):
   DELTA_PNL = (P_target - P_entry) / P_entry
   FEES      = taker_fee + maker_fee              # market entry + limit exit
-ELSE (deadline exit):
+IF deadline exit:
   DELTA_PNL = (P_deadline - P_entry) / P_entry
   FEES      = taker_fee × 2                      # two market orders
 
@@ -84,6 +93,7 @@ NET_PNL     = DELTA_PNL + FUNDING_PNL - FEES
 | `F_threshold` | 2 | float | 0.4% |
 | `entry_offset_seconds` | 2 | int | 5s |
 | `retracement_pct` | 2 | float | 0.50 |
+| `sl_mult` | 2 | float | 1.5 |
 | `T_deadline` | 2 | int (seconds) | 60s |
 
 ---
@@ -92,7 +102,7 @@ NET_PNL     = DELTA_PNL + FUNDING_PNL - FEES
 
 | | Direction | Entry | Exit | Profits From | Costs | Key Risk |
 |---|---|---|---|---|---|---|
-| **S2** | LONG | Market (−5s) | Limit (retrace) or Market (deadline) | Funding fee + partial retrace | Residual delta + fees | No retracement |
+| **S2** | LONG | Market (−5s) | Stop (SL), Limit (retrace), or Market (deadline) | Funding fee + partial retrace | Residual delta + fees | No retracement; sharp drop triggers SL |
 
 ---
 

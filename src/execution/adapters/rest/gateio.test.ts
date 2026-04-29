@@ -135,7 +135,7 @@ describe('gateio stop_market params', () => {
     return { adapter, ccxt: mockCcxt }
   }
 
-  it('sell-side stop_market sends stopPrice and side without triggerDirection', async () => {
+  it('sell-side stop_market maps type to market and sends stopPrice + reduceOnly without text or triggerDirection', async () => {
     const { adapter, ccxt } = makeAdapter()
     await adapter.createOrder({
       intentId: 'i1',
@@ -149,13 +149,20 @@ describe('gateio stop_market params', () => {
       reduceOnly: true,
     })
     const call = vi.mocked(ccxt.createOrder).mock.calls[0]!
+    // type must be 'market' so CCXT sets initial.price = '0' on the price-triggered endpoint
+    expect(call[1]).toBe('market')
     expect(call[2]).toBe('sell')
     const params = call[5] as Record<string, unknown>
     expect(params).toHaveProperty('stopPrice', 44000)
+    // reduceOnly (camelCase) so CCXT places it inside initial.reduce_only for trigger orders
+    expect(params).toHaveProperty('reduceOnly', true)
+    expect(params).not.toHaveProperty('reduce_only')
+    // text must be absent — CCXT cannot relay it into initial.text and Gate.io rejects top-level unknown fields
+    expect(params).not.toHaveProperty('text')
     expect(params).not.toHaveProperty('triggerDirection')
   })
 
-  it('buy-side stop_market sends stopPrice and side without triggerDirection', async () => {
+  it('buy-side stop_market maps type to market and sends stopPrice + reduceOnly without text or triggerDirection', async () => {
     const { adapter, ccxt } = makeAdapter()
     await adapter.createOrder({
       intentId: 'i1',
@@ -169,9 +176,51 @@ describe('gateio stop_market params', () => {
       reduceOnly: true,
     })
     const call = vi.mocked(ccxt.createOrder).mock.calls[0]!
+    expect(call[1]).toBe('market')
     expect(call[2]).toBe('buy')
     const params = call[5] as Record<string, unknown>
     expect(params).toHaveProperty('stopPrice', 46000)
+    expect(params).toHaveProperty('reduceOnly', true)
+    expect(params).not.toHaveProperty('reduce_only')
+    expect(params).not.toHaveProperty('text')
     expect(params).not.toHaveProperty('triggerDirection')
+  })
+
+  it('limit order sends timeInForce key (not tif) so CCXT lowercases it before dispatch', async () => {
+    const { adapter, ccxt } = makeAdapter()
+    await adapter.createOrder({
+      intentId: 'i1',
+      clientOrderId: 'tp-cid',
+      exchange: 'gateio',
+      symbol: 'BTCUSDT',
+      side: 'sell',
+      type: 'limit',
+      qty: 0.001,
+      price: 50000,
+      timeInForce: 'GTC',
+      reduceOnly: true,
+    })
+    const call = vi.mocked(ccxt.createOrder).mock.calls[0]!
+    const params = call[5] as Record<string, unknown>
+    // Must use `timeInForce` key so CCXT maps GTC→gtc; raw `tif: 'GTC'` is rejected by Gate.io
+    expect(params).toHaveProperty('timeInForce', 'GTC')
+    expect(params).not.toHaveProperty('tif')
+  })
+
+  it('non-stop order still sends text (client order id)', async () => {
+    const { adapter, ccxt } = makeAdapter()
+    await adapter.createOrder({
+      intentId: 'i1',
+      clientOrderId: 'entry-cid',
+      exchange: 'gateio',
+      symbol: 'BTCUSDT',
+      side: 'buy',
+      type: 'market',
+      qty: 0.001,
+    })
+    const call = vi.mocked(ccxt.createOrder).mock.calls[0]!
+    expect(call[1]).toBe('market')
+    const params = call[5] as Record<string, unknown>
+    expect(params).toHaveProperty('text', 'entry-cid')
   })
 })

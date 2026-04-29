@@ -106,7 +106,7 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 | `ladder_bottom_mult` | 4.1 | float | 1.5 |
 | `limit_offset_mult` | 4.2 | float | 1.0 |
 | `entry_mult` | 4.3 | float | 0.75 |
-| `sl_mult` | 4.3 | float | 1.5 |
+| `sl_mult` | 2, 4.1, 4.2, 4.3 | float | 1.5 |
 | `T_deadline` | 2, 4.x | int (seconds) | 60s |
 | `F_A_threshold` | 5 | float | 1.5% |
 | `F_B_max` | 5 | float | 0.4% |
@@ -141,3 +141,6 @@ reverted:
 - `exit_offset_seconds  >= 2`
 - `deadline_seconds`: 2 <= value <= 180
 - `ladder_count >= 2`
+- `sl_mult` (strategies 2, 4.1): >= 0.5 AND <= 4.0
+- `sl_mult` (strategy 4.2): >= 1.0 AND <= 4.0; MUST be > `limit_offset_mult`
+- `sl_mult` (strategy 4.3): >= 0.5 AND <= 4.0; MUST be > `entry_mult`

@@ -28,7 +28,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-arbinet}
       - POSTGRES_USER=${POSTGRES_USER:-arbinet}

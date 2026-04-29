@@ -3,6 +3,8 @@ import type { Logger } from 'pino'
 
 import type { CcxtFundingRate, CcxtMarket } from '../../exchanges/types.js'
 import type { ExchangeConfig } from '../config/types.js'
+import type { MarketMetadata, MarketMetadataProvider, MarketMetadataDelta } from '../markets/types.js'
+import type { Exchange, Unsubscribe } from '../types/exchange.js'
 
 const { MockEx, ccxtMock } = vi.hoisted(() => {
   class MockEx {
@@ -105,6 +107,51 @@ function makeOptions(exchanges: SupportedExchange[] = ['binance', 'bitget']) {
   const logger = makeLogger()
   const exchangeConfigs = exchanges.map(makeExchangeConfig)
   return { bus, registry, metrics, logger, exchangeConfigs }
+}
+
+function makeMockMarketsProvider(initial: Map<Exchange, string[]>): {
+  provider: MarketMetadataProvider
+  trigger(delta: MarketMetadataDelta): void
+} {
+  const listeners: ((delta: MarketMetadataDelta) => void)[] = []
+  const listed = new Map(initial)
+
+  const provider: MarketMetadataProvider = {
+    list(exchange: Exchange): MarketMetadata[] {
+      return (listed.get(exchange) ?? []).map(symbol => ({
+        exchange,
+        symbol,
+        exchangeSymbol: symbol,
+        contractSize: 1,
+        pricePrecision: 2,
+        amountPrecision: 4,
+        makerFee: 0,
+        takerFee: 0,
+        status: 'trading',
+      }))
+    },
+    get: vi.fn(),
+    resolve: vi.fn(),
+    refresh: vi.fn(),
+    onUpdate(listener: (delta: MarketMetadataDelta) => void): Unsubscribe {
+      listeners.push(listener)
+      return () => {
+        const idx = listeners.indexOf(listener)
+        if (idx >= 0) listeners.splice(idx, 1)
+      }
+    },
+  }
+
+  return {
+    provider,
+    trigger(delta: MarketMetadataDelta) {
+      for (const m of delta.removed) {
+        const symbols = listed.get(m.exchange)
+        if (symbols) listed.set(m.exchange, symbols.filter(s => s !== m.symbol))
+      }
+      for (const listener of listeners) listener(delta)
+    },
+  }
 }
 
 describe('FundingRateSource', () => {
@@ -415,6 +462,107 @@ describe('FundingRateSource', () => {
 
     const copy = handle.source.latest('binance')
     copy.clear()
+
+    expect(handle.source.latest('binance').size).toBe(1)
+
+    await handle.stop()
+  })
+
+  it('markets.updated with removed symbols evicts snapshots and increments metric', async () => {
+    MockEx.setup.binanceusdm = {
+      markets: {
+        'BTC/USDT:USDT': makePerpMarket('BTCUSDT', 'BTC/USDT:USDT'),
+        'ETH/USDT:USDT': makePerpMarket('ETHUSDT', 'ETH/USDT:USDT'),
+      },
+      rates: {
+        'BTC/USDT:USDT': makeFundingRate('BTC/USDT:USDT'),
+        'ETH/USDT:USDT': makeFundingRate('ETH/USDT:USDT'),
+      },
+    }
+
+    const { bus, metrics, logger, registry } = makeOptions(['binance'])
+    const mockMarkets = makeMockMarketsProvider(
+      new Map([['binance' as Exchange, ['BTCUSDT', 'ETHUSDT']]])
+    )
+    const handle = createFundingRateSource({
+      bus,
+      logger,
+      metrics,
+      exchanges: [makeExchangeConfig('binance')],
+      markets: mockMarkets.provider,
+    })
+    await handle.source.start()
+
+    expect(handle.source.latest('binance').size).toBe(2)
+
+    mockMarkets.trigger({
+      added: [],
+      changed: [],
+      removed: [
+        { exchange: 'binance' as Exchange, symbol: 'ETHUSDT', exchangeSymbol: 'ETH/USDT:USDT', contractSize: 1, pricePrecision: 2, amountPrecision: 4, makerFee: 0, takerFee: 0, status: 'delisted' },
+      ],
+    })
+
+    expect(handle.source.latest('binance').size).toBe(1)
+    expect(handle.source.latest('binance').has('BTCUSDT')).toBe(true)
+    expect(handle.source.latest('binance').has('ETHUSDT')).toBe(false)
+
+    const rendered = await registry.render()
+    expect(rendered).toMatch(/funding_snapshots_evicted_total\{exchange="binance",reason="market_removed"\} 1/)
+
+    await handle.stop()
+  })
+
+  it('reconcile on pull drops symbols absent from markets.list()', async () => {
+    MockEx.setup.binanceusdm = {
+      markets: {
+        'BTC/USDT:USDT': makePerpMarket('BTCUSDT', 'BTC/USDT:USDT'),
+        'DEGEN/USDT:USDT': makePerpMarket('DEGENUSDT', 'DEGEN/USDT:USDT'),
+      },
+      rates: {
+        'BTC/USDT:USDT': makeFundingRate('BTC/USDT:USDT'),
+        'DEGEN/USDT:USDT': makeFundingRate('DEGEN/USDT:USDT'),
+      },
+    }
+
+    // markets provider only knows about BTCUSDT — DEGENUSDT is delisted
+    const { bus, metrics, logger, registry } = makeOptions(['binance'])
+    const mockMarkets = makeMockMarketsProvider(
+      new Map([['binance' as Exchange, ['BTCUSDT']]])
+    )
+    const handle = createFundingRateSource({
+      bus,
+      logger,
+      metrics,
+      exchanges: [makeExchangeConfig('binance')],
+      markets: mockMarkets.provider,
+    })
+    await handle.source.start()
+
+    expect(handle.source.latest('binance').size).toBe(1)
+    expect(handle.source.latest('binance').has('BTCUSDT')).toBe(true)
+    expect(handle.source.latest('binance').has('DEGENUSDT')).toBe(false)
+
+    const rendered = await registry.render()
+    expect(rendered).toMatch(/funding_snapshots_evicted_total\{exchange="binance",reason="reconcile_orphan"\} 1/)
+
+    await handle.stop()
+  })
+
+  it('funding source works without markets option (back-compat)', async () => {
+    MockEx.setup.binanceusdm = {
+      markets: { 'BTC/USDT:USDT': makePerpMarket('BTCUSDT', 'BTC/USDT:USDT') },
+      rates: { 'BTC/USDT:USDT': makeFundingRate('BTC/USDT:USDT') },
+    }
+
+    const { bus, metrics, logger } = makeOptions(['binance'])
+    const handle = createFundingRateSource({
+      bus,
+      logger,
+      metrics,
+      exchanges: [makeExchangeConfig('binance')],
+    })
+    await handle.source.start()
 
     expect(handle.source.latest('binance').size).toBe(1)
 

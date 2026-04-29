@@ -27,6 +27,7 @@ file. For global variables and hard bounds, see `_globals.md`.
 | Funding threshold | `F_threshold` | 0.6% |
 | Limit offset | `limit_offset_mult` | 1.0 (i.e., `F × 1.0`) |
 | Take-profit | `TP` | 0.2% above entry |
+| Stop-loss multiplier | `sl_mult` | 1.5 — SL at `entry × (1 − F × sl_mult)`; MUST be > `limit_offset_mult` |
 | Deadline | `T_deadline` | `T_funding + 60s` |
 
 ### Execution Flow
@@ -37,10 +38,13 @@ file. For global variables and hard bounds, see `_globals.md`.
    → Place BUY LIMIT at: P_current × (1 - F × limit_offset_mult)
 
 2. IF filled:
+   → Place STOP-LOSS: SELL STOP at P_fill × (1 − F × sl_mult)
    → Place TAKE-PROFIT: SELL LIMIT at P_fill × (1 + TP)
+   → Both active from the first candle after entry fill (OCO pair)
 
-3. EXIT:
-   → TP hit, OR
+3. EXIT (whichever comes first):
+   → SL hit: SELL STOP fires (taker fee)
+   → TP hit: SELL LIMIT fills (maker fee)
    → T_deadline → SELL MARKET + cancel unfilled limit
 ```
 
@@ -66,8 +70,8 @@ Same structure as 4.1 but with single entry price instead of `P_avg`. Use Scenar
 
 | | Direction | Entry | Exit | Profits From | Costs | Key Risk |
 |---|---|---|---|---|---|---|
-| **S4.2a** | LONG | Single limit (−5s) | Limit (TP) or Market (deadline) | Delta recovery | Fees | Not filled, or no recovery |
-| **S4.2b** | LONG | Single limit (−5s) | Limit (TP) or Market (deadline) | Delta recovery + funding | Fees | Not filled, or no recovery |
+| **S4.2a** | LONG | Single limit (−5s) | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery | Fees | Not filled, or sharp drop triggers SL |
+| **S4.2b** | LONG | Single limit (−5s) | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery + funding | Fees | Not filled, or sharp drop triggers SL |
 
 ---
 

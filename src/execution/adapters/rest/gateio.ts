@@ -20,11 +20,24 @@ const gateioSpec: CcxtAdapterSpec = {
       throw err
     }
   },
+  // Gate.io's CCXT path for perp triggers only recognises 'market' and 'limit'.
+  // 'stop_market' is unknown → CCXT skips the isMarketOrder branch → initial.price
+  // becomes priceToPrecision(symbol, undefined) which is rejected. Map to 'market'
+  // so CCXT sets initial.price = '0' and routes to the price-triggered endpoint.
+  mapCcxtOrderType: (req: OrderRequest) => (req.type === 'stop_market' ? 'market' : req.type),
   buildCreateOrderParams: (req: OrderRequest) => {
-    const p: Record<string, unknown> = { text: req.clientOrderId }
+    const p: Record<string, unknown> = {}
+    // For price-triggered orders (SL), CCXT cannot relay `text` into initial.text;
+    // it would land at the top level of the price_orders body which Gate.io rejects.
+    if (req.stopPrice === undefined) p.text = req.clientOrderId
     if (req.leverage !== undefined) p.leverage = req.leverage
-    if (req.reduceOnly) p.reduce_only = true
-    if (req.timeInForce) p.tif = req.timeInForce
+    // Use CCXT's unified camelCase key so it's placed inside initial.reduce_only for
+    // trigger orders (CCXT omits `reduceOnly` and sets request['initial']['reduce_only']).
+    if (req.reduceOnly) p.reduceOnly = true
+    // Pass as `timeInForce` so CCXT maps it through options['timeInForce'] → lowercase value
+    // ('GTC'→'gtc', 'IOC'→'ioc', …). Passing `tif` directly bypasses the mapping and
+    // leaves the raw uppercase string in the request, which Gate.io rejects.
+    if (req.timeInForce) p.timeInForce = req.timeInForce
     if (req.stopPrice !== undefined) p.stopPrice = req.stopPrice
     return p
   },

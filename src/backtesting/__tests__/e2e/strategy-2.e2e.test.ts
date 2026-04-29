@@ -1,25 +1,26 @@
 import { describe, it, expect } from 'vitest'
 import { Strategy2 } from '../../strategies/strategy-2.js'
-import { buildWindow, makeFundingEvent, BINANCE_FEES } from './fixtures.js'
+import { buildWindow, makeFundingEvent, BINANCE_FEES, DEFAULT_SLIPPAGE } from './fixtures.js'
 
 const TOLERANCE = 1e-10
 
 describe('E2E: Strategy 2 — Retracement Exit', () => {
-  const strategy = new Strategy2()
-  strategy.initialize(
-    {
-      strategy_id: 'strategy_2',
-      direction: 'long',
-      funding_threshold: 0.004,
-      entry_offset_seconds: 5,
-      retracement_pct: 0.5,
-      deadline_seconds: 60,
-    },
-    BINANCE_FEES,
-    0
-  )
-
   it('Scenario 3: Retracement hit before deadline', () => {
+    const strategy = new Strategy2()
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_2',
+        direction: 'long',
+        funding_threshold: 0.004,
+        entry_offset_seconds: 5,
+        retracement_pct: 0.5,
+        deadline_seconds: 60,
+        sl_mult: 1.5, // SL at ~50005 * 0.985 = ~49254 — far below test drop of 49800
+      },
+      BINANCE_FEES,
+      0
+    )
+
     const fundingTime = new Date('2025-06-01T00:00:00Z')
     const basePrice = 50000
 
@@ -67,6 +68,21 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
   })
 
   it('Scenario 4: No retracement, deadline exit', () => {
+    const strategy = new Strategy2()
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_2',
+        direction: 'long',
+        funding_threshold: 0.004,
+        entry_offset_seconds: 5,
+        retracement_pct: 0.5,
+        deadline_seconds: 60,
+        sl_mult: 1.5, // SL at ~50005 * 0.985 = ~49255 — max drop is 50000 - 60*5 = 49700 > 49255
+      },
+      BINANCE_FEES,
+      0
+    )
+
     const fundingTime = new Date('2025-06-01T00:00:00Z')
 
     // Price drops steadily and keeps dropping — P_low keeps updating so
@@ -92,5 +108,43 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     expect(result.exit_reason).toBe('DEADLINE')
     // Deadline exit: two taker fees
     expect(result.pnl.fees).toBeCloseTo(0.0004 * 2, TOLERANCE)
+  })
+
+  it('Scenario SL: Sharp drop triggers SL before T_low', () => {
+    // Entry at T-5s. Price immediately drops below SL right after entry.
+    // SL fires at entry+1s (pre-funding), before T_low can be identified.
+    // F = -0.01, entry fill ≈ 50005, slPrice = 50005 * (1 - 0.01 * 1.5) ≈ 49254.9
+    const strategy = new Strategy2()
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_2',
+        direction: 'long',
+        funding_threshold: 0.004,
+        entry_offset_seconds: 5,
+        retracement_pct: 0.5,
+        deadline_seconds: 60,
+        sl_mult: 1.5,
+      },
+      BINANCE_FEES,
+      DEFAULT_SLIPPAGE
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+
+    const window = buildWindow({
+      fundingTime,
+      basePrice: 50000,
+      priceFn: offset => {
+        if (offset <= -5) return 50000 // entry candle
+        return 49200 // drops well below slPrice (~49255) right after entry
+      },
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('SL_HIT')
+    expect(result.pnl.net_pnl).toBeLessThan(0)
   })
 })

@@ -1,27 +1,30 @@
 import type { FeeSchedule, Strategy2Config } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
-import { checkLimitFill } from '../orders/limit-order.js'
+import { simulateOrders } from '../orders/simulator.js'
 import { calculatePnl } from '../pnl/calculator.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
 import type { ExitReason } from '../config/schema.js'
+import type { Order } from '../orders/types.js'
 
 /**
  * Strategy 2: Negative Funding LONG - Retracement Exit
  *
  * Enter LONG at T_funding - entry_offset. After the drop, wait for a partial
- * retracement. Exit at retracement target or at deadline.
+ * retracement. Exit at retracement target, stop-loss, or deadline.
+ * SL is active from entry+1s; TP only valid after T_low is identified.
  */
 export class Strategy2 implements BaseStrategy {
   readonly id = 'strategy_2'
   private config!: Strategy2Config
   private feeSchedule!: FeeSchedule
+  private slippage = 0
 
-  initialize(config: Strategy2Config, feeSchedule: FeeSchedule, slippage?: number): void {
-    void slippage
+  initialize(config: Strategy2Config, feeSchedule: FeeSchedule, slippage: number): void {
     this.config = config
     this.feeSchedule = feeSchedule
+    this.slippage = slippage
   }
 
   shouldTrigger(event: FundingEvent): boolean {
@@ -29,6 +32,7 @@ export class Strategy2 implements BaseStrategy {
   }
 
   execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
+    const absF = Math.abs(event.funding_rate)
     const entryTime = new Date(event.funding_time.getTime() - this.config.entry_offset_seconds * 1000)
     const deadlineTime = new Date(event.funding_time.getTime() + this.config.deadline_seconds * 1000)
 
@@ -39,9 +43,11 @@ export class Strategy2 implements BaseStrategy {
     const entryCandle = data.getRowAt(entryTs)
     if (!entryCandle) return null
 
-    // BUY MARKET at entry
     const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry')
     if (!entryFill) return null
+
+    // SL anchored to entry price
+    const slPrice = entryFill.price * (1 - absF * this.config.sl_mult)
 
     // Get P_funding (price at funding time)
     const fundingCandle = data.getRowAt(fundingTs)
@@ -64,37 +70,65 @@ export class Strategy2 implements BaseStrategy {
 
     if (pLow === Infinity) return null
 
-    // Compute retracement target
+    // Retracement target (TP) — only valid after T_low
     const pTarget = pLow + (pFunding - pLow) * this.config.retracement_pct
 
-    // Check if price reaches P_target AFTER T_low and BEFORE T_deadline
-    let exit: { price: number; reason: ExitReason; feeType: 'maker' | 'taker'; ts: string } | null = null
+    // T_low + 1s: TP only active after T_low is identified
+    const tLowRow = postFundingRows[tLowIdx]
+    if (!tLowRow) return null
+    const tLowPlus1Ts = toClickHouseDateTime(new Date(new Date(tLowRow.ts.replace(' ', 'T') + 'Z').getTime() + 1000))
 
-    // Search for retracement fill AFTER T_low
-    for (let i = tLowIdx + 1; i < postFundingRows.length; i++) {
-      const row = postFundingRows[i]
-      if (!row) continue
-      const fill = checkLimitFill('sell', pTarget, row, 1, 'tp')
-      if (fill) {
-        exit = { price: pTarget, reason: 'TP_HIT', feeType: 'maker', ts: row.ts }
-        break
-      }
-    }
+    // Simulate SL+TP over [entry+1s, deadline]
+    const entryPlus1Ts = toClickHouseDateTime(new Date(entryTime.getTime() + 1000))
+    const allPostEntryRows = data.getRowsInRange(entryPlus1Ts, deadlineTs)
+    if (allPostEntryRows.length === 0) return null
 
-    if (!exit) {
-      // Deadline exit
+    const orders: Order[] = [
+      {
+        side: 'sell',
+        type: 'stop',
+        price: slPrice,
+        quantity: 1,
+        validFrom: entryPlus1Ts,
+        validUntil: deadlineTs,
+        reduceOnly: true,
+        label: 'sl',
+      },
+      {
+        side: 'sell',
+        type: 'limit',
+        price: pTarget,
+        quantity: 1,
+        validFrom: tLowPlus1Ts,
+        validUntil: deadlineTs,
+        reduceOnly: true,
+        label: 'tp',
+      },
+    ]
+
+    const { fills } = simulateOrders(orders, allPostEntryRows, this.slippage, 'long')
+
+    let exit: { price: number; reason: ExitReason; feeType: 'maker' | 'taker'; ts: string }
+
+    const slFill = fills.find(f => f.label === 'sl')
+    const tpFill = fills.find(f => f.label === 'tp')
+
+    if (slFill) {
+      exit = { price: slFill.price, reason: 'SL_HIT', feeType: 'taker', ts: slFill.timestamp }
+    } else if (tpFill) {
+      exit = { price: tpFill.price, reason: 'TP_HIT', feeType: 'maker', ts: tpFill.timestamp }
+    } else {
       const deadlineCandle = data.getRowAt(deadlineTs)
-      if (!deadlineCandle) {
-        // Use last available candle
-        const lastRow = postFundingRows[postFundingRows.length - 1]
-        if (!lastRow) return null
-        const deadlineFill = fillMarketOrder('sell', lastRow, 1, 'deadline')
-        if (!deadlineFill) return null
-        exit = { price: deadlineFill.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
-      } else {
+      if (deadlineCandle) {
         const deadlineFill = fillMarketOrder('sell', deadlineCandle, 1, 'deadline')
         if (!deadlineFill) return null
         exit = { price: deadlineFill.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
+      } else {
+        const lastRow = allPostEntryRows[allPostEntryRows.length - 1]
+        if (!lastRow) return null
+        const lastFill = fillMarketOrder('sell', lastRow, 1, 'deadline')
+        if (!lastFill) return null
+        exit = { price: lastFill.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
       }
     }
 

@@ -60,25 +60,81 @@ other absolute path outside the worktree
 
 ## Hard parameter bounds
 
-Proposals outside any of these ranges will be rejected by the loader. Do not propose values outside these ranges, ever.
+Proposals outside any of these ranges will be rejected by the loader. Do not propose values outside these ranges, ever. Each param is listed under the strategy/strategies that use it — do not edit params your strategy does not own.
 
-- `funding_threshold`:    >= 0.001  AND <  0.025
-- `stop_loss`:            >= 0.002  AND <  0.04
-- `tp_multiplier`:        >= 1.2    AND <  10
-- `tp_addend`:            >= 0.002  AND <  0.04
-- `entry_offset_seconds`: >= 2      AND <  5
-- `exit_offset_seconds`:  >= 1      AND <  10
-- `deadline_seconds`:     >= 1      AND <= 1800
-- `ladder_count`:         >= 2      AND <  8
-- `ladder_top_mult`:      >= 0.4    AND <  3
-- `ladder_bottom_mult`:   >= 1      AND <  4
-- `retracement_pct`:      >= 0.1    AND <  1.5
-- `take_profit`:          >= 0.001  AND <  0.03
-- `limit_offset_mult`:    >= 1.1    AND <  4
-- `entry_mult`:           >= 1.1    AND <  4
-- `sl_mult`:              >= 0.2    AND <  3
+### strategy_1 (LONG — instant exit)
+- `funding_threshold`:    >= 0.001  AND <= 0.015
+- `entry_offset_seconds`: >= 1       AND <= 5
+- `exit_offset_seconds`:  >= 2       AND <= 5
 
-**IMPORTANT:** `ladder_top_mult` MUST always be strictly less than `ladder_bottom_mult` (`ladder_top_mult < ladder_bottom_mult`).
+### strategy_2 (LONG — retracement exit)
+- `funding_threshold`:    >= 0.001  AND <= 0.015
+- `entry_offset_seconds`: >= 1       AND <= 5
+- `retracement_pct`:      >= 0.20    AND <= 2.00
+- `deadline_seconds`:     >= 5      AND <= 900
+- `sl_mult`:              >= 0.50     AND <= 4.0    ← SL at entry × (1 − F × mult)
+
+### strategy_3a / strategy_3b (SHORT — ride the drop)
+- `funding_threshold`:    >= 0.001  AND <= 0.015
+- `entry_offset_seconds`: >= 1       AND <= 5
+- `stop_loss`:            >= 0.002   AND <= 0.040
+- `tp_multiplier`:        >= 1.2     AND <= 5.0    ← TP_a = F × multiplier; values < 1 target less than the funding; only active in mode A
+- `tp_addend`:            >= 0.001   AND <= 0.040  ← TP_b = F + addend; only active in mode B
+- `deadline_seconds`:     >= 3      AND <= 900
+
+### strategy_4_1a / strategy_4_1b (LONG — ladder limit)
+- `funding_threshold`:    >= 0.001  AND <= 0.015
+- `entry_offset_seconds`: >= 1       AND <= 5
+- `ladder_count`:         >= 2       AND <= 8
+- `ladder_top_mult`:      >= 0.3     AND <= 2.5
+- `ladder_bottom_mult`:   >= 0.8     AND <= 4.0
+- `take_profit`:          >= 0.001   AND <= 0.020
+- `deadline_seconds`:     >= 10      AND <= 900
+- `sl_mult`:              >= 1.0     AND <= 5.0    ← SL at P_avg × (1 − F × mult)
+
+### strategy_4_2a / strategy_4_2b (LONG — single limit)
+- `funding_threshold`:    >= 0.001  AND <= 0.015
+- `entry_offset_seconds`: >= 1       AND <= 5
+- `limit_offset_mult`:    >= 0.3     AND <= 3.0    ← entry at P × (1 − F × mult); default is 1.0
+- `take_profit`:          >= 0.001   AND <= 0.020
+- `deadline_seconds`:     >= 10      AND <= 900
+- `sl_mult`:              >= 0.6     AND <= 4.0    ← SL at entry × (1 − F × mult); MUST be > limit_offset_mult
+
+### strategy_4_3a / strategy_4_3b (LONG — limit with SL/TP)
+- `funding_threshold`:    >= 0.001  AND <= 0.015
+- `entry_offset_seconds`: >= 1       AND <= 5
+- `entry_mult`:           >= 0.3     AND <= 3.0    ← entry at P × (1 − F × mult); default is 1.0
+- `sl_mult`:              >= 0.5     AND <= 4.0    ← SL at P × (1 − F × mult); MUST be > entry_mult
+- `take_profit`:          >= 0.002   AND <= 0.020
+- `deadline_seconds`:     >= 10      AND <= 900
+
+### strategy_5 (SHORT on B — cross-exchange arbitrage)
+- `funding_threshold_a`:      >= 0.005  AND <= 0.050  ← min abs(F) required on Exchange A
+- `funding_max_b`:            >= 0.001  AND <= 0.020  ← max abs(F) allowed on Exchange B; MUST be < funding_threshold_a
+- `funding_spread_threshold`: >= 0.001  AND <= 0.040  ← MUST satisfy: funding_threshold_a − funding_max_b >= funding_spread_threshold
+- `entry_offset_seconds`:     >= 1      AND <= 5
+- `deadline_seconds`:         >= 10     AND <= 900
+- `vol_ratio_threshold`:      >= 1.0    AND <= 10.0   ← ratio A/B; < 1 inverts the price-leadership assumption
+
+## Coupling rules
+
+**IMPORTANT:** Violating any of these produces a parameter set that can never make money or will never fire. Do not propose a YAML that breaks them.
+
+1. **`ladder_top_mult < ladder_bottom_mult`** (strategy_4_1x): ladder range is `F × (bottom_mult − top_mult)`; if inverted the ladder collapses to nothing.
+2. **`sl_mult > ladder_bottom_mult`** (strategy_4_1x): the lowest ladder rung sits at `P × (1 − F × ladder_bottom_mult)` and SL at `pAvg × (1 − F × sl_mult)`. If `sl_mult ≤ ladder_bottom_mult`, the SL sits at or above the deepest rung → any partial fill at the lower rungs stops out immediately. (Combined with rule #1, this also implies `sl_mult > ladder_top_mult`.)
+3. **`entry_mult < sl_mult`** (strategy_4_3x): entry price is `P × (1 − F × entry_mult)`, SL is `P × (1 − F × sl_mult)`. If `sl_mult ≤ entry_mult`, the SL sits at or above the entry limit → position stops out the instant it fills.
+4. **`limit_offset_mult < sl_mult`** (strategy_4_2x): entry limit sits at `P × (1 − F × limit_offset_mult)`, SL at `entry × (1 − F × sl_mult)`. If `sl_mult ≤ limit_offset_mult`, SL is at or above the entry limit price → position stops out instantly on fill.
+5. **`sl_mult + retracement_pct > 1`** (strategy_2): SL is anchored at `entry × (1 − F × sl_mult)`; the retracement TP sits roughly at `entry × (1 − F × (1 − retracement_pct))` assuming the post-funding drop scales with F. If `sl_mult ≤ 1 − retracement_pct`, SL sits above the retracement target → SL fires during the drop before TP can ever resolve.
+6. **`funding_threshold_a − funding_max_b >= funding_spread_threshold`** (strategy_5): all three gates must fire simultaneously for a trade to trigger. If this inequality fails, no trade ever fires regardless of market conditions.
+7. **`tp_multiplier × funding_threshold <= stop_loss × 4`** (strategy_3a/3b, soft guideline): if `TP_a` is far larger than the SL budget, the TP almost never resolves before deadline; widening TP without also widening stop_loss (or tightening deadline) is wasteful.
+
+## Direction-aware reasoning
+
+The engine handles signs; you edit only magnitudes. But the direction determines which side of entry each boundary sits on — keep this in mind when reasoning about whether tightening or widening a param helps or hurts:
+
+- **LONG strategies (1, 2, 4.1, 4.2, 4.3):** triggered by negative funding. TP is placed **above** the fill price; SL (where present, strategies 2, 4.1, 4.2, 4.3) is placed **below**. Widening `take_profit` makes the target harder to reach. Widening `sl_mult` increases the loss budget and reduces premature stop-outs.
+- **SHORT strategies (3a, 3b):** also triggered by negative funding, but the position is short — profit comes from the price drop. TP is placed **below** entry; SL is placed **above**. Tightening `stop_loss` means a smaller adverse move above entry triggers the stop. Raising `tp_multiplier` makes the target further below entry and harder to reach.
+- **strategy_5 (SHORT on B):** TP is placed **below** entry on Exchange B. The TP magnitude is derived inside the engine as `(F_A − F_B) / 2`; you tune only the gating thresholds (`funding_threshold_a`, `funding_max_b`, `funding_spread_threshold`) and `deadline_seconds`.
 
 ## Response shape (keep it tight)
 
