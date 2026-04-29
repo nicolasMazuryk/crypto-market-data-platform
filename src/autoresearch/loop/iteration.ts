@@ -51,6 +51,17 @@ function truncate(s: string, max: number): string {
   return `${s.slice(0, max - 3)}...`
 }
 
+function extractBacktestError(stderr: string, stdout: string): string {
+  const combined = `${stderr}\n${stdout}`
+  for (const line of combined.split('\n')) {
+    const t = line.trim()
+    if (/^(Fatal error:|Error:|TypeError:|ValidationError:)/i.test(t)) {
+      return truncate(t, 300)
+    }
+  }
+  return ''
+}
+
 function copyReport(srcReportPath: string, repoRoot: string, tag: string, iter: number): string {
   const reportsDir = getReportsDir(repoRoot, tag)
   fs.mkdirSync(reportsDir, { recursive: true })
@@ -196,7 +207,13 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   if (backtest.timedOut || backtest.code !== 0 || backtest.reportPath === null) {
     // Backtest failed — revert YAML edits so we stay on last keep.
     await revertWorktreeToHead(worktreePath)
-    const err = backtest.timedOut ? 'backtest_timeout' : `backtest_exit_code=${String(backtest.code)}`
+    let err: string
+    if (backtest.timedOut) {
+      err = 'backtest_timeout'
+    } else {
+      const detail = extractBacktestError(backtest.stderr, backtest.stdout)
+      err = detail ? `backtest_exit_code=${String(backtest.code)}: ${detail}` : `backtest_exit_code=${String(backtest.code)}`
+    }
     return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt, agentTokensUsed, agentCostUsd)
   }
 

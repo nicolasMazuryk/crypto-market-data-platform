@@ -38,6 +38,9 @@ function compactRow(row: ResultRow, rationale?: string): string {
   const ecq = row.equity_curve_quality_score === null ? 'n/a' : row.equity_curve_quality_score.toFixed(1)
   const ui = row.ulcer_index === null ? 'n/a' : row.ulcer_index.toFixed(3)
   let line = `  iter=${String(row.iter)} status=${row.status} pnl=${pnl} sharpe=${sharpe} trades=${trades} ecq=${ecq} ui=${ui} desc="${row.description}"`
+  if (row.status === 'error' && row.error_message.length > 0) {
+    line += ` error="${row.error_message.replace(/"/g, "'")}"`
+  }
   if (rationale !== undefined && rationale.length > 0) {
     line += ` rationale="${rationale.replace(/"/g, "'")}"`
   }

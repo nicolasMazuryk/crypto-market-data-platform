@@ -55,17 +55,33 @@ other absolute path outside the worktree
   proposal.json).
 - Do NOT call Bash for any reason — not `cat`, `ls`, `find`, `git`, or
   anything else. The harness rejects shell output and you do not need it.
-- Do NOT verify your edit after applying it. The Edit tool errors loudly if
-  the change failed; trust it and stop.
 
 ## Hard parameter bounds
 
 Proposals outside any of these ranges will be rejected by the loader. Do not propose values outside these ranges, ever. Each param is listed under the strategy/strategies that use it — do not edit params your strategy does not own.
 
+<<<<<<< Updated upstream
 ### strategy_1 (LONG — instant exit)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
 - `entry_offset_seconds`: >= 1       AND <= 5
 - `exit_offset_seconds`:  >= 2       AND <= 5
+=======
+- `funding_threshold`:    >= 0.001  AND <  0.015
+- `stop_loss`:            >= 0.002  AND <  0.04
+- `tp_multiplier`:        >= 1.2    AND <  10
+- `tp_addend`:            >= 0.002  AND <  0.04
+- `entry_offset_seconds`: >= 1      AND <  5
+- `exit_offset_seconds`:  >= 1      AND <  10
+- `deadline_seconds`:     >= 1      AND <= 1800
+- `ladder_count`:         >= 2      AND <  8
+- `ladder_top_mult`:      >= 0.4    AND <  3
+- `ladder_bottom_mult`:   >= 1      AND <  4
+- `retracement_pct`:      >= 0.1    AND <  1.5
+- `take_profit`:          >= 0.001  AND <  0.03
+- `limit_offset_mult`:    >= 1.1    AND <  4
+- `entry_mult`:           >= 1.1    AND <  4
+- `sl_mult`:              >= 0.2    AND <  3
+>>>>>>> Stashed changes
 
 ### strategy_2 (LONG — retracement exit)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
