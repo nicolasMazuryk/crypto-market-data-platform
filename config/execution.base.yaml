@@ -30,7 +30,7 @@ exchanges:
       buckets: []
 
   - exchange: okx
-    enabled: false
+    enabled: true
     credentialsEnvPrefix: OKX
     marketRefreshMs: 60000
     fundingPullMs: 10000
@@ -40,7 +40,7 @@ exchanges:
       buckets: []
 
   - exchange: bitget
-    enabled: false
+    enabled: true
     credentialsEnvPrefix: BITGET
     marketRefreshMs: 60000
     fundingPullMs: 10000
@@ -60,7 +60,7 @@ exchanges:
       buckets: []
 
   - exchange: kucoin
-    enabled: false
+    enabled: true
     credentialsEnvPrefix: KUCOIN
     marketRefreshMs: 60000
     fundingPullMs: 10000
