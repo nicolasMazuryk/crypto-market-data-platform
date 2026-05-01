@@ -28,5 +28,3 @@ ansible/inventory/hosts.ini
 # Terraform
 **/.terraform/providers/
 terraform/terraform.tfvars
-.claude/settings.local.json
-.mcp.json
