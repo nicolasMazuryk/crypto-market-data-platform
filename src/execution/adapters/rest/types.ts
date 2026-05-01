@@ -66,6 +66,9 @@ export interface Balance {
   asset: string
   available: number
   locked: number
+  /** Total wallet equity (e.g. Binance walletBalance, Gate total, OKX cashBal). */
+  walletBalance?: number
+  unrealizedPnl?: number
   updatedAt: number
 }
 

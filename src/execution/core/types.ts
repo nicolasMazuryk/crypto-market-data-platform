@@ -7,6 +7,7 @@ import type {
   OrderEvent,
   PositionEvent,
   BalanceEvent,
+  FillEvent,
   FundingFeeEvent,
   ConnectionStateEvent,
 } from '../adapters/privatews/types.js'
@@ -66,6 +67,7 @@ export interface DomainEvents {
   'ws.order': (event: OrderEvent) => void
   'ws.position': (event: PositionEvent) => void
   'ws.balance': (event: BalanceEvent) => void
+  'ws.fill': (event: FillEvent) => void
   'ws.funding_fee': (event: FundingFeeEvent) => void
   'ws.connection': (event: ConnectionStateEvent) => void
   'state.desync': (event: DesyncEvent) => void

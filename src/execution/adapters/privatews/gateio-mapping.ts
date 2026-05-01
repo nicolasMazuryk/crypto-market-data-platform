@@ -133,13 +133,15 @@ export function parseGateioMessage(
     const balances: BalanceEvent[] = []
     for (const item of items) {
       const d = item as GateioBalanceData
-      const available = parseFloat(d.available ?? d.balance ?? '0')
+      const available = parseFloat(d.available ?? '0')
       const locked = parseFloat(d.order_margin ?? '0')
+      const total = parseFloat(d.balance ?? 'NaN')
       const balance: Balance = {
         exchange,
         asset: d.currency,
         available,
         locked,
+        ...(!isNaN(total) ? { walletBalance: total } : {}),
         updatedAt: receivedAt,
       }
       balances.push({ exchange, balance, seq, receivedAt })

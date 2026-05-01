@@ -12,10 +12,10 @@ import {
   runs,
   tradeIntents,
   orders,
-  opsEvents,
-  positionsHistory,
+  fills,
   balancesHistory,
   fundingAttributions,
+  opsEvents,
 } from './drizzle/schema.js'
 
 export interface PersistenceWriterOptions {
@@ -77,6 +77,12 @@ const PERMANENT_PG_ERROR_CODES = new Set([
   '42P01', // undefined_table
 ])
 
+/** Convert a numeric value to a finite string, or null for NaN/undefined/Infinity. */
+function toFiniteStr(v: number | undefined | null): string | null {
+  if (v == null || !isFinite(v)) return null
+  return String(v)
+}
+
 /** Write a single row to the appropriate DB table. Exported for pre-recovery WAL drain. */
 export async function writeRowToDb(
   db: DrizzleDb,
@@ -92,9 +98,13 @@ export async function writeRowToDb(
           .values(row as typeof tradeIntents.$inferInsert)
           .onConflictDoNothing()
       } else {
+        const updateSet: Record<string, unknown> = {
+          status: sql`${row.status}::intent_status`,
+        }
+        if (row.exitAt) updateSet.exitAt = row.exitAt
         await db
           .update(tradeIntents)
-          .set({ status: sql`${row.status}::intent_status` })
+          .set(updateSet as Parameters<ReturnType<typeof db.update>['set']>[0])
           .where(eq(tradeIntents.id, row.id as string))
       }
       break
@@ -137,13 +147,6 @@ export async function writeRowToDb(
         )
       break
     }
-
-    case 'positions_history':
-      await db
-        .insert(positionsHistory)
-        .values(row as typeof positionsHistory.$inferInsert)
-        .onConflictDoNothing()
-      break
 
     case 'balances_history':
       await db
@@ -243,15 +246,6 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       entryAt: new Date(intent.entryAt),
       status: state.status,
       exitPolicy: intent.exitPolicy,
-      fundingSnapshot: {
-        exchange: intent.exchange,
-        symbol: intent.symbol,
-        fundingRate: intent.fundingRate,
-        fundingRatePercent: intent.fundingRatePercent,
-        fundingInterval: intent.fundingInterval,
-        nextFundingTimestamp: intent.nextFundingTimestamp,
-        nextFundingDatetime: intent.nextFundingDatetime,
-      },
     }
   }
 
@@ -284,9 +278,11 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
 
     unsubs.push(
       bus.on('intent.state_changed', state => {
+        const row: Record<string, unknown> = { id: state.intent.id, status: state.status }
+        if (state.status === 'exited') row.exitAt = new Date()
         enqueue({
           table: 'trade_intents',
-          row: { id: state.intent.id, status: state.status },
+          row,
           onConflict: 'update',
         })
       })
@@ -311,6 +307,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
           qty: String(event.qty),
           filledQty: '0',
           price: event.price != null ? String(event.price) : null,
+          stopPrice: event.stopPrice != null ? String(event.stopPrice) : null,
           status: 'new',
           submittedAt: new Date(),
         }
@@ -341,25 +338,44 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       })
     )
 
+    // Write fill rows immediately; requires a DB lookup to resolve the order UUID.
     unsubs.push(
-      bus.on('ws.position', event => {
-        const { position } = event
-        if (Math.abs(position.qty) < 1e-9) return
-        enqueue({
-          table: 'positions_history',
-          row: {
-            id: randomUUID(),
-            exchange: event.exchange,
-            symbol: position.symbol,
-            qty: String(position.qty),
-            entryPrice: position.entryPrice != null ? String(position.entryPrice) : null,
-            markPrice: position.markPrice != null ? String(position.markPrice) : null,
-            leverage: position.leverage,
-            snapshotReason: 'periodic',
-            ts: new Date(position.updatedAt),
-          },
-          onConflict: 'ignore',
-        })
+      bus.on('ws.fill', event => {
+        void (async () => {
+          try {
+            const [orderRow] = await db
+              .select({ id: orders.id })
+              .from(orders)
+              .where(and(eq(orders.exchange, event.exchange), eq(orders.clientOrderId, event.clientOrderId)))
+              .limit(1)
+            if (!orderRow) {
+              logger.warn(
+                { exchange: event.exchange, clientOrderId: event.clientOrderId, exchangeFillId: event.exchangeFillId },
+                'persistence: fill received but matching order not found'
+              )
+              return
+            }
+            await db
+              .insert(fills)
+              .values({
+                id: randomUUID(),
+                orderId: orderRow.id,
+                exchange: event.exchange,
+                exchangeFillId: event.exchangeFillId,
+                qty: String(event.qty),
+                price: String(event.price),
+                feeAsset: event.feeAsset,
+                feeAmount: String(event.feeAmount),
+                isMaker: event.isMaker,
+                ts: new Date(event.ts),
+              })
+              .onConflictDoNothing()
+            metrics.writesTotal.inc(1, { table: 'fills', result: 'success' })
+          } catch (err) {
+            logger.warn({ err, exchangeFillId: event.exchangeFillId }, 'persistence: fill write failed')
+            metrics.writesTotal.inc(1, { table: 'fills', result: 'error' })
+          }
+        })()
       })
     )
 
@@ -372,8 +388,11 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             id: randomUUID(),
             exchange: event.exchange,
             asset: balance.asset,
-            available: String(balance.available),
-            locked: String(balance.locked),
+            available: toFiniteStr(balance.available) ?? '0',
+            locked: toFiniteStr(balance.locked) ?? '0',
+            balance: toFiniteStr(balance.walletBalance),
+            unrealizedPnl: toFiniteStr(balance.unrealizedPnl),
+            reason: 'periodic',
             ts: new Date(balance.updatedAt),
           },
           onConflict: 'ignore',
@@ -528,6 +547,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
         qty: String(params.qty),
         filledQty: '0',
         price: params.price != null ? String(params.price) : null,
+        stopPrice: params.stopPrice != null ? String(params.stopPrice) : null,
         status: 'new',
         submittedAt: new Date(),
       }

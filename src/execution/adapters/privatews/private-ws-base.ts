@@ -15,6 +15,7 @@ import type {
   OrderEvent,
   PositionEvent,
   BalanceEvent,
+  FillEvent,
   FundingFeeEvent,
 } from './types.js'
 
@@ -35,6 +36,7 @@ export interface ParsedWsMessage {
   orders?: OrderEvent[]
   positions?: PositionEvent[]
   balances?: BalanceEvent[]
+  fills?: FillEvent[]
   fundingFees?: FundingFeeEvent[] | undefined
   eventType: string
   eventTimestampMs?: number
@@ -228,6 +230,10 @@ export function createPrivateWsAdapterFromSpec<TRaw>(
     for (const ev of result.balances ?? []) {
       events.emit('balance', ev)
       bus.emit('ws.balance', ev)
+    }
+    for (const ev of result.fills ?? []) {
+      events.emit('fill', ev)
+      bus.emit('ws.fill', ev)
     }
     for (const ev of result.fundingFees ?? []) {
       events.emit('fundingFee', ev)

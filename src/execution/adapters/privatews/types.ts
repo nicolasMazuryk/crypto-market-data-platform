@@ -35,6 +35,20 @@ export interface FundingFeeEvent {
   receivedAt: number
 }
 
+export interface FillEvent {
+  exchange: Exchange
+  symbol: string
+  clientOrderId: string
+  exchangeFillId: string
+  qty: number
+  price: number
+  feeAsset: string
+  feeAmount: number
+  isMaker: boolean
+  ts: number
+  receivedAt: number
+}
+
 export interface ConnectionStateEvent {
   exchange: Exchange
   state: ConnectionState
@@ -46,6 +60,7 @@ export interface PrivateWsEvents {
   order: (e: OrderEvent) => void
   position: (e: PositionEvent) => void
   balance: (e: BalanceEvent) => void
+  fill: (e: FillEvent) => void
   fundingFee: (e: FundingFeeEvent) => void
   connectionState: (e: ConnectionStateEvent) => void
 }

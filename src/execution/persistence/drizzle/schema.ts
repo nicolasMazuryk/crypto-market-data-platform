@@ -27,14 +27,6 @@ export const orderStatusEnum = pgEnum('order_status', [
 
 export const opsEventLevelEnum = pgEnum('ops_event_level', ['debug', 'info', 'warn', 'error', 'fatal'])
 
-export const snapshotReasonEnum = pgEnum('snapshot_reason', [
-  'pre_funding',
-  'post_funding',
-  'reconcile',
-  'exit',
-  'periodic',
-])
-
 export const runs = pgTable('runs', {
   id: text('id').primaryKey(),
   startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
@@ -63,10 +55,9 @@ export const tradeIntents = pgTable(
     nextFundingTs: timestamp('next_funding_ts', { withTimezone: true }).notNull(),
     decidedAt: timestamp('decided_at', { withTimezone: true }).notNull(),
     entryAt: timestamp('entry_at', { withTimezone: true }),
+    exitAt: timestamp('exit_at', { withTimezone: true }),
     status: intentStatusEnum('status').notNull().default('decided'),
-    decisionReason: text('decision_reason'),
     exitPolicy: jsonb('exit_policy').notNull().default('{}'),
-    fundingSnapshot: jsonb('funding_snapshot'),
   },
   table => [
     index('idx_ti_run_exchange_status').on(table.runId, table.exchange, table.status),
@@ -90,11 +81,11 @@ export const orders = pgTable(
     qty: text('qty').notNull(),
     filledQty: text('filled_qty').notNull().default('0'),
     price: text('price'),
+    stopPrice: text('stop_price'),
     status: orderStatusEnum('status').notNull().default('new'),
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
     ackedAt: timestamp('acked_at', { withTimezone: true }),
     terminalAt: timestamp('terminal_at', { withTimezone: true }),
-    rawSnapshot: jsonb('raw_snapshot'),
   },
   table => [
     unique('uq_orders_exchange_client_order_id').on(table.exchange, table.clientOrderId),
@@ -123,20 +114,35 @@ export const fills = pgTable(
   ]
 )
 
-export const positionsHistory = pgTable(
-  'positions_history',
+export const positions = pgTable(
+  'positions',
   {
     id: text('id').primaryKey(),
+    intentId: text('intent_id').notNull(),
     exchange: text('exchange').notNull(),
     symbol: text('symbol').notNull(),
-    qty: text('qty').notNull(),
-    entryPrice: text('entry_price'),
-    markPrice: text('mark_price'),
+    side: text('side').notNull(),
     leverage: integer('leverage').notNull(),
-    snapshotReason: snapshotReasonEnum('snapshot_reason').notNull(),
-    ts: timestamp('ts', { withTimezone: true }).notNull(),
+    marginMode: text('margin_mode'),
+    qty: text('qty').notNull(),
+    entryPrice: text('entry_price').notNull(),
+    exitPrice: text('exit_price'),
+    closedVolume: text('closed_volume'),
+    maxNotionalUsd: text('max_notional_usd'),
+    closingPnl: text('closing_pnl'),
+    tradingFeeUsd: text('trading_fee_usd'),
+    fundingFeeUsd: text('funding_fee_usd'),
+    realizedPnlUsd: text('realized_pnl_usd'),
+    roiPct: text('roi_pct'),
+    openedAt: timestamp('opened_at', { withTimezone: true }).notNull(),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    status: text('status').notNull().default('open'),
   },
-  table => [index('idx_positions_history_exchange_symbol_ts').on(table.exchange, table.symbol, table.ts)]
+  table => [
+    unique('uq_positions_intent_id').on(table.intentId),
+    index('idx_positions_exchange_symbol').on(table.exchange, table.symbol),
+    foreignKey({ columns: [table.intentId], foreignColumns: [tradeIntents.id] }),
+  ]
 )
 
 export const balancesHistory = pgTable(
@@ -147,6 +153,10 @@ export const balancesHistory = pgTable(
     asset: text('asset').notNull(),
     available: text('available').notNull(),
     locked: text('locked').notNull(),
+    balance: text('balance'),
+    unrealizedPnl: text('unrealized_pnl'),
+    reason: text('reason'),
+    intentId: text('intent_id'),
     ts: timestamp('ts', { withTimezone: true }).notNull(),
   },
   table => [index('idx_balances_history_exchange_asset_ts').on(table.exchange, table.asset, table.ts)]
@@ -165,7 +175,10 @@ export const fundingAttributions = pgTable(
     asset: text('asset').notNull(),
     ts: timestamp('ts', { withTimezone: true }).notNull(),
   },
-  table => [index('idx_funding_attr_exchange_symbol_ts').on(table.exchange, table.symbol, table.fundingTime)]
+  table => [
+    unique('uq_funding_attr').on(table.exchange, table.symbol, table.fundingTime),
+    index('idx_funding_attr_exchange_symbol_ts').on(table.exchange, table.symbol, table.fundingTime),
+  ]
 )
 
 export const opsEvents = pgTable(
@@ -188,13 +201,12 @@ export type EngineMode = typeof engineModeEnum.enumValues[number]
 export type IntentStatusRow = typeof intentStatusEnum.enumValues[number]
 export type OrderStatusRow = typeof orderStatusEnum.enumValues[number]
 export type OpsEventLevel = typeof opsEventLevelEnum.enumValues[number]
-export type SnapshotReason = typeof snapshotReasonEnum.enumValues[number]
 
 export type RunRow = typeof runs.$inferSelect
 export type TradeIntentRow = typeof tradeIntents.$inferSelect
 export type OrderRow = typeof orders.$inferSelect
 export type FillRow = typeof fills.$inferSelect
-export type PositionsHistoryRow = typeof positionsHistory.$inferSelect
+export type PositionRow = typeof positions.$inferSelect
 export type BalancesHistoryRow = typeof balancesHistory.$inferSelect
 export type FundingAttributionRow = typeof fundingAttributions.$inferSelect
 export type OpsEventRow = typeof opsEvents.$inferSelect

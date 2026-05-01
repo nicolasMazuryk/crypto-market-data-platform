@@ -64,21 +64,10 @@ interface ReevaluateDiff {
 }
 
 function reevaluateIntent(lc: IntentLifecycle): ReevaluateDiff {
-  const { intent } = lc
-  const snapshot = intent.fundingSnapshot as Record<string, unknown> | null
-
-  if (!snapshot) {
-    return { intentId: intent.id, diverged: false, diffs: [{ field: 'fundingSnapshot', persisted: null, reevaluated: 'missing' }] }
-  }
-
-  const diffs: { field: string; persisted: unknown; reevaluated: unknown }[] = []
-
-  const snapshotFundingRate = snapshot.fundingRate
-  if (snapshotFundingRate !== undefined && String(snapshotFundingRate) !== intent.fundingRate) {
-    diffs.push({ field: 'fundingRate', persisted: intent.fundingRate, reevaluated: snapshotFundingRate })
-  }
-
-  return { intentId: intent.id, diverged: diffs.length > 0, diffs }
+  // fundingSnapshot was dropped in migration 0002 — funding data is now stored
+  // directly on the intent row (fundingRate, fundingRatePercent, etc.) with no
+  // redundant snapshot to compare against.
+  return { intentId: lc.intent.id, diverged: false, diffs: [] }
 }
 
 function formatTable(results: LifecyclePnL[]): string {

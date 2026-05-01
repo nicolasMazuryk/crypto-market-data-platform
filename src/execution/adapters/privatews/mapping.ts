@@ -118,11 +118,14 @@ export function mapAccountUpdate(
   exchange: Exchange = 'binance'
 ): { balances: BalanceEvent[]; positions: PositionEvent[] } {
   const balances: BalanceEvent[] = raw.a.B.map(b => {
+    const wb = parseFloat(b.wb)
+    const cw = parseFloat(b.cw)
     const balance: Balance = {
       exchange,
       asset: b.a,
-      available: parseFloat(b.cw),
-      locked: Math.max(0, parseFloat(b.wb) - parseFloat(b.cw)),
+      available: cw,
+      locked: Math.max(0, wb - cw),
+      walletBalance: wb,
       updatedAt: raw.T,
     }
     return { exchange, balance, seq, receivedAt }
