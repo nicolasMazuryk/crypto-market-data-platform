@@ -1,6 +1,6 @@
 import type { Exchange, TypedEventEmitter, Unsubscribe } from '../types/exchange.js'
 import type { TradeIntent } from '../strategies/types.js'
-import type { IntentState } from '../execution/types.js'
+import type { ExitReason, IntentState } from '../execution/types.js'
 import type { FundingSnapshot } from '../funding/types.js'
 import type { MarketMetadataDelta } from '../markets/types.js'
 import type {
@@ -45,6 +45,32 @@ export interface OrderFilledEvent {
   avgFillPrice?: number
 }
 
+export interface ExitTriggeredEvent {
+  intentId: string
+  exchange: Exchange
+  symbol: string
+  reason: ExitReason
+  triggerPrice?: number
+  triggerTs: number
+  source: 'ws' | 'timer'
+  exitOrderClientId?: string
+  latencyMs?: number
+}
+
+export interface IntentExitedEvent {
+  intentId: string
+  exchange: Exchange
+  symbol: string
+  side: string
+  qty: number
+  avgEntryPrice?: number
+  avgExitPrice?: number
+  exitReason: string
+  decidedAt: number
+  entryFilledAt?: number
+  exitFilledAt: number
+}
+
 export interface PositionOpenedEvent {
   intentId: string
   exchange: Exchange
@@ -61,8 +87,10 @@ export interface DomainEvents {
   'intent.created': (state: IntentState) => void
   'intent.submitted': (state: IntentState) => void
   'intent.state_changed': (state: IntentState) => void
+  'intent.exited': (event: IntentExitedEvent) => void
   'order.placed': (event: OrderPlacedEvent) => void
   'order.filled': (event: OrderFilledEvent) => void
+  'exit.triggered': (event: ExitTriggeredEvent) => void
   'position.opened': (event: PositionOpenedEvent) => void
   'ws.order': (event: OrderEvent) => void
   'ws.position': (event: PositionEvent) => void

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { sql, eq, and } from 'drizzle-orm'
+import { sql, eq, and, gte, lte } from 'drizzle-orm'
 import type { Logger } from 'pino'
 
 import type { EventBus } from '../core/types.js'
@@ -16,6 +16,9 @@ import {
   balancesHistory,
   fundingAttributions,
   opsEvents,
+  intentLifecycleEvents,
+  exitTriggers,
+  realizedPnl,
 } from './drizzle/schema.js'
 
 export interface PersistenceWriterOptions {
@@ -36,9 +39,11 @@ export interface WriteOrderSyncParams {
   symbol: string
   side: 'buy' | 'sell'
   orderType: 'market' | 'limit' | 'stop_market'
+  kind: 'entry' | 'sl' | 'tp' | 'close' | 'timed'
   qty: number
   price?: number
   stopPrice?: number
+  intendedPrice?: number
   reduceOnly: boolean
 }
 
@@ -98,10 +103,14 @@ export async function writeRowToDb(
           .values(row as typeof tradeIntents.$inferInsert)
           .onConflictDoNothing()
       } else {
-        const updateSet: Record<string, unknown> = {
-          status: sql`${row.status}::intent_status`,
-        }
+        const updateSet: Record<string, unknown> = {}
+        if (row.status) updateSet.status = sql`${row.status}::intent_status`
         if (row.exitAt) updateSet.exitAt = row.exitAt
+        if (row.exitReason) updateSet.exitReason = row.exitReason
+        if (row.avgEntryPrice) updateSet.avgEntryPrice = row.avgEntryPrice
+        if (row.avgExitPrice) updateSet.avgExitPrice = row.avgExitPrice
+        if (row.entryFilledAt) updateSet.entryFilledAt = row.entryFilledAt
+        if (row.exitFilledAt) updateSet.exitFilledAt = row.exitFilledAt
         await db
           .update(tradeIntents)
           .set(updateSet as Parameters<ReturnType<typeof db.update>['set']>[0])
@@ -176,6 +185,27 @@ export async function writeRowToDb(
         .onConflictDoNothing()
       break
 
+    case 'intent_lifecycle_events':
+      await db
+        .insert(intentLifecycleEvents)
+        .values(row as typeof intentLifecycleEvents.$inferInsert)
+        .onConflictDoNothing()
+      break
+
+    case 'exit_triggers':
+      await db
+        .insert(exitTriggers)
+        .values(row as typeof exitTriggers.$inferInsert)
+        .onConflictDoNothing()
+      break
+
+    case 'realized_pnl':
+      await db
+        .insert(realizedPnl)
+        .values(row as typeof realizedPnl.$inferInsert)
+        .onConflictDoNothing()
+      break
+
     default:
       // Unknown table — log but don't throw so the queue keeps draining
       break
@@ -215,6 +245,9 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
   const queue: QueuedWrite[] = []
   let flushTimer: ReturnType<typeof setInterval> | undefined
   const unsubs: (() => void)[] = []
+
+  // Track last known status per intent for lifecycle event from_status calculation.
+  const prevStatusByIntent = new Map<string, string>()
 
   function enqueue(write: QueuedWrite): void {
     if (queue.length >= 1000) {
@@ -266,6 +299,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
   function subscribeAll(): void {
     unsubs.push(
       bus.on('intent.decided', intent => {
+        prevStatusByIntent.set(intent.id, 'decided')
         const state: IntentState = {
           intent,
           status: 'decided',
@@ -278,12 +312,28 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
 
     unsubs.push(
       bus.on('intent.state_changed', state => {
+        const fromStatus = prevStatusByIntent.get(state.intent.id) ?? null
+        prevStatusByIntent.set(state.intent.id, state.status)
+
         const row: Record<string, unknown> = { id: state.intent.id, status: state.status }
         if (state.status === 'exited') row.exitAt = new Date()
         enqueue({
           table: 'trade_intents',
           row,
           onConflict: 'update',
+        })
+
+        enqueue({
+          table: 'intent_lifecycle_events',
+          row: {
+            id: randomUUID(),
+            intentId: state.intent.id,
+            fromStatus,
+            toStatus: state.status,
+            ts: new Date(),
+            latencyMs: null,
+            context: null,
+          },
         })
       })
     )
@@ -303,6 +353,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
           exchangeOrderId: event.exchangeOrderId ?? null,
           side: event.side,
           type: event.orderType,
+          kind: event.kind,
           reduceOnly: event.reduceOnly,
           qty: String(event.qty),
           filledQty: '0',
@@ -338,13 +389,13 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       })
     )
 
-    // Write fill rows immediately; requires a DB lookup to resolve the order UUID.
+    // Write fill rows immediately; requires a DB lookup to resolve the order UUID, intent_id, and kind.
     unsubs.push(
       bus.on('ws.fill', event => {
         void (async () => {
           try {
             const [orderRow] = await db
-              .select({ id: orders.id })
+              .select({ id: orders.id, intentId: orders.intentId, kind: orders.kind })
               .from(orders)
               .where(and(eq(orders.exchange, event.exchange), eq(orders.clientOrderId, event.clientOrderId)))
               .limit(1)
@@ -368,12 +419,130 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
                 feeAmount: String(event.feeAmount),
                 isMaker: event.isMaker,
                 ts: new Date(event.ts),
+                intentId: orderRow.intentId,
+                orderKind: orderRow.kind,
               })
               .onConflictDoNothing()
             metrics.writesTotal.inc(1, { table: 'fills', result: 'success' })
           } catch (err) {
             logger.warn({ err, exchangeFillId: event.exchangeFillId }, 'persistence: fill write failed')
             metrics.writesTotal.inc(1, { table: 'fills', result: 'error' })
+          }
+        })()
+      })
+    )
+
+    unsubs.push(
+      bus.on('exit.triggered', event => {
+        enqueue({
+          table: 'exit_triggers',
+          row: {
+            id: randomUUID(),
+            intentId: event.intentId,
+            reason: event.reason,
+            triggerPrice: event.triggerPrice != null ? String(event.triggerPrice) : null,
+            triggerTs: new Date(event.triggerTs),
+            source: event.source,
+            exitOrderClientId: event.exitOrderClientId ?? null,
+            latencyMs: event.latencyMs ?? null,
+            context: null,
+          },
+        })
+      })
+    )
+
+    unsubs.push(
+      bus.on('intent.exited', event => {
+        void (async () => {
+          try {
+            // Enrich the trade_intents row with final prices, reason, and timestamps.
+            const intentUpdate: Record<string, unknown> = {
+              id: event.intentId,
+              exitReason: event.exitReason,
+              exitFilledAt: new Date(event.exitFilledAt),
+            }
+            if (event.avgEntryPrice != null) intentUpdate.avgEntryPrice = String(event.avgEntryPrice)
+            if (event.avgExitPrice != null) intentUpdate.avgExitPrice = String(event.avgExitPrice)
+            if (event.entryFilledAt != null) intentUpdate.entryFilledAt = new Date(event.entryFilledAt)
+            enqueue({ table: 'trade_intents', row: intentUpdate, onConflict: 'update' })
+
+            // Compute realized PnL from fills and funding.
+            const fillRows = await db
+              .select({
+                qty: fills.qty,
+                price: fills.price,
+                feeAmount: fills.feeAmount,
+                orderKind: fills.orderKind,
+              })
+              .from(fills)
+              .innerJoin(orders, eq(fills.orderId, orders.id))
+              .where(eq(orders.intentId, event.intentId))
+
+            const fundingRows = await db
+              .select({ fundingAmount: fundingAttributions.fundingAmount })
+              .from(fundingAttributions)
+              .where(
+                and(
+                  eq(fundingAttributions.exchange, event.exchange),
+                  eq(fundingAttributions.symbol, event.symbol),
+                  ...(event.entryFilledAt != null
+                    ? [gte(fundingAttributions.ts, new Date(event.entryFilledAt))]
+                    : []),
+                  lte(fundingAttributions.ts, new Date(event.exitFilledAt))
+                )
+              )
+
+            let entryFees = 0
+            let exitFees = 0
+            for (const f of fillRows) {
+              const fee = parseFloat(f.feeAmount)
+              if (!isNaN(fee)) {
+                if (f.orderKind === 'entry') entryFees += fee
+                else exitFees += fee
+              }
+            }
+
+            let fundingTotal = 0
+            for (const f of fundingRows) {
+              const amt = parseFloat(f.fundingAmount)
+              if (!isNaN(amt)) fundingTotal += amt
+            }
+
+            const qty = event.qty
+            const entryPx = event.avgEntryPrice
+            const exitPx = event.avgExitPrice
+
+            let grossPnl: number | null = null
+            if (entryPx != null && exitPx != null && qty > 0) {
+              grossPnl = event.side === 'long' ? (exitPx - entryPx) * qty : (entryPx - exitPx) * qty
+            }
+
+            const netPnl = grossPnl != null ? grossPnl - entryFees - exitFees + fundingTotal : null
+
+            const holdDurationMs =
+              event.entryFilledAt != null ? event.exitFilledAt - event.entryFilledAt : null
+
+            enqueue({
+              table: 'realized_pnl',
+              row: {
+                intentId: event.intentId,
+                exchange: event.exchange,
+                symbol: event.symbol,
+                qty: String(qty),
+                avgEntryPrice: entryPx != null ? String(entryPx) : null,
+                avgExitPrice: exitPx != null ? String(exitPx) : null,
+                grossPnl: grossPnl != null ? String(grossPnl) : null,
+                entryFees: String(entryFees),
+                exitFees: String(exitFees),
+                fundingTotal: String(fundingTotal),
+                netPnl: netPnl != null ? String(netPnl) : null,
+                holdDurationMs,
+                exitReason: event.exitReason,
+                computedAt: new Date(),
+              },
+            })
+          } catch (err) {
+            logger.warn({ err, intentId: event.intentId }, 'persistence: intent.exited handler failed')
           }
         })()
       })
@@ -543,11 +712,13 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
         exchangeOrderId: null,
         side: params.side,
         type: params.orderType,
+        kind: params.kind,
         reduceOnly: params.reduceOnly,
         qty: String(params.qty),
         filledQty: '0',
         price: params.price != null ? String(params.price) : null,
         stopPrice: params.stopPrice != null ? String(params.stopPrice) : null,
+        intendedPrice: params.intendedPrice != null ? String(params.intendedPrice) : null,
         status: 'new',
         submittedAt: new Date(),
       }
