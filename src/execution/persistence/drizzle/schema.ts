@@ -1,4 +1,4 @@
-import { pgTable, pgEnum, text, timestamp, boolean, integer, jsonb, index, unique, foreignKey } from 'drizzle-orm/pg-core'
+import { pgTable, pgEnum, text, timestamp, boolean, integer, bigint, jsonb, index, unique, foreignKey } from 'drizzle-orm/pg-core'
 
 export const engineModeEnum = pgEnum('engine_mode', ['live', 'dry_run', 'drain_only', 'halted'])
 
@@ -58,6 +58,11 @@ export const tradeIntents = pgTable(
     exitAt: timestamp('exit_at', { withTimezone: true }),
     status: intentStatusEnum('status').notNull().default('decided'),
     exitPolicy: jsonb('exit_policy').notNull().default('{}'),
+    avgEntryPrice: text('avg_entry_price'),
+    avgExitPrice: text('avg_exit_price'),
+    exitReason: text('exit_reason'),
+    entryFilledAt: timestamp('entry_filled_at', { withTimezone: true }),
+    exitFilledAt: timestamp('exit_filled_at', { withTimezone: true }),
   },
   table => [
     index('idx_ti_run_exchange_status').on(table.runId, table.exchange, table.status),
@@ -77,11 +82,17 @@ export const orders = pgTable(
     exchangeOrderId: text('exchange_order_id'),
     side: text('side').notNull(),
     type: text('type').notNull(),
+    kind: text('kind'),
     reduceOnly: boolean('reduce_only').notNull().default(false),
     qty: text('qty').notNull(),
     filledQty: text('filled_qty').notNull().default('0'),
     price: text('price'),
     stopPrice: text('stop_price'),
+    intendedPrice: text('intended_price'),
+    rejectionReason: text('rejection_reason'),
+    exchangeSubmittedAt: timestamp('exchange_submitted_at', { withTimezone: true }),
+    firstFillAt: timestamp('first_fill_at', { withTimezone: true }),
+    workingAt: timestamp('working_at', { withTimezone: true }),
     status: orderStatusEnum('status').notNull().default('new'),
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
     ackedAt: timestamp('acked_at', { withTimezone: true }),
@@ -107,6 +118,12 @@ export const fills = pgTable(
     feeAmount: text('fee_amount').notNull(),
     isMaker: boolean('is_maker').notNull(),
     ts: timestamp('ts', { withTimezone: true }).notNull(),
+    commissionAsset: text('commission_asset'),
+    commissionAmount: text('commission_amount'),
+    transactionTime: timestamp('transaction_time', { withTimezone: true }),
+    markPrice: text('mark_price'),
+    intentId: text('intent_id'),
+    orderKind: text('order_kind'),
   },
   table => [
     unique('uq_fills_exchange_fill_id').on(table.exchange, table.exchangeFillId),
@@ -134,6 +151,11 @@ export const positions = pgTable(
     fundingFeeUsd: text('funding_fee_usd'),
     realizedPnlUsd: text('realized_pnl_usd'),
     roiPct: text('roi_pct'),
+    unrealizedPnl: text('unrealized_pnl'),
+    liquidationPrice: text('liquidation_price'),
+    effectiveLeverage: text('effective_leverage'),
+    marginUsed: text('margin_used'),
+    indexPrice: text('index_price'),
     openedAt: timestamp('opened_at', { withTimezone: true }).notNull(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
     status: text('status').notNull().default('open'),
@@ -155,6 +177,9 @@ export const balancesHistory = pgTable(
     locked: text('locked').notNull(),
     balance: text('balance'),
     unrealizedPnl: text('unrealized_pnl'),
+    marginBalance: text('margin_balance'),
+    equity: text('equity'),
+    crossUnrealizedPnl: text('cross_unrealized_pnl'),
     reason: text('reason'),
     intentId: text('intent_id'),
     ts: timestamp('ts', { withTimezone: true }).notNull(),
@@ -197,6 +222,66 @@ export const opsEvents = pgTable(
   ]
 )
 
+export const intentLifecycleEvents = pgTable(
+  'intent_lifecycle_events',
+  {
+    id: text('id').primaryKey(),
+    intentId: text('intent_id').notNull(),
+    fromStatus: text('from_status'),
+    toStatus: text('to_status').notNull(),
+    ts: timestamp('ts', { withTimezone: true }).notNull(),
+    latencyMs: integer('latency_ms'),
+    context: jsonb('context'),
+  },
+  table => [
+    index('idx_lifecycle_events_intent_ts').on(table.intentId, table.ts),
+    foreignKey({ columns: [table.intentId], foreignColumns: [tradeIntents.id] }),
+  ]
+)
+
+export const exitTriggers = pgTable(
+  'exit_triggers',
+  {
+    id: text('id').primaryKey(),
+    intentId: text('intent_id').notNull(),
+    reason: text('reason').notNull(),
+    triggerPrice: text('trigger_price'),
+    triggerTs: timestamp('trigger_ts', { withTimezone: true }).notNull(),
+    source: text('source').notNull(),
+    exitOrderClientId: text('exit_order_client_id'),
+    latencyMs: integer('latency_ms'),
+    context: jsonb('context'),
+  },
+  table => [
+    index('idx_exit_triggers_intent_id').on(table.intentId),
+    foreignKey({ columns: [table.intentId], foreignColumns: [tradeIntents.id] }),
+  ]
+)
+
+export const realizedPnl = pgTable(
+  'realized_pnl',
+  {
+    intentId: text('intent_id').primaryKey(),
+    exchange: text('exchange').notNull(),
+    symbol: text('symbol').notNull(),
+    qty: text('qty').notNull(),
+    avgEntryPrice: text('avg_entry_price'),
+    avgExitPrice: text('avg_exit_price'),
+    grossPnl: text('gross_pnl'),
+    entryFees: text('entry_fees').notNull().default('0'),
+    exitFees: text('exit_fees').notNull().default('0'),
+    fundingTotal: text('funding_total').notNull().default('0'),
+    netPnl: text('net_pnl'),
+    holdDurationMs: bigint('hold_duration_ms', { mode: 'number' }),
+    exitReason: text('exit_reason'),
+    computedAt: timestamp('computed_at', { withTimezone: true }).notNull(),
+  },
+  table => [
+    index('idx_realized_pnl_exchange_symbol').on(table.exchange, table.symbol),
+    foreignKey({ columns: [table.intentId], foreignColumns: [tradeIntents.id] }),
+  ]
+)
+
 export type EngineMode = typeof engineModeEnum.enumValues[number]
 export type IntentStatusRow = typeof intentStatusEnum.enumValues[number]
 export type OrderStatusRow = typeof orderStatusEnum.enumValues[number]
@@ -210,3 +295,6 @@ export type PositionRow = typeof positions.$inferSelect
 export type BalancesHistoryRow = typeof balancesHistory.$inferSelect
 export type FundingAttributionRow = typeof fundingAttributions.$inferSelect
 export type OpsEventRow = typeof opsEvents.$inferSelect
+export type IntentLifecycleEventRow = typeof intentLifecycleEvents.$inferSelect
+export type ExitTriggerRow = typeof exitTriggers.$inferSelect
+export type RealizedPnlRow = typeof realizedPnl.$inferSelect

@@ -1,6 +1,6 @@
 import type { Logger } from 'pino'
 
-import type { Clock, EventBus } from '../core/types.js'
+import type { Clock, EventBus, ExitTriggeredEvent } from '../core/types.js'
 import type { ExecutionMetrics } from '../observability/metrics.js'
 import type { Unsubscribe } from '../types/exchange.js'
 import type { ExitReason, IntentState, PositionMonitor } from './types.js'
@@ -21,6 +21,14 @@ export interface PositionMonitorHandle extends PositionMonitor {
 interface ArmedEntry {
   timers: unknown[]
   unsubs: Unsubscribe[]
+}
+
+interface ExitTriggerContext {
+  triggerPrice?: number
+  triggerTs: number
+  source: 'ws' | 'timer'
+  exitOrderClientId?: string
+  latencyMs?: number
 }
 
 export function createPositionMonitor(opts: PositionMonitorOptions): PositionMonitorHandle {
@@ -64,15 +72,36 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
       const now = clock.now()
       const skewMs = clock.skewMs(intent.exchange)
 
+      let settled = false
+      const settle = (reason: ExitReason, ctx: ExitTriggerContext): void => {
+        if (!settled && armed.has(intentId)) {
+          settled = true
+          doDisarm(intentId)
+          const triggerEvent: ExitTriggeredEvent = {
+            intentId,
+            exchange: intent.exchange,
+            symbol: intent.symbol,
+            reason,
+            triggerTs: ctx.triggerTs,
+            source: ctx.source,
+            ...(ctx.triggerPrice !== undefined ? { triggerPrice: ctx.triggerPrice } : {}),
+            ...(ctx.exitOrderClientId !== undefined ? { exitOrderClientId: ctx.exitOrderClientId } : {}),
+            ...(ctx.latencyMs !== undefined ? { latencyMs: ctx.latencyMs } : {}),
+          }
+          bus.emit('exit.triggered', triggerEvent)
+          logger.info({ intentId, reason, ...ctx }, 'monitor.settle')
+          emitExit(intentId, reason)
+        }
+      }
+
       if (exitPolicy.kind === 'timed') {
         const delay = Math.max(0, exitPolicy.exitAt - now - skewMs)
-        let fired = false
         const handle = setTOFn(() => {
-          if (!fired && armed.has(intentId)) {
-            fired = true
-            doDisarm(intentId)
-            emitExit(intentId, 'timed')
-          }
+          settle('timed', {
+            triggerTs: clock.now(),
+            source: 'timer',
+            latencyMs: Math.max(0, clock.now() - exitPolicy.exitAt),
+          })
         }, delay)
         entry.timers.push(handle)
         logger.debug({ intentId, delay }, 'monitor.armed.timed')
@@ -81,21 +110,14 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         const slId = state.exitOrderRefs?.sl?.clientOrderId
         const tpId = state.exitOrderRefs?.tp?.clientOrderId
 
-        let settled = false
-
-        const settle = (reason: ExitReason, triggerOrderId?: string): void => {
-          if (!settled) {
-            settled = true
-            doDisarm(intentId)
-            logger.info({ intentId, reason, triggerOrderId }, 'monitor.settle')
-            emitExit(intentId, reason)
-          }
-        }
-
         const deadlineDelay = Math.max(0, exitPolicy.deadlineAt - now - skewMs)
         const deadlineHandle = setTOFn(() => {
           logger.info({ intentId, deadlineAt: exitPolicy.deadlineAt }, 'monitor.deadline_fired')
-          settle('deadline')
+          settle('deadline', {
+            triggerTs: clock.now(),
+            source: 'timer',
+            latencyMs: Math.max(0, clock.now() - exitPolicy.deadlineAt),
+          })
         }, deadlineDelay)
         entry.timers.push(deadlineHandle)
 
@@ -104,9 +126,23 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
           const { order } = event
           if (order.status !== 'filled') return
           if (order.clientOrderId === slId) {
-            settle('sl', order.clientOrderId)
+            const ctx: ExitTriggerContext = {
+              triggerTs: order.updatedAt,
+              source: 'ws',
+              exitOrderClientId: slId,
+              latencyMs: event.receivedAt - order.updatedAt,
+            }
+            if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice
+            settle('sl', ctx)
           } else if (order.clientOrderId === tpId) {
-            settle('tp', order.clientOrderId)
+            const ctx: ExitTriggerContext = {
+              triggerTs: order.updatedAt,
+              source: 'ws',
+              exitOrderClientId: tpId,
+              latencyMs: event.receivedAt - order.updatedAt,
+            }
+            if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice
+            settle('tp', ctx)
           }
         })
         entry.unsubs.push(unsub)

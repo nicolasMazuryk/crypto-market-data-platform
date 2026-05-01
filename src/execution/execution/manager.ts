@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import type { Logger } from 'pino'
 
 import { normalizeSymbol } from '../../utils/symbol-normalizer.js'
-import type { Clock, EventBus, OrderPlacedEvent, OrderFilledEvent, PositionOpenedEvent } from '../core/types.js'
+import type { Clock, EventBus, IntentExitedEvent, OrderPlacedEvent, OrderFilledEvent, PositionOpenedEvent } from '../core/types.js'
 import type { ExecutionIds } from '../core/ids.js'
 import type { ExecutionMetrics } from '../observability/metrics.js'
 import type { ExchangeRestAdapter, OrderSide } from '../adapters/rest/types.js'
@@ -33,9 +33,11 @@ export interface BeforeCreateOrderParams {
   symbol: string
   side: 'buy' | 'sell'
   orderType: 'market' | 'limit' | 'stop_market'
+  kind: 'entry' | 'sl' | 'tp' | 'close' | 'timed'
   qty: number
   price?: number
   stopPrice?: number
+  intendedPrice?: number
   reduceOnly: boolean
 }
 
@@ -206,6 +208,35 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             { intentId: intent.id, err },
             'handleEntryFilled: getPositions failed — using s.filledQty for SL/TP'
           )
+        }
+
+        if (opts.beforeCreateOrder) {
+          await Promise.all([
+            opts.beforeCreateOrder({
+              intentId: intent.id,
+              clientOrderId: slId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              side: exitSide,
+              kind: 'sl',
+              orderType: 'stop_market',
+              qty: exitQty,
+              stopPrice: slPrice,
+              reduceOnly: true,
+            }).catch((err: unknown) => logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for sl order')),
+            opts.beforeCreateOrder({
+              intentId: intent.id,
+              clientOrderId: tpId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              side: exitSide,
+              kind: 'tp',
+              orderType: 'limit',
+              qty: exitQty,
+              price: tpPrice,
+              reduceOnly: true,
+            }).catch((err: unknown) => logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for tp order')),
+          ])
         }
 
         const [slResult, tpResult] = await Promise.allSettled([
@@ -402,6 +433,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         if (order?.status === 'filled') {
           if (order.avgFillPrice !== undefined) s.avgExitPrice = order.avgFillPrice
           recordExitMetrics(s, s.exitReason ?? 'error')
+          emitIntentExited(s)
           transition(s, 'exited')
           void sweepReduceOnlyOrders(rest, s.intent.exchangeSymbol, s.intent.id)
           return
@@ -413,6 +445,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           const pos = positions.find(p => p.symbol === s.intent.symbol || p.symbol.includes(s.intent.symbol))
           if (!pos || pos.qty === 0) {
             recordExitMetrics(s, s.exitReason ?? 'error')
+            emitIntentExited(s)
             transition(s, 'exited')
             void sweepReduceOnlyOrders(rest, s.intent.exchangeSymbol, s.intent.id)
             return
@@ -457,6 +490,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             })
           )
           if (slOrder?.status === 'filled' && s.status === 'monitoring') {
+            if (slOrder.avgFillPrice !== undefined) s.avgExitPrice = slOrder.avgFillPrice
             monitor.disarm(intent.id)
             await handleMonitorExit(s, 'sl')
             return
@@ -472,6 +506,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             })
           )
           if (tpOrder?.status === 'filled' && s.status === 'monitoring') {
+            if (tpOrder.avgFillPrice !== undefined) s.avgExitPrice = tpOrder.avgFillPrice
             monitor.disarm(intent.id)
             await handleMonitorExit(s, 'tp')
             return
@@ -626,6 +661,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       // have slipped through. The sweep ensures no orphaned reduce-only orders remain after exit.
       await sweepReduceOnlyOrders(rest, intent.exchangeSymbol, intent.id)
       recordExitMetrics(s, reason)
+      emitIntentExited(s)
       transition(s, 'exited')
       logger.info(
         { event: 'intent.exited.complete', intentId: intent.id, exchange: intent.exchange, symbol: intent.symbol, exitReason: reason, durationMs: clock.now() - exitStartedAt },
@@ -646,6 +682,23 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       // Register BEFORE placing so racing WS fill events are not missed.
       s.exitOrderRefs = { close: { clientOrderId: closeId } }
       byCloseOrderId.set(canonCloseId, intent.id)
+      if (opts.beforeCreateOrder) {
+        try {
+          await opts.beforeCreateOrder({
+            intentId: intent.id,
+            clientOrderId: closeId,
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
+            side: exitSide,
+            kind: closeKind,
+            orderType: 'market',
+            qty: s.filledQty,
+            reduceOnly: true,
+          })
+        } catch (err) {
+          logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for close order')
+        }
+      }
       try {
         const closeAck = await rest.createOrder({
           intentId: intent.id,
@@ -697,6 +750,25 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       strategy: s.intent.strategy,
       exit_reason: reason,
     })
+  }
+
+  function emitIntentExited(s: IntentState): void {
+    const exitFilledAt = clock.now()
+    const event: IntentExitedEvent = {
+      intentId: s.intent.id,
+      exchange: s.intent.exchange,
+      symbol: s.intent.symbol,
+      side: s.intent.side,
+      qty: s.filledQty,
+      exitReason: s.exitReason ?? 'error',
+      decidedAt: s.intent.decidedAt,
+      exitFilledAt,
+    }
+    if (s.avgEntryPrice !== undefined) event.avgEntryPrice = s.avgEntryPrice
+    if (s.avgExitPrice !== undefined) event.avgExitPrice = s.avgExitPrice
+    const entryAt = entryFilledAt.get(s.intent.id)
+    if (entryAt !== undefined) event.entryFilledAt = entryAt
+    bus.emit('intent.exited', event)
   }
 
   // Smart risk preemption helpers
@@ -915,6 +987,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               bus.emit('order.filled', closeFilled)
               logger.info({ event: 'order.filled', ...closeFilled }, 'order.filled')
               recordExitMetrics(s, s.exitReason ?? 'error')
+              emitIntentExited(s)
               transition(s, 'exited')
               const wsRest = restAdapters.get(s.intent.exchange)
               if (wsRest) void sweepReduceOnlyOrders(wsRest, s.intent.exchangeSymbol, s.intent.id)
@@ -1096,6 +1169,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             exchange: intent.exchange,
             symbol: intent.exchangeSymbol,
             side: entrySide,
+            kind: 'entry',
             orderType: 'market',
             qty: check.qty,
             reduceOnly: false,
