@@ -27,8 +27,11 @@ ALTER TABLE balances_history
   ADD COLUMN IF NOT EXISTS unrealized_pnl TEXT;
 
 -- 4. funding_attributions: unique constraint enables ON CONFLICT deduplication
-ALTER TABLE funding_attributions
-  ADD CONSTRAINT IF NOT EXISTS uq_funding_attr UNIQUE (exchange, symbol, funding_time);
+DO $$ BEGIN
+  ALTER TABLE funding_attributions
+    ADD CONSTRAINT uq_funding_attr UNIQUE (exchange, symbol, funding_time);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 5. Replace positions_history with positions (one row per closed-position lifecycle)
 DROP TABLE IF EXISTS positions_history;
