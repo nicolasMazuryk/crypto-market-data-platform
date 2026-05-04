@@ -3,7 +3,7 @@
 
 strategy_id: "strategy_1"
 direction: "long"
-funding_threshold: 0.004      # 0.3%
-entry_offset_seconds: 2       # Enter at T_funding - 5s
+funding_threshold: 0.00686268  # 0.686268%
+entry_offset_seconds: 2       # Enter at T_funding - 2s
 exit_offset_seconds: 2        # Exit at T_funding + 2s
 funding_applied_on_same_second: false

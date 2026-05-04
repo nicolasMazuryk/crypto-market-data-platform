@@ -18,7 +18,7 @@ describe('Config Loader', () => {
 
     expect(config.strategy.strategy_id).toBe('strategy_1')
     if (config.strategy.strategy_id === 'strategy_1') {
-      expect(config.strategy.funding_threshold).toBe(0.004)
+      expect(config.strategy.funding_threshold).toBe(0.00686268)
       expect(config.strategy.entry_offset_seconds).toBe(2)
       expect(config.strategy.exit_offset_seconds).toBe(2)
     }
@@ -31,7 +31,7 @@ describe('Config Loader', () => {
     expect(config.strategy.strategy_id).toBe('strategy_3a')
     if (config.strategy.strategy_id === 'strategy_3a') {
       expect(config.strategy.tp_mode).toBe('A')
-      expect(config.strategy.tp_multiplier).toBe(1.5)
+      expect(config.strategy.tp_multiplier).toBe(1.975)
       expect(config.strategy.direction).toBe('short')
     }
   })

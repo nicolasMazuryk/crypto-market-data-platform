@@ -2,10 +2,10 @@
 
 strategy_id: "strategy_4_3a"
 direction: "long"
-funding_threshold: 0.004      # 0.4%
+funding_threshold: 0.007      # 0.7%
 entry_offset_seconds: 2       # Enter at T_funding - 2s (tighter)
-entry_mult: 1.0              # Limit at P * (1 - F * 1.0)
+entry_mult: 1.1               # Limit at P * (1 - F * 1.1)
 sl_mult: 1.5                  # SL at P * (1 - F * 1.5)
-take_profit: 0.002            # 0.2%
+take_profit: 0.010            # 1.0%
 deadline_seconds: 600         # Max hold after T_funding (10 minutes)
 funding_applied_on_same_second: false

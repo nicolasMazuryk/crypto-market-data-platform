@@ -3,11 +3,11 @@
 
 strategy_id: "strategy_3a"
 direction: "short"
-funding_threshold: 0.004     # 0.4%
+funding_threshold: 0.0020     # 0.20%
 entry_offset_seconds: 2       # Enter at T_funding - 2s
-stop_loss: 0.020              # 2.0%
+stop_loss: 0.02              # 2.0%
 tp_mode: "A"
-tp_multiplier: 1.5          # TP = F * 1.5
-tp_addend: 0.004              # Not used in mode A, but required
+tp_multiplier: 1.975          # TP = F * 1.975
+tp_addend: 0.003              # Not used in mode A, but required
 deadline_seconds: 60          # Max seconds after T_funding before forced exit
 funding_applied_on_same_second: true
