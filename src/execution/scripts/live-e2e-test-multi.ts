@@ -265,7 +265,7 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
   // Load credentials
   const apiKey = process.env[`${spec.envPrefix}_API_KEY`]
   const apiSecret = process.env[`${spec.envPrefix}_API_SECRET`]
-  const apiPassphrase = process.env[`${spec.envPrefix}_API_PASSPHRASE`]
+  const apiPassphrase = process.env[`${spec.envPrefix}_API_PASSPHRASE`] ?? process.env[`${spec.envPrefix}_API_PASS`]
 
   if (!apiKey || !apiSecret) {
     info(`${YL}Skipping — ${spec.envPrefix}_API_KEY / _API_SECRET not set${R}`)
