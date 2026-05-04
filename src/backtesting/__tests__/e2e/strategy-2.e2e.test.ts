@@ -16,6 +16,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_mult: 1.5, // SL at ~50005 * 0.985 = ~49254 — far below test drop of 49800
+        funding_applied_on_same_second: false,
       },
       BINANCE_FEES,
       0
@@ -78,6 +79,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_mult: 1.5, // SL at ~50005 * 0.985 = ~49255 — max drop is 50000 - 60*5 = 49700 > 49255
+        funding_applied_on_same_second: false,
       },
       BINANCE_FEES,
       0
@@ -124,6 +126,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_mult: 1.5,
+        funding_applied_on_same_second: false,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE

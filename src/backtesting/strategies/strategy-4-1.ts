@@ -3,6 +3,7 @@ import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
 import { simulateLadderOrders, simulateOrders } from '../orders/simulator.js'
 import { calculateLadderPnl } from '../pnl/calculator.js'
+import { fundingFractionForLadder } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
 import type { ExitReason } from '../config/schema.js'
@@ -42,6 +43,7 @@ export class Strategy41 implements BaseStrategy {
 
     const setupTs = toClickHouseDateTime(setupTime)
     const deadlineTs = toClickHouseDateTime(deadlineTime)
+    const fundingTs = toClickHouseDateTime(event.funding_time)
 
     // Record P_current from ask price at setup time
     const setupCandle = data.getRowAt(setupTs)
@@ -159,12 +161,19 @@ export class Strategy41 implements BaseStrategy {
       }
     }
 
+    const appliedFraction = fundingFractionForLadder({
+      fills,
+      exitTs: exit.ts,
+      fundingTs,
+      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
+    })
+
     const pnl = calculateLadderPnl({
       direction: 'long',
       avgEntryPrice: pAvg,
       exitPrice: exit.price,
       fundingRate: event.funding_rate,
-      includeFunding: this.config.include_funding,
+      appliedFraction,
       numFilled: fills.length,
       exitFeeType: exit.feeType,
       feeSchedule: this.feeSchedule,
@@ -185,7 +194,7 @@ export class Strategy41 implements BaseStrategy {
       exit_reason: exit.reason,
       hold_duration: holdDuration,
       fill_count: fills.length,
-      funding_received: this.config.include_funding,
+      funding_received: appliedFraction > 0,
     }
   }
 }

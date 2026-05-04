@@ -86,10 +86,12 @@ export function buildReport(input: BuildReportInput): BacktestReport {
 
   // Equity curve (cumulative P&L)
   const equityCurve: number[] = []
+  const equityCurveTimestamps: string[] = []
   let cumPnl = 0
-  for (const p of pnls) {
-    cumPnl += p
+  for (const trade of trades) {
+    cumPnl += trade.pnl.net_pnl
     equityCurve.push(cumPnl)
+    equityCurveTimestamps.push(trade.funding_time.toISOString())
   }
 
   // Equity curve metrics
@@ -172,6 +174,7 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     reproducibility: reproducibility,
     trade_log: tradeLog,
     equity_curve: equityCurve,
+    equity_curve_timestamps: equityCurveTimestamps,
     equity_curve_metrics: equityCurveMetrics,
   }
 }

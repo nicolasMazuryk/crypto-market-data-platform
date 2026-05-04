@@ -83,6 +83,8 @@ export interface Strategy1Config {
   entry_offset_seconds: number
   /** Seconds after T_funding to exit (>= 2, market-order latency) */
   exit_offset_seconds: number
+  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
+  funding_applied_on_same_second: boolean
 }
 
 /** Strategy 2: Negative Funding LONG - Retracement Exit */
@@ -98,6 +100,8 @@ export interface Strategy2Config {
   deadline_seconds: number
   /** Stop-loss multiplier: SL at entry_price × (1 − |F| × sl_mult) */
   sl_mult: number
+  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
+  funding_applied_on_same_second: boolean
 }
 
 /** Strategy 3: Negative Funding SHORT - Ride the Drop */
@@ -117,6 +121,8 @@ export interface Strategy3Config {
   tp_addend: number
   /** Max seconds after T_funding before forced exit (>= 2) */
   deadline_seconds: number
+  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
+  funding_applied_on_same_second: boolean
 }
 
 /** Strategy 4.1: Negative Funding Ladder LONG - Post-Funding Entry */
@@ -136,8 +142,8 @@ export interface Strategy41Config {
   take_profit: number
   /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
-  /** Whether funding fee is applied to the position */
-  include_funding: boolean
+  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
+  funding_applied_on_same_second: boolean
   /** Stop-loss multiplier: SL at P_avg × (1 − |F| × sl_mult) */
   sl_mult: number
 }
@@ -154,7 +160,8 @@ export interface Strategy42Config {
   take_profit: number
   /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
-  include_funding: boolean
+  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
+  funding_applied_on_same_second: boolean
   /** Stop-loss multiplier: SL at entry_price × (1 − |F| × sl_mult); must be > limit_offset_mult */
   sl_mult: number
 }
@@ -174,7 +181,8 @@ export interface Strategy43Config {
   take_profit: number
   /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
-  include_funding: boolean
+  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
+  funding_applied_on_same_second: boolean
 }
 
 /** Strategy 5: Cross-Exchange Funding Arbitrage */
@@ -197,6 +205,8 @@ export interface Strategy5Config {
   deadline_seconds: number
   /** Volume ratio threshold: A volume must exceed B volume by this factor */
   vol_ratio_threshold: number
+  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
+  funding_applied_on_same_second: boolean
 }
 
 /** Union of all strategy configs */

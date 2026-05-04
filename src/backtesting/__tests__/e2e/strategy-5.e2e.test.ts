@@ -19,6 +19,7 @@ describe('E2E: Strategy 5 — Cross-Exchange Funding Arbitrage', () => {
         entry_offset_seconds: 3,
         deadline_seconds: 60,
         vol_ratio_threshold: 1.0,
+        funding_applied_on_same_second: true,
       },
       BINANCE_FEES
     )
@@ -62,7 +63,7 @@ describe('E2E: Strategy 5 — Cross-Exchange Funding Arbitrage', () => {
     expect(Math.abs(result.pnl.fees - expectedFees)).toBeLessThan(TOLERANCE)
     expect(Math.abs(result.pnl.net_pnl - expectedNet)).toBeLessThan(TOLERANCE)
     expect(result.pnl.net_pnl).toBeGreaterThan(0) // Profitable!
-    expect(result.funding_received).toBe(false) // Shorts pay
+    expect(result.funding_received).toBe(true) // position straddles funding tick
   })
 
   it('Scenario 15: Volume filter fails — strategy does not trigger', () => {
@@ -90,6 +91,7 @@ describe('E2E: Strategy 5 — Cross-Exchange Funding Arbitrage', () => {
         entry_offset_seconds: 3,
         deadline_seconds: 60,
         vol_ratio_threshold: 1.0,
+        funding_applied_on_same_second: true,
       },
       BINANCE_FEES
     )

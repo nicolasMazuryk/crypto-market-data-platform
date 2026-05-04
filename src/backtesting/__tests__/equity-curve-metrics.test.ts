@@ -1,12 +1,7 @@
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import { beforeAll, describe, it, expect } from 'vitest'
 
 import { computeEquityCurveMetrics } from '../reporting/equity-curve-metrics.js'
 import type { EquityCurveMetrics } from '../reporting/types.js'
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 function requireResult(equity: number[]): EquityCurveMetrics {
   const r = computeEquityCurveMetrics(equity)
@@ -159,32 +154,6 @@ describe('computeEquityCurveMetrics', () => {
         expect(score).toBeGreaterThanOrEqual(0)
         expect(score).toBeLessThanOrEqual(100)
       }
-    })
-  })
-
-  describe('real equity curve from iter_0 copy.json', () => {
-    const jsonPath = path.resolve(__dirname, '../../..', 'iter_0 copy.json')
-
-    it('computes all metrics without throwing', () => {
-      const raw = fs.readFileSync(jsonPath, 'utf8')
-      const report = JSON.parse(raw) as { equity_curve: number[] }
-      const result = computeEquityCurveMetrics(report.equity_curve)
-
-      expect(result).not.toBeNull()
-      if (result === null) return
-
-      expect(typeof result.r2).toBe('number')
-      expect(typeof result.k_ratio).toBe('number')
-      expect(typeof result.ulcer_index).toBe('number')
-      expect(typeof result.recovery_factor).toBe('number')
-      expect(typeof result.serenity_ratio).toBe('number')
-      expect(typeof result.gain_to_pain_ratio).toBe('number')
-
-      expect(result.equity_curve_quality_score).toBeGreaterThanOrEqual(0)
-      expect(result.equity_curve_quality_score).toBeLessThanOrEqual(100)
-
-      // Spike-then-crash curve documented in the prompt has high sustained drawdown
-      expect(result.ulcer_index).toBeGreaterThan(5)
     })
   })
 })

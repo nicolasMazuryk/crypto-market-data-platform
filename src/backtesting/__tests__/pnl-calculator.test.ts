@@ -39,24 +39,29 @@ describe('P&L Calculator', () => {
   })
 
   describe('calculateFundingPnl', () => {
-    it('longs receive +|F| when funding rate is negative', () => {
-      const result = calculateFundingPnl(-0.015, 'long', true)
+    it('longs receive +|F| when funding rate is negative (fraction=1)', () => {
+      const result = calculateFundingPnl(-0.015, 'long', 1)
       expect(result).toBeCloseTo(0.015, TOLERANCE)
     })
 
-    it('shorts pay -|F| when funding rate is negative', () => {
-      const result = calculateFundingPnl(-0.015, 'short', true)
+    it('shorts pay -|F| when funding rate is negative (fraction=1)', () => {
+      const result = calculateFundingPnl(-0.015, 'short', 1)
       expect(result).toBeCloseTo(-0.015, TOLERANCE)
     })
 
-    it('returns 0 when include_funding is false', () => {
-      const result = calculateFundingPnl(-0.015, 'long', false)
+    it('returns 0 when appliedFraction is 0', () => {
+      const result = calculateFundingPnl(-0.015, 'long', 0)
       expect(result).toBe(0)
     })
 
-    it('longs pay when funding rate is positive', () => {
-      const result = calculateFundingPnl(0.01, 'long', true)
+    it('longs pay when funding rate is positive (fraction=1)', () => {
+      const result = calculateFundingPnl(0.01, 'long', 1)
       expect(result).toBeCloseTo(-0.01, TOLERANCE)
+    })
+
+    it('scales proportionally for partial fraction', () => {
+      expect(calculateFundingPnl(-0.02, 'long', 0.5)).toBeCloseTo(0.01, TOLERANCE)
+      expect(calculateFundingPnl(-0.02, 'short', 0.5)).toBeCloseTo(-0.01, TOLERANCE)
     })
   })
 
@@ -83,7 +88,7 @@ describe('P&L Calculator', () => {
         entryPrice: 50000,
         exitPrice: 49925,
         fundingRate: -0.015,
-        includeFunding: true,
+        appliedFraction: 1,
         entryFeeType: 'taker',
         exitFeeType: 'taker',
         feeSchedule: defaultFees,
@@ -107,7 +112,7 @@ describe('P&L Calculator', () => {
         entryPrice: 50000,
         exitPrice: 49600,
         fundingRate: -0.005,
-        includeFunding: true,
+        appliedFraction: 1,
         entryFeeType: 'taker',
         exitFeeType: 'taker',
         feeSchedule: defaultFees,
@@ -132,7 +137,7 @@ describe('P&L Calculator', () => {
         entryPrice: 50000,
         exitPrice: 49250,
         fundingRate: -0.01,
-        includeFunding: true,
+        appliedFraction: 1,
         entryFeeType: 'taker',
         exitFeeType: 'maker',
         feeSchedule: defaultFees,
@@ -163,7 +168,7 @@ describe('P&L Calculator', () => {
         avgEntryPrice: pAvg,
         exitPrice: 49700,
         fundingRate: -0.01,
-        includeFunding: false, // scenario a
+        appliedFraction: 0, // scenario a
         numFilled: 3,
         exitFeeType: 'maker',
         feeSchedule: defaultFees,
@@ -182,7 +187,7 @@ describe('P&L Calculator', () => {
         avgEntryPrice: pAvg,
         exitPrice: 49700,
         fundingRate: -0.01,
-        includeFunding: true, // scenario b
+        appliedFraction: 1, // scenario b
         numFilled: 3,
         exitFeeType: 'maker',
         feeSchedule: defaultFees,

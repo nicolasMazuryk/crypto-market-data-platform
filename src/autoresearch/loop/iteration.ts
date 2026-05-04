@@ -12,7 +12,7 @@ import { commitAll, diffNameOnlyHead, resetHard, revParseHead } from '../git/rat
 import { getProposalIterPath, getProposalJsonPath, getReportsDir, getResultsDir } from '../paths.js'
 import { appendRow } from '../results/tsv.js'
 import type { ResultRow, RunSpec, RunState } from '../types.js'
-import { renderEquityCurveChart } from '../../backtesting/reporting/equity-curve-chart.js'
+import { renderEquityCurveChart, renderTimeBasedEquityCurveChart } from '../../backtesting/reporting/equity-curve-chart.js'
 import type { BacktestReport } from '../../backtesting/reporting/types.js'
 
 import type { Semaphore } from './pool.js'
@@ -239,9 +239,16 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   // Copy the report into the per-iteration name so the TSV row points
   // somewhere stable.
   const iterReportPath = copyReport(backtest.reportPath, repoRoot, spec.tag, iter)
-  await renderEquityCurveChart(report.equity_curve, iterReportPath.replace(/\.json$/, '.png')).catch((e: unknown) => {
+  const pngPath = iterReportPath.replace(/\.json$/, '.png')
+  const timePngPath = iterReportPath.replace(/\.json$/, '.time.png')
+  await renderEquityCurveChart(report.equity_curve, pngPath).catch((e: unknown) => {
     logWrite(`[chart] render failed: ${e instanceof Error ? e.message : String(e)}`)
   })
+  await renderTimeBasedEquityCurveChart(report.equity_curve, report.equity_curve_timestamps, timePngPath).catch(
+    (e: unknown) => {
+      logWrite(`[chart] time render failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  )
 
   // Step 5: decide keep/discard.
   const improved = state.best_pnl === null ? true : metrics.total_net_pnl > state.best_pnl
@@ -353,9 +360,16 @@ export async function runBaselineIteration(args: {
   }
 
   const iterReportPath = copyReport(backtest.reportPath, args.repoRoot, args.spec.tag, iter)
-  await renderEquityCurveChart(report.equity_curve, iterReportPath.replace(/\.json$/, '.png')).catch((e: unknown) => {
+  const pngPath = iterReportPath.replace(/\.json$/, '.png')
+  const timePngPath = iterReportPath.replace(/\.json$/, '.time.png')
+  await renderEquityCurveChart(report.equity_curve, pngPath).catch((e: unknown) => {
     args.logWrite(`[chart] render failed: ${e instanceof Error ? e.message : String(e)}`)
   })
+  await renderTimeBasedEquityCurveChart(report.equity_curve, report.equity_curve_timestamps, timePngPath).catch(
+    (e: unknown) => {
+      args.logWrite(`[chart] time render failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  )
 
   return {
     iter,

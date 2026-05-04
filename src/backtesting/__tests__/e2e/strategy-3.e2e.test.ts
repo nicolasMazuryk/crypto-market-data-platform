@@ -16,6 +16,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         tp_multiplier: 1.5,
         tp_addend: 0.004,
         deadline_seconds: 60,
+        funding_applied_on_same_second: true,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -42,7 +43,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('TP_HIT')
     expect(result.pnl.funding_pnl).toBeLessThan(0) // Shorts pay funding
-    expect(result.funding_received).toBe(false)
+    expect(result.funding_received).toBe(true) // Funding was applied (position straddles funding tick)
   })
 
   it('Scenario 6: SL hit before TP', () => {
@@ -58,6 +59,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         tp_multiplier: 1.5,
         tp_addend: 0.004,
         deadline_seconds: 60,
+        funding_applied_on_same_second: true,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -98,6 +100,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         tp_multiplier: 1.5,
         tp_addend: 0.004,
         deadline_seconds: 60,
+        funding_applied_on_same_second: true,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -151,6 +154,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         tp_multiplier: 1.5,
         tp_addend: 0.004,
         deadline_seconds: 60,
+        funding_applied_on_same_second: true,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE

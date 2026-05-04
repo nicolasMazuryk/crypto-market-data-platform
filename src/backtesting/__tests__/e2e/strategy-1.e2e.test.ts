@@ -13,6 +13,7 @@ describe('E2E: Strategy 1 — Instant Exit', () => {
       funding_threshold: 0.004,
       entry_offset_seconds: 5,
       exit_offset_seconds: 2,
+      funding_applied_on_same_second: false,
     },
     BINANCE_FEES,
     0

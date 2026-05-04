@@ -3,6 +3,7 @@ import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
 import { simulateOrders } from '../orders/simulator.js'
 import { calculatePnl } from '../pnl/calculator.js'
+import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
 import type { ExitReason } from '../config/schema.js'
@@ -39,6 +40,7 @@ export class Strategy3 implements BaseStrategy {
     const absF = Math.abs(event.funding_rate)
     const entryTime = new Date(event.funding_time.getTime() - this.config.entry_offset_seconds * 1000)
     const entryTs = toClickHouseDateTime(entryTime)
+    const fundingTs = toClickHouseDateTime(event.funding_time)
 
     const entryCandle = data.getRowAt(entryTs)
     if (!entryCandle) return null
@@ -138,12 +140,19 @@ export class Strategy3 implements BaseStrategy {
       }
     }
 
+    const applyFunding = shouldApplyFunding({
+      entryTs,
+      exitTs,
+      fundingTs,
+      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
+    })
+
     const pnl = calculatePnl({
       direction: 'short',
       entryPrice,
       exitPrice,
       fundingRate: event.funding_rate,
-      includeFunding: true, // Shorts always pay funding
+      appliedFraction: fundingFraction(applyFunding),
       entryFeeType: 'taker',
       exitFeeType,
       feeSchedule: this.feeSchedule,
@@ -164,7 +173,7 @@ export class Strategy3 implements BaseStrategy {
       exit_reason: exitReason,
       hold_duration: holdDuration,
       fill_count: 1,
-      funding_received: false, // Shorts pay, not receive
+      funding_received: applyFunding,
     }
   }
 }

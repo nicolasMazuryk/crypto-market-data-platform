@@ -10,5 +10,5 @@ ladder_top_mult: 0.4
 ladder_bottom_mult: 1.5
 take_profit: 0.002            # 0.2% above P_avg
 deadline_seconds: 60
-include_funding: true
+funding_applied_on_same_second: true
 sl_mult: 1.5                  # SL at P_avg × (1 − F × 1.5)

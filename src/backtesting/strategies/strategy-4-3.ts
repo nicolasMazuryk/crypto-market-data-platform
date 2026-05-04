@@ -4,6 +4,7 @@ import { fillMarketOrder } from '../orders/market-order.js'
 import { simulateOrders } from '../orders/simulator.js'
 import { checkLimitFill } from '../orders/limit-order.js'
 import { calculatePnl } from '../pnl/calculator.js'
+import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
 import type { ExitReason } from '../config/schema.js'
@@ -42,6 +43,7 @@ export class Strategy43 implements BaseStrategy {
 
     const setupTs = toClickHouseDateTime(entrySetupTime)
     const deadlineTs = toClickHouseDateTime(deadlineTime)
+    const fundingTs = toClickHouseDateTime(event.funding_time)
 
     const setupCandle = data.getRowAt(setupTs)
     if (setupCandle?.ask_open == null) return null
@@ -136,13 +138,20 @@ export class Strategy43 implements BaseStrategy {
       }
     }
 
+    const applyFunding = shouldApplyFunding({
+      entryTs: entryFill.timestamp,
+      exitTs: exit.ts,
+      fundingTs,
+      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
+    })
+
     const pnl = calculatePnl({
       direction: 'long',
       entryPrice: entryFill.price,
       exitPrice: exit.price,
       fundingRate: event.funding_rate,
-      includeFunding: this.config.include_funding,
-      entryFeeType: 'maker', // Limit entry
+      appliedFraction: fundingFraction(applyFunding),
+      entryFeeType: 'maker',
       exitFeeType: exit.feeType,
       feeSchedule: this.feeSchedule,
     })
@@ -162,7 +171,7 @@ export class Strategy43 implements BaseStrategy {
       exit_reason: exit.reason,
       hold_duration: holdDuration,
       fill_count: 1,
-      funding_received: this.config.include_funding,
+      funding_received: applyFunding,
     }
   }
 }

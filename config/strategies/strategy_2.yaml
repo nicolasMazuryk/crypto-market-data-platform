@@ -8,3 +8,4 @@ entry_offset_seconds: 2       # Enter at T_funding - 5s
 retracement_pct: 0.5        # 50% retracement target
 deadline_seconds: 600          # Max hold after T_funding (10 minutes)
 sl_mult: 1.5                  # SL at entry × (1 − F × 1.5)
+funding_applied_on_same_second: false

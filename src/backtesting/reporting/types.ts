@@ -119,5 +119,6 @@ export interface BacktestReport {
   reproducibility: ReproducibilitySection
   trade_log?: TradeLogEntry[] | undefined
   equity_curve: number[]
+  equity_curve_timestamps: string[]
   equity_curve_metrics: EquityCurveMetrics | null
 }

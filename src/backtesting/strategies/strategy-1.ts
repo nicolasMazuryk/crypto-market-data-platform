@@ -2,6 +2,7 @@ import type { FeeSchedule, Strategy1Config } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
 import { calculatePnl } from '../pnl/calculator.js'
+import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
 
@@ -33,6 +34,7 @@ export class Strategy1 implements BaseStrategy {
 
     const entryTs = toClickHouseDateTime(entryTime)
     const exitTs = toClickHouseDateTime(exitTime)
+    const fundingTs = toClickHouseDateTime(event.funding_time)
 
     const entryCandle = data.getRowAt(entryTs)
     const exitCandle = data.getRowAt(exitTs)
@@ -47,12 +49,19 @@ export class Strategy1 implements BaseStrategy {
     const exitFill = fillMarketOrder('sell', exitCandle, 1, 'exit')
     if (!exitFill) return null
 
+    const applyFunding = shouldApplyFunding({
+      entryTs,
+      exitTs,
+      fundingTs,
+      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
+    })
+
     const pnl = calculatePnl({
       direction: 'long',
       entryPrice: entryFill.price,
       exitPrice: exitFill.price,
       fundingRate: event.funding_rate,
-      includeFunding: true, // S1 always receives funding
+      appliedFraction: fundingFraction(applyFunding),
       entryFeeType: 'taker',
       exitFeeType: 'taker',
       feeSchedule: this.feeSchedule,
@@ -72,7 +81,7 @@ export class Strategy1 implements BaseStrategy {
       exit_reason: 'MARKET_EXIT',
       hold_duration: holdDuration,
       fill_count: 1,
-      funding_received: true,
+      funding_received: applyFunding,
     }
   }
 }

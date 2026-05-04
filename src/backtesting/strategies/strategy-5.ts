@@ -3,6 +3,7 @@ import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
 import { checkLimitFill } from '../orders/limit-order.js'
 import { calculatePnl } from '../pnl/calculator.js'
+import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
 import type { ExitReason } from '../config/schema.js'
@@ -57,6 +58,7 @@ export class Strategy5 implements BaseStrategy {
 
     const entryTs = toClickHouseDateTime(entryTime)
     const deadlineTs = toClickHouseDateTime(deadlineTime)
+    const fundingTs = toClickHouseDateTime(event.funding_time)
 
     const entryCandle = data.getRowAt(entryTs)
     if (!entryCandle) return null
@@ -98,13 +100,20 @@ export class Strategy5 implements BaseStrategy {
       }
     }
 
+    const applyFunding = shouldApplyFunding({
+      entryTs,
+      exitTs: exit.ts,
+      fundingTs,
+      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
+    })
+
     // Shorts on B pay F_B funding
     const pnl = calculatePnl({
       direction: 'short',
       entryPrice: entryFill.price,
       exitPrice: exit.price,
       fundingRate: fundingRateB,
-      includeFunding: true,
+      appliedFraction: fundingFraction(applyFunding),
       entryFeeType: 'taker',
       exitFeeType: exit.feeType,
       feeSchedule: this.feeSchedule,
@@ -125,7 +134,7 @@ export class Strategy5 implements BaseStrategy {
       exit_reason: exit.reason,
       hold_duration: holdDuration,
       fill_count: 1,
-      funding_received: false, // Shorts pay
+      funding_received: applyFunding,
     }
   }
 

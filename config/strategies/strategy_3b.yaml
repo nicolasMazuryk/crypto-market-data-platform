@@ -10,3 +10,4 @@ tp_mode: "B"
 tp_multiplier: 1.5            # Not used in mode B, but required
 tp_addend: 0.004             # TP = F + 0.4%
 deadline_seconds: 60         # Max seconds after T_funding before forced exit
+funding_applied_on_same_second: true

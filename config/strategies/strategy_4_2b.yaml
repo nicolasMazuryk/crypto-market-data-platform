@@ -7,5 +7,5 @@ entry_offset_seconds: 5
 limit_offset_mult: 1.0
 take_profit: 0.002            # 0.2%
 deadline_seconds: 60
-include_funding: true
+funding_applied_on_same_second: true
 sl_mult: 1.5                  # SL at entry × (1 − F × 1.5); must be > limit_offset_mult

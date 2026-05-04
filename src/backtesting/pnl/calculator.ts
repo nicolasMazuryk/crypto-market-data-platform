@@ -29,25 +29,22 @@ export function calculateDeltaPnl(direction: 'long' | 'short', entryPrice: numbe
  * - Longs receive +|F|
  * - Shorts pay -|F|
  *
- * If include_funding is false, returns 0.
- *
  * @param fundingRate - The actual funding rate (negative number for negative funding)
  * @param direction - Position direction
- * @param includeFunding - Whether funding applies
+ * @param appliedFraction - 0 = none, 1 = full, in-between = partial (ladder proportional accrual)
  */
-export function calculateFundingPnl(fundingRate: number, direction: 'long' | 'short', includeFunding: boolean): number {
-  if (!includeFunding) return 0
+export function calculateFundingPnl(
+  fundingRate: number,
+  direction: 'long' | 'short',
+  appliedFraction: number
+): number {
+  if (appliedFraction <= 0) return 0
 
   // F in the spec is expressed as absolute value. The funding rate from DB is negative.
   // When F is negative: longs receive +|F|, shorts pay -|F|
   const absF = Math.abs(fundingRate)
-
-  if (direction === 'long') {
-    // Longs receive funding when rate is negative
-    return fundingRate < 0 ? absF : -absF
-  }
-  // Shorts pay funding when rate is negative
-  return fundingRate < 0 ? -absF : absF
+  const sign = direction === 'long' ? (fundingRate < 0 ? 1 : -1) : fundingRate < 0 ? -1 : 1
+  return sign * absF * appliedFraction
 }
 
 /**
@@ -60,13 +57,13 @@ export function calculatePnl(params: {
   entryPrice: number
   exitPrice: number
   fundingRate: number
-  includeFunding: boolean
+  appliedFraction: number
   entryFeeType: FeeType
   exitFeeType: FeeType
   feeSchedule: FeeSchedule
 }): PnlBreakdown {
   const delta_pnl = calculateDeltaPnl(params.direction, params.entryPrice, params.exitPrice)
-  const funding_pnl = calculateFundingPnl(params.fundingRate, params.direction, params.includeFunding)
+  const funding_pnl = calculateFundingPnl(params.fundingRate, params.direction, params.appliedFraction)
   const entryFee = calculateFee(params.entryFeeType, params.feeSchedule)
   const exitFee = calculateFee(params.exitFeeType, params.feeSchedule)
   const fees = entryFee + exitFee
@@ -86,13 +83,13 @@ export function calculateLadderPnl(params: {
   avgEntryPrice: number
   exitPrice: number
   fundingRate: number
-  includeFunding: boolean
+  appliedFraction: number
   numFilled: number
   exitFeeType: FeeType
   feeSchedule: FeeSchedule
 }): PnlBreakdown {
   const delta_pnl = calculateDeltaPnl(params.direction, params.avgEntryPrice, params.exitPrice)
-  const funding_pnl = calculateFundingPnl(params.fundingRate, params.direction, params.includeFunding)
+  const funding_pnl = calculateFundingPnl(params.fundingRate, params.direction, params.appliedFraction)
   const entryFees = params.numFilled * params.feeSchedule.maker_fee
   const exitFee = calculateFee(params.exitFeeType, params.feeSchedule)
   const fees = entryFees + exitFee

@@ -8,4 +8,4 @@ entry_mult: 0.75
 sl_mult: 1.5
 take_profit: 0.003            # 0.3%
 deadline_seconds: 60
-include_funding: true
+funding_applied_on_same_second: true
