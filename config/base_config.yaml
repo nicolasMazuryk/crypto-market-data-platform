@@ -31,6 +31,9 @@ fees:
   kucoinfutures:
     taker_fee: 0.0006   # 0.06%
     maker_fee: 0.0002   # 0.02%
+  kucoin:
+    taker_fee: 0.0006   # 0.06%
+    maker_fee: 0.0002   # 0.02%
 
 validation:
   required_seconds_before: 3
