@@ -62,57 +62,57 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 
 ### strategy_1 (LONG — instant exit)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5
-- `exit_offset_seconds`:  >= 2       AND <= 5
+- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
+- `exit_offset_seconds`:  >= 2       AND <= 5        ← **integer only** (2, 3, 4, or 5 — no decimals)
 
 ### strategy_2 (LONG — retracement exit)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5
+- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `retracement_pct`:      >= 0.20    AND <= 2.00
-- `deadline_seconds`:     >= 5      AND <= 900
+- `deadline_seconds`:     >= 5      AND <= 900       ← **integer only** (no decimals)
 - `sl_mult`:              >= 0.50     AND <= 4.0    ← SL at entry × (1 − F × mult)
 
 ### strategy_3a / strategy_3b (SHORT — ride the drop)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5
+- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `stop_loss`:            >= 0.002   AND <= 0.040
 - `tp_multiplier`:        >= 1.2     AND <= 5.0    ← TP_a = F × multiplier; values < 1 target less than the funding; only active in mode A
 - `tp_addend`:            >= 0.001   AND <= 0.040  ← TP_b = F + addend; only active in mode B
-- `deadline_seconds`:     >= 3      AND <= 900
+- `deadline_seconds`:     >= 3      AND <= 900       ← **integer only** (no decimals)
 
 ### strategy_4_1a / strategy_4_1b (LONG — ladder limit)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5
-- `ladder_count`:         >= 2       AND <= 8
+- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
+- `ladder_count`:         >= 2       AND <= 8        ← **integer only** (2, 3, 4, 5, 6, 7, or 8 — no decimals)
 - `ladder_top_mult`:      >= 0.3     AND <= 2.5
 - `ladder_bottom_mult`:   >= 0.8     AND <= 4.0
 - `take_profit`:          >= 0.001   AND <= 0.020
-- `deadline_seconds`:     >= 10      AND <= 900
+- `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
 - `sl_mult`:              >= 1.0     AND <= 5.0    ← SL at P_avg × (1 − F × mult)
 
 ### strategy_4_2a / strategy_4_2b (LONG — single limit)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5
+- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `limit_offset_mult`:    >= 0.3     AND <= 3.0    ← entry at P × (1 − F × mult); default is 1.0
 - `take_profit`:          >= 0.001   AND <= 0.020
-- `deadline_seconds`:     >= 10      AND <= 900
+- `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
 - `sl_mult`:              >= 0.6     AND <= 4.0    ← SL at entry × (1 − F × mult); MUST be > limit_offset_mult
 
 ### strategy_4_3a / strategy_4_3b (LONG — limit with SL/TP)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5
+- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `entry_mult`:           >= 0.3     AND <= 3.0    ← entry at P × (1 − F × mult); default is 1.0
 - `sl_mult`:              >= 0.5     AND <= 4.0    ← SL at P × (1 − F × mult); MUST be > entry_mult
 - `take_profit`:          >= 0.002   AND <= 0.020
-- `deadline_seconds`:     >= 10      AND <= 900
+- `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
 
 ### strategy_5 (SHORT on target — main-exchange-driven cross-exchange)
 - `main_exchange_funding_threshold`: >= 0.002 AND <= 0.015
 - `min_funding_spread`:              >= 0.001 AND <= 0.015
 - `stop_loss`:                       >= 0.001 AND <= 0.020
 - `tp_multiplier`:                   >= 0.1   AND <= 3.0
-- `entry_offset_seconds`:            >= 1     AND <= 5
-- `deadline_seconds`:                >= 10    AND <= 900
+- `entry_offset_seconds`:            >= 1     AND <= 5      ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
+- `deadline_seconds`:                >= 10    AND <= 900     ← **integer only** (no decimals)
 
 ## Coupling rules
 
