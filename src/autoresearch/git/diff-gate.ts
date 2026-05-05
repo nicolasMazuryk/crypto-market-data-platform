@@ -11,7 +11,7 @@ export interface DiffGateResult {
   outOfScopePaths: string[]
   revertedPaths: string[]
   cleanedPaths: string[]
-  /** True if strategy_5 and the agent mutated exchange_a or exchange_b. */
+  /** True if strategy_5 and the agent mutated main_exchange or exclude_exchanges. */
   pinnedExchangesMutated: boolean
   errorMessage: string | null
 }
@@ -19,7 +19,7 @@ export interface DiffGateResult {
 /**
  * Enforce that the agent only touched allowed files. Any out-of-scope change
  * (modified or untracked) is reverted. For strategy_5, additionally assert
- * exchange_a/exchange_b were not changed — if they were, revert the YAML to
+ * main_exchange/exclude_exchanges were not changed — if they were, revert the YAML to
  * HEAD entirely and report the violation.
  */
 export async function enforceScope(worktreePath: string, spec: RunSpec): Promise<DiffGateResult> {
@@ -71,11 +71,19 @@ export async function enforceScope(worktreePath: string, spec: RunSpec): Promise
 }
 
 function checkStrategy5Pins(worktreePath: string, spec: RunSpec): boolean {
-  if (spec.exchange_a === null || spec.exchange_b === null) return false
+  if (spec.main_exchange === null) return false
   const yamlPath = path.join(worktreePath, 'config', 'strategies', `${spec.strategy}.yaml`)
   if (!fs.existsSync(yamlPath)) return false
   const content = fs.readFileSync(yamlPath, 'utf-8')
   const parsed = parseYaml(content) as Record<string, unknown> | null
   if (parsed === null) return false
-  return parsed.exchange_a !== spec.exchange_a || parsed.exchange_b !== spec.exchange_b
+  if (parsed.main_exchange !== spec.main_exchange) return true
+  if (spec.exclude_exchanges !== null) {
+    const yamlExcludes: string[] = Array.isArray(parsed.exclude_exchanges)
+      ? (parsed.exclude_exchanges as string[])
+      : []
+    const specExcludes = spec.exclude_exchanges
+    if (JSON.stringify([...yamlExcludes].sort()) !== JSON.stringify([...specExcludes].sort())) return true
+  }
+  return false
 }

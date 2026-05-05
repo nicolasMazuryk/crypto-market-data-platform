@@ -16,8 +16,8 @@ runs:
     exchange: okx
     iterations: 100
   - strategy: strategy_5
-    exchange_a: binance
-    exchange_b: bybit
+    main_exchange: binance
+    exclude_exchanges: []
 `.trim()
 
 describe('parseMatrixContent', () => {
@@ -30,9 +30,9 @@ describe('parseMatrixContent', () => {
     expect(specs[0]?.iterations).toBe(50)
     expect(specs[1]?.tag).toBe('strategy_1-okx')
     expect(specs[1]?.iterations).toBe(100)
-    expect(specs[2]?.tag).toBe('strategy_5-binance_bybit')
-    expect(specs[2]?.exchange_a).toBe('binance')
-    expect(specs[2]?.exchange_b).toBe('bybit')
+    expect(specs[2]?.tag).toBe('strategy_5-binance')
+    expect(specs[2]?.main_exchange).toBe('binance')
+    expect(specs[2]?.exclude_exchanges).toEqual([])
   })
 
   it('rejects duplicate tags', () => {
@@ -48,7 +48,7 @@ describe('parseMatrixContent', () => {
     expect(() => parseMatrixContent(content)).toThrow(/not a known strategy id/i)
   })
 
-  it('rejects strategy_5 without exchange_a/exchange_b', () => {
+  it('rejects strategy_5 without main_exchange', () => {
     const content = `
 default_iterations: 5
 max_parallel: 1
@@ -60,10 +60,10 @@ runs:
   - strategy: strategy_5
     exchange: binance
 `.trim()
-    expect(() => parseMatrixContent(content)).toThrow(/strategy_5 requires 'exchange_a'/i)
+    expect(() => parseMatrixContent(content)).toThrow(/strategy_5 requires 'main_exchange'/i)
   })
 
-  it('rejects non-strategy_5 rows with exchange_a/exchange_b', () => {
+  it('rejects non-strategy_5 rows with main_exchange/exclude_exchanges', () => {
     const content = `
 default_iterations: 5
 max_parallel: 1
@@ -73,8 +73,7 @@ backtest_timeout_ms: 1000
 per_iteration_budget_usd: 0.10
 runs:
   - strategy: strategy_1
-    exchange_a: binance
-    exchange_b: bybit
+    main_exchange: binance
 `.trim()
     expect(() => parseMatrixContent(content)).toThrow(/requires 'exchange'/i)
   })

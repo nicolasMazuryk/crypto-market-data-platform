@@ -28,7 +28,7 @@ function setupRepo(): string {
   )
   fs.writeFileSync(
     path.join(dir, 'config', 'strategies', 'strategy_5.yaml'),
-    'strategy_id: strategy_5\nexchange_a: binance\nexchange_b: bybit\nfunding_threshold_a: 0.005\nfunding_max_b: 0.004\nfunding_spread_threshold: 0.004\nentry_offset_seconds: 3\ndeadline_seconds: 60\nvol_ratio_threshold: 1.0\n'
+    'strategy_id: strategy_5\nmain_exchange: binance\nexclude_exchanges: []\nmain_exchange_funding_threshold: 0.005\nmin_funding_spread: 0.004\nstop_loss: 0.005\ntp_multiplier: 1.5\nentry_offset_seconds: 3\ndeadline_seconds: 60\nfunding_applied_on_same_second: true\n'
   )
   fs.writeFileSync(path.join(dir, 'unrelated.txt'), 'original\n')
   runGit(dir, ['add', '-A'])
@@ -41,8 +41,8 @@ function baseSpec(overrides: Partial<RunSpec> = {}): RunSpec {
     tag: 'strategy_1-binance',
     strategy: 'strategy_1',
     exchange: 'binance',
-    exchange_a: null,
-    exchange_b: null,
+    main_exchange: null,
+    exclude_exchanges: null,
     iterations: 10,
     iteration_timeout_ms: 600_000,
     backtest_timeout_ms: 1000,
@@ -89,19 +89,19 @@ describe('enforceScope (diff-gate)', () => {
     expect(fs.existsSync(newFile)).toBe(false)
   })
 
-  it('detects strategy_5 pinned-exchange mutations and reverts the yaml', async () => {
+  it('detects strategy_5 pinned main_exchange mutation and reverts the yaml', async () => {
     const p = path.join(repo, 'config', 'strategies', 'strategy_5.yaml')
     const before = fs.readFileSync(p, 'utf-8')
-    const mutated = before.replace('exchange_a: binance', 'exchange_a: okx')
+    const mutated = before.replace('main_exchange: binance', 'main_exchange: okx')
     fs.writeFileSync(p, mutated)
     const result = await enforceScope(
       repo,
       baseSpec({
-        tag: 'strategy_5-binance_bybit',
+        tag: 'strategy_5-binance',
         strategy: 'strategy_5',
         exchange: null,
-        exchange_a: 'binance',
-        exchange_b: 'bybit',
+        main_exchange: 'binance',
+        exclude_exchanges: [],
       })
     )
     expect(result.pinnedExchangesMutated).toBe(true)

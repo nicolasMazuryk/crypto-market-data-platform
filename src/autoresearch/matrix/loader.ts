@@ -57,21 +57,25 @@ function normalizeRow(raw: Record<string, unknown>, idx: number): MatrixRow {
   }
 
   if (strategy === 'strategy_5') {
-    const exchange_a = raw.exchange_a
-    const exchange_b = raw.exchange_b
-    if (typeof exchange_a !== 'string' || exchange_a.length === 0) {
-      throw new Error(`matrix.yaml runs[${String(idx)}]: strategy_5 requires 'exchange_a'`)
-    }
-    if (typeof exchange_b !== 'string' || exchange_b.length === 0) {
-      throw new Error(`matrix.yaml runs[${String(idx)}]: strategy_5 requires 'exchange_b'`)
+    const main_exchange = raw.main_exchange
+    if (typeof main_exchange !== 'string' || main_exchange.length === 0) {
+      throw new Error(`matrix.yaml runs[${String(idx)}]: strategy_5 requires 'main_exchange'`)
     }
     if ('exchange' in raw) {
       throw new Error(`matrix.yaml runs[${String(idx)}]: strategy_5 must not set 'exchange'`)
     }
+    const excludeRaw = raw.exclude_exchanges
+    let exclude_exchanges: string[] = []
+    if (excludeRaw !== undefined && excludeRaw !== null) {
+      if (!Array.isArray(excludeRaw)) {
+        throw new Error(`matrix.yaml runs[${String(idx)}]: strategy_5 'exclude_exchanges' must be an array`)
+      }
+      exclude_exchanges = excludeRaw as string[]
+    }
     return {
       strategy: 'strategy_5',
-      exchange_a,
-      exchange_b,
+      main_exchange,
+      exclude_exchanges,
       agent,
       ...(iterations === undefined ? {} : { iterations }),
     }
@@ -81,8 +85,8 @@ function normalizeRow(raw: Record<string, unknown>, idx: number): MatrixRow {
   if (typeof exchange !== 'string' || exchange.length === 0) {
     throw new Error(`matrix.yaml runs[${String(idx)}]: '${strategy}' requires 'exchange'`)
   }
-  if ('exchange_a' in raw || 'exchange_b' in raw) {
-    throw new Error(`matrix.yaml runs[${String(idx)}]: only strategy_5 uses 'exchange_a'/'exchange_b'`)
+  if ('main_exchange' in raw || 'exclude_exchanges' in raw) {
+    throw new Error(`matrix.yaml runs[${String(idx)}]: only strategy_5 uses 'main_exchange'/'exclude_exchanges'`)
   }
   return {
     strategy,
@@ -148,13 +152,13 @@ export function loadMatrix(matrixPath: string): MatrixFile {
 
 export function toRunSpec(row: MatrixRow, matrix: MatrixFile): RunSpec {
   const iterations = row.iterations ?? matrix.default_iterations
-  if (row.strategy === 'strategy_5' && 'exchange_a' in row) {
+  if (row.strategy === 'strategy_5' && 'main_exchange' in row) {
     return {
       tag: tagForRow(row),
       strategy: row.strategy,
       exchange: null,
-      exchange_a: row.exchange_a,
-      exchange_b: row.exchange_b,
+      main_exchange: row.main_exchange,
+      exclude_exchanges: row.exclude_exchanges,
       iterations,
       iteration_timeout_ms: matrix.iteration_timeout_ms,
       backtest_timeout_ms: matrix.backtest_timeout_ms,
@@ -167,8 +171,8 @@ export function toRunSpec(row: MatrixRow, matrix: MatrixFile): RunSpec {
       tag: tagForRow(row),
       strategy: row.strategy,
       exchange: row.exchange,
-      exchange_a: null,
-      exchange_b: null,
+      main_exchange: null,
+      exclude_exchanges: null,
       iterations,
       iteration_timeout_ms: matrix.iteration_timeout_ms,
       backtest_timeout_ms: matrix.backtest_timeout_ms,

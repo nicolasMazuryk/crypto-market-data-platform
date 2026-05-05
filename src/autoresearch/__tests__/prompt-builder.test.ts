@@ -12,8 +12,8 @@ function spec(overrides: Partial<RunSpec> = {}): RunSpec {
     tag: 'strategy_1-binance',
     strategy: 'strategy_1',
     exchange: 'binance',
-    exchange_a: null,
-    exchange_b: null,
+    main_exchange: null,
+    exclude_exchanges: null,
     iterations: 50,
     iteration_timeout_ms: 600_000,
     backtest_timeout_ms: 600_000,
@@ -64,15 +64,15 @@ describe('buildPrompt', () => {
     expect(prefix1.length).toBeGreaterThan(100)
   })
 
-  it('warns about strategy_5 pinned exchanges in the hard constraints', () => {
+  it('warns about strategy_5 pinned main_exchange in the hard constraints', () => {
     const program = path.join(dir, 'program.md')
     const yamlPath = path.join(dir, 'strat.yaml')
     fs.writeFileSync(program, 'program')
-    fs.writeFileSync(yamlPath, 'exchange_a: binance\nexchange_b: bybit')
+    fs.writeFileSync(yamlPath, 'main_exchange: binance\nexclude_exchanges: []')
     const prompt = buildPrompt({
       repoRoot: dir,
       worktreePath: dir,
-      spec: spec({ strategy: 'strategy_5', exchange: null, exchange_a: 'binance', exchange_b: 'bybit' }),
+      spec: spec({ strategy: 'strategy_5', exchange: null, main_exchange: 'binance', exclude_exchanges: [] }),
       programMdPath: program,
       strategyYamlPath: yamlPath,
       iter: 3,
@@ -83,7 +83,6 @@ describe('buildPrompt', () => {
       proposalPath: path.join(dir, 'p.json'),
     })
     expect(prompt).toMatch(/strategy_5 pins/)
-    expect(prompt).toMatch(/exchange_a=binance/)
-    expect(prompt).toMatch(/exchange_b=bybit/)
+    expect(prompt).toMatch(/main_exchange=binance/)
   })
 })

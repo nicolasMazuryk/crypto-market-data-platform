@@ -1,6 +1,6 @@
 import { logger } from '../../logger.js'
 import type { ResolvedConfig } from '../config/schema.js'
-import { queryFundingEvents, queryCrossExchangeFundingEvents } from '../data/funding-events.js'
+import { queryFundingEvents, queryMainExchangeCrossEvents } from '../data/funding-events.js'
 import { fetchOrderbookWindow } from '../data/orderbook-window.js'
 import { validateEventData } from '../data/validation.js'
 import type { FundingEvent, SkipReason } from '../data/types.js'
@@ -22,9 +22,9 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
 
   logger.info({ strategy: strategyId, exchange: base.exchange, symbol: base.symbol ?? 'all' }, 'Starting backtest')
 
-  // Get fee schedule for the exchange where trades execute.
-  // Strategy 5 trades on exchange_b, not base.exchange.
-  const feeExchange = strategyId === 'strategy_5' ? strategyConfig.exchange_b : base.exchange
+  // For S5, initialize with main_exchange fees as fallback; actual per-trade fees are passed per call.
+  const feeExchange =
+    strategyConfig.strategy_id === 'strategy_5' ? strategyConfig.main_exchange : base.exchange
   const feeSchedule = base.fees[feeExchange]
   if (!feeSchedule) {
     throw new Error(`No fee schedule configured for exchange: ${feeExchange}`)
@@ -41,25 +41,28 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   let totalEventsScanned = 0
   let totalDataRows = 0
 
-  // Handle S5 separately (cross-exchange)
-  if (strategyId === 'strategy_5') {
+  // Handle S5 separately (main-exchange-driven, scans all target exchanges)
+  if (strategyConfig.strategy_id === 'strategy_5') {
     const s5Config = strategyConfig
     const s5Strategy = strategy as Strategy5
 
-    const crossEvents = await queryCrossExchangeFundingEvents(
-      s5Config.exchange_a,
-      s5Config.exchange_b,
+    // Pass only user-specified exclusions; queryMainExchangeCrossEvents auto-adds main_exchange
+    const crossEvents = await queryMainExchangeCrossEvents(
+      s5Config.main_exchange,
+      s5Config.exclude_exchanges,
       base.symbol,
       base.start_date,
       base.end_date,
-      s5Config.funding_threshold_a,
-      s5Config.funding_max_b,
-      s5Config.funding_spread_threshold,
+      s5Config.main_exchange_funding_threshold,
+      s5Config.min_funding_spread,
       base.funding_time_tolerance_seconds
     )
 
     totalEventsScanned = crossEvents.length
-    logger.info({ events: crossEvents.length }, 'Found cross-exchange funding events')
+    logger.info(
+      { events: crossEvents.length, main_exchange: s5Config.main_exchange },
+      'Found main-exchange cross events'
+    )
 
     const FETCH_CONCURRENCY_S5 = 30
     for (let i = 0; i < crossEvents.length; i += FETCH_CONCURRENCY_S5) {
@@ -67,8 +70,8 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
       const pairs = await Promise.all(
         batch.map(async crossEvent => ({
           crossEvent,
-          windowB: await fetchOrderbookWindow(
-            s5Config.exchange_b,
+          windowTarget: await fetchOrderbookWindow(
+            crossEvent.target_exchange,
             crossEvent.symbol,
             crossEvent.funding_time,
             base.window
@@ -76,10 +79,10 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
         }))
       )
 
-      for (const { crossEvent, windowB } of pairs) {
-        totalDataRows += windowB.length
+      for (const { crossEvent, windowTarget } of pairs) {
+        totalDataRows += windowTarget.length
 
-        const validation = validateEventData(windowB, crossEvent.funding_time, base.validation)
+        const validation = validateEventData(windowTarget, crossEvent.funding_time, base.validation)
         if (!validation.valid) {
           for (const reason of validation.skipReasons) allSkipReasons.push(reason)
           continue
@@ -87,18 +90,22 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
 
         triggeredCount++
 
+        const targetFeeSchedule = base.fees[crossEvent.target_exchange] ?? feeSchedule
+
         const fakeEvent: FundingEvent = {
-          exchange: s5Config.exchange_b,
+          exchange: crossEvent.target_exchange,
           symbol: crossEvent.symbol,
           funding_time: crossEvent.funding_time,
-          funding_rate: crossEvent.funding_rate_b,
+          funding_rate: crossEvent.target_funding_rate,
         }
 
-        const result = s5Strategy.executeWithCrossExchange(
+        const result = s5Strategy.executeMainExchange(
           fakeEvent,
-          windowB,
-          crossEvent.funding_rate_a,
-          crossEvent.funding_rate_b
+          windowTarget,
+          crossEvent.main_funding_rate,
+          crossEvent.target_funding_rate,
+          crossEvent.target_funding_time,
+          targetFeeSchedule
         )
 
         if (result) {

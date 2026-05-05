@@ -47,8 +47,8 @@ export function getBranchName(tag: string): string {
 }
 
 export function tagForRow(row: MatrixRow): string {
-  if (row.strategy === 'strategy_5' && 'exchange_a' in row) {
-    return `strategy_5-${row.exchange_a}_${row.exchange_b}`
+  if (row.strategy === 'strategy_5' && 'main_exchange' in row) {
+    return `strategy_5-${row.main_exchange}`
   }
   if ('exchange' in row) {
     return `${row.strategy}-${row.exchange}`

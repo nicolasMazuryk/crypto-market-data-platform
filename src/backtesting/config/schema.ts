@@ -185,27 +185,24 @@ export interface Strategy43Config {
   funding_applied_on_same_second: boolean
 }
 
-/** Strategy 5: Cross-Exchange Funding Arbitrage */
+/** Strategy 5: Main-Exchange-Driven Cross-Exchange Short */
 export interface Strategy5Config {
   strategy_id: 'strategy_5'
   direction: 'short'
-  /** Exchange A (high funding rate) */
-  exchange_a: string
-  /** Exchange B (low funding rate, where we trade) */
-  exchange_b: string
-  /** Minimum absolute funding rate on Exchange A */
-  funding_threshold_a: number
-  /** Maximum absolute funding rate on Exchange B */
-  funding_max_b: number
-  /** Minimum funding spread (F_A - F_B) */
-  funding_spread_threshold: number
-  /** Seconds before T_funding to enter (>= 2, market-order latency) */
+  /** Most-liquid exchange whose funding event triggers the setup */
+  main_exchange: string
+  /** Exchanges to exclude from the target set (main is auto-excluded) */
+  exclude_exchanges: string[]
+  /** Min |F| on main_exchange to qualify as a setup */
+  main_exchange_funding_threshold: number
+  /** Min (F_target - F_main); main must be more negative than target by at least this */
+  min_funding_spread: number
+  /** Stop loss as fraction of entry price; SL = entry * (1 + stop_loss) for short */
+  stop_loss: number
+  /** TP_distance = |F_main| * tp_multiplier; TP = entry * (1 - TP_distance) */
+  tp_multiplier: number
   entry_offset_seconds: number
-  /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
-  /** Volume ratio threshold: A volume must exceed B volume by this factor */
-  vol_ratio_threshold: number
-  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
   funding_applied_on_same_second: boolean
 }
 

@@ -25,9 +25,9 @@ you may not add new top-level fields the loader does not already know about.
 
 ### strategy_5 pins
 
-For `strategy_5`, the fields `exchange_a` and `exchange_b` are pinned by the
-matrix row. The harness will revert your edit if it detects a change to either
-field; do not touch them.
+For `strategy_5`, the field `main_exchange` is pinned by the matrix row. The
+harness will revert your edit if it detects a change. `exclude_exchanges` is
+also pinned (matrix-controlled); do not touch either.
 
 ## Working directory
 
@@ -106,13 +106,13 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 - `take_profit`:          >= 0.002   AND <= 0.020
 - `deadline_seconds`:     >= 10      AND <= 900
 
-### strategy_5 (SHORT on B — cross-exchange arbitrage)
-- `funding_threshold_a`:      >= 0.005  AND <= 0.050  ← min abs(F) required on Exchange A
-- `funding_max_b`:            >= 0.001  AND <= 0.020  ← max abs(F) allowed on Exchange B; MUST be < funding_threshold_a
-- `funding_spread_threshold`: >= 0.001  AND <= 0.040  ← MUST satisfy: funding_threshold_a − funding_max_b >= funding_spread_threshold
-- `entry_offset_seconds`:     >= 1      AND <= 5
-- `deadline_seconds`:         >= 10     AND <= 900
-- `vol_ratio_threshold`:      >= 1.0    AND <= 10.0   ← ratio A/B; < 1 inverts the price-leadership assumption
+### strategy_5 (SHORT on target — main-exchange-driven cross-exchange)
+- `main_exchange_funding_threshold`: >= 0.002 AND <= 0.015
+- `min_funding_spread`:              >= 0.001 AND <= 0.015
+- `stop_loss`:                       >= 0.001 AND <= 0.020
+- `tp_multiplier`:                   >= 0.1   AND <= 3.0
+- `entry_offset_seconds`:            >= 1     AND <= 5
+- `deadline_seconds`:                >= 10    AND <= 900
 
 ## Coupling rules
 
@@ -123,7 +123,7 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 3. **`entry_mult < sl_mult`** (strategy_4_3x): entry price is `P × (1 − F × entry_mult)`, SL is `P × (1 − F × sl_mult)`. If `sl_mult ≤ entry_mult`, the SL sits at or above the entry limit → position stops out the instant it fills.
 4. **`limit_offset_mult < sl_mult`** (strategy_4_2x): entry limit sits at `P × (1 − F × limit_offset_mult)`, SL at `entry × (1 − F × sl_mult)`. If `sl_mult ≤ limit_offset_mult`, SL is at or above the entry limit price → position stops out instantly on fill.
 5. **`sl_mult + retracement_pct > 1`** (strategy_2): SL is anchored at `entry × (1 − F × sl_mult)`; the retracement TP sits roughly at `entry × (1 − F × (1 − retracement_pct))` assuming the post-funding drop scales with F. If `sl_mult ≤ 1 − retracement_pct`, SL sits above the retracement target → SL fires during the drop before TP can ever resolve.
-6. **`funding_threshold_a − funding_max_b >= funding_spread_threshold`** (strategy_5): all three gates must fire simultaneously for a trade to trigger. If this inequality fails, no trade ever fires regardless of market conditions.
+6. **`min_funding_spread <= main_exchange_funding_threshold`** (strategy_5): if `min_funding_spread > main_exchange_funding_threshold`, no trade can ever fire (a target with funding_rate = 0 would need spread > threshold, which is impossible when threshold < spread). Keep `min_funding_spread` at most equal to `main_exchange_funding_threshold`.
 7. **`tp_multiplier × funding_threshold <= stop_loss × 4`** (strategy_3a/3b, soft guideline): if `TP_a` is far larger than the SL budget, the TP almost never resolves before deadline; widening TP without also widening stop_loss (or tightening deadline) is wasteful.
 
 ## Direction-aware reasoning
@@ -132,7 +132,7 @@ The engine handles signs; you edit only magnitudes. But the direction determines
 
 - **LONG strategies (1, 2, 4.1, 4.2, 4.3):** triggered by negative funding. TP is placed **above** the fill price; SL (where present, strategies 2, 4.1, 4.2, 4.3) is placed **below**. Widening `take_profit` makes the target harder to reach. Widening `sl_mult` increases the loss budget and reduces premature stop-outs.
 - **SHORT strategies (3a, 3b):** also triggered by negative funding, but the position is short — profit comes from the price drop. TP is placed **below** entry; SL is placed **above**. Tightening `stop_loss` means a smaller adverse move above entry triggers the stop. Raising `tp_multiplier` makes the target further below entry and harder to reach.
-- **strategy_5 (SHORT on B):** TP is placed **below** entry on Exchange B. The TP magnitude is derived inside the engine as `(F_A − F_B) / 2`; you tune only the gating thresholds (`funding_threshold_a`, `funding_max_b`, `funding_spread_threshold`) and `deadline_seconds`.
+- **strategy_5 (SHORT on target):** TP is placed **below** entry as `|F_main| × tp_multiplier`; SL above entry as `stop_loss`. Tune `main_exchange_funding_threshold`, `min_funding_spread`, `stop_loss`, `tp_multiplier`, `deadline_seconds`.
 
 ## Response shape (keep it tight)
 

@@ -4,6 +4,7 @@ import { parse } from 'yaml'
 
 import type { BaseConfig, ResolvedConfig, StrategyConfig, StrategyId, FeeSchedule } from './schema.js'
 import { VALID_STRATEGY_IDS } from './schema.js'
+import { SUPPORTED_EXCHANGES } from './exchanges.js'
 
 /** Deep-merge source into target. Source values take precedence. */
 function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
@@ -99,6 +100,34 @@ function requireBoolean(obj: Record<string, unknown>, field: string, context: st
     throw new Error(`${context}: '${field}' must be a boolean, got ${JSON.stringify(val)}`)
   }
   return val
+}
+
+function requireNumberInRange(
+  obj: Record<string, unknown>,
+  field: string,
+  min: number,
+  max: number,
+  context: string
+): number {
+  const val = requireNumber(obj, field, context)
+  if (val < min || val > max) {
+    throw new Error(`${context}: '${field}' must be between ${String(min)} and ${String(max)}, got ${String(val)}`)
+  }
+  return val
+}
+
+function parseStringArray(obj: Record<string, unknown>, field: string, context: string): string[] {
+  const val = obj[field]
+  if (val === undefined || val === null) return []
+  if (!Array.isArray(val)) {
+    throw new Error(`${context}: '${field}' must be an array, got ${JSON.stringify(val)}`)
+  }
+  for (let i = 0; i < val.length; i++) {
+    if (typeof val[i] !== 'string') {
+      throw new Error(`${context}: '${field}[${String(i)}]' must be a string, got ${JSON.stringify(val[i])}`)
+    }
+  }
+  return val as string[]
 }
 
 function validateFeeSchedule(obj: unknown, exchange: string): FeeSchedule {
@@ -307,20 +336,41 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
       }
 
-    case 'strategy_5':
+    case 'strategy_5': {
+      const main_exchange = requireString(merged, 'main_exchange', ctx)
+      if (!SUPPORTED_EXCHANGES.includes(main_exchange)) {
+        throw new Error(
+          `${ctx}: 'main_exchange' must be one of [${SUPPORTED_EXCHANGES.join(', ')}], got '${main_exchange}'`
+        )
+      }
+      const exclude_exchanges = parseStringArray(merged, 'exclude_exchanges', ctx)
+      for (const exc of exclude_exchanges) {
+        if (!SUPPORTED_EXCHANGES.includes(exc)) {
+          throw new Error(
+            `${ctx}: 'exclude_exchanges' entry must be one of [${SUPPORTED_EXCHANGES.join(', ')}], got '${exc}'`
+          )
+        }
+      }
       return {
         strategy_id: strategyId,
         direction: 'short',
-        exchange_a: requireString(merged, 'exchange_a', ctx),
-        exchange_b: requireString(merged, 'exchange_b', ctx),
-        funding_threshold_a: requirePositiveNumber(merged, 'funding_threshold_a', ctx),
-        funding_max_b: requirePositiveNumber(merged, 'funding_max_b', ctx),
-        funding_spread_threshold: requirePositiveNumber(merged, 'funding_spread_threshold', ctx),
+        main_exchange,
+        exclude_exchanges,
+        main_exchange_funding_threshold: requireNumberInRange(
+          merged,
+          'main_exchange_funding_threshold',
+          0.002,
+          0.015,
+          ctx
+        ),
+        min_funding_spread: requireNumberInRange(merged, 'min_funding_spread', 0.001, 0.015, ctx),
+        stop_loss: requireNumberInRange(merged, 'stop_loss', 0.001, 0.020, ctx),
+        tp_multiplier: requireNumberInRange(merged, 'tp_multiplier', 0.1, 3.0, ctx),
         entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
         deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 10, 900, ctx),
-        vol_ratio_threshold: requirePositiveNumber(merged, 'vol_ratio_threshold', ctx),
         funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
       }
+    }
   }
 }
 

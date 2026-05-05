@@ -156,3 +156,10 @@ runs:
   - strategy: strategy_4_3a
     exchange: kucoin
     agent: claude
+
+  # strategy_5
+  - strategy: strategy_5
+    main_exchange: binance
+    exclude_exchanges: []
+    agent: claude
+    iterations: 9

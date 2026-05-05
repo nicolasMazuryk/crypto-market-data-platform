@@ -60,9 +60,9 @@ describe('Config Loader', () => {
     const config = loadConfig(stratPath, BASE_CONFIG)
 
     if (config.strategy.strategy_id === 'strategy_5') {
-      expect(config.strategy.exchange_a).toBe('binance')
-      expect(config.strategy.exchange_b).toBe('bybit')
-      expect(config.strategy.funding_threshold_a).toBe(0.005)
+      expect(config.strategy.main_exchange).toBe('binance')
+      expect(config.strategy.exclude_exchanges).toEqual([])
+      expect(config.strategy.main_exchange_funding_threshold).toBe(0.005)
     }
   })
 

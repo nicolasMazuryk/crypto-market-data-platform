@@ -1,125 +1,168 @@
 import type { FeeSchedule, Strategy5Config } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
-import { checkLimitFill } from '../orders/limit-order.js'
+import { simulateOrders } from '../orders/simulator.js'
 import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
 import type { ExitReason } from '../config/schema.js'
+import type { Order } from '../orders/types.js'
 
 /**
- * Strategy 5: Cross-Exchange Funding Arbitrage
+ * Strategy 5: Main-Exchange-Driven Cross-Exchange Short
  *
- * When Exchange A has high negative funding and Exchange B has low funding,
- * short on Exchange B to capture the price drop driven by A's settlement.
+ * When the main (most-liquid) exchange has deeply negative funding, short on
+ * a less-negative target exchange to capture the price drop while paying
+ * smaller funding cost.
  *
- * This strategy requires separate data windows for both exchanges.
- * The execute method here operates on Exchange B's data only.
- * Cross-exchange selection logic is handled at the engine level.
+ * Cross-exchange selection and data fetching are handled at the engine level.
+ * executeMainExchange operates on the target exchange's data.
  */
 export class Strategy5 implements BaseStrategy {
   readonly id = 'strategy_5'
   private config!: Strategy5Config
-  private feeSchedule!: FeeSchedule
+  private slippage = 0
 
-  initialize(config: Strategy5Config, feeSchedule: FeeSchedule, slippage?: number): void {
-    void slippage
+  initialize(config: Strategy5Config, _feeSchedule: FeeSchedule, slippage?: number): void {
     this.config = config
-    this.feeSchedule = feeSchedule
+    this.slippage = slippage ?? 0
   }
 
-  /**
-   * For S5, shouldTrigger is handled differently at the engine level
-   * because it requires data from two exchanges.
-   * This method checks only the basic funding rate condition.
-   */
   shouldTrigger(): boolean {
-    // S5 triggering is done at the engine level with cross-exchange data
     return true
   }
 
   /**
-   * Execute short on Exchange B.
+   * Execute short on target exchange.
    *
-   * @param event - Funding event (with Exchange B's funding rate)
-   * @param data - Exchange B's orderbook data window
-   * @param fundingRateA - Exchange A's funding rate (passed separately)
-   * @param fundingRateB - Exchange B's funding rate
+   * Entry and deadline are anchored to `event.funding_time` (main exchange's trigger time).
+   * Funding applicability uses `targetFundingTime` (target's actual funding tick).
+   *
+   * @param event - Contains exchange=target, funding_time=MAIN's time (trigger), funding_rate=target's rate
+   * @param data - Target exchange's orderbook data window
+   * @param mainFundingRate - Main exchange's funding rate (negative, triggers setup)
+   * @param targetFundingRate - Target exchange's funding rate (signed; short pays this)
+   * @param targetFundingTime - Target exchange's actual funding time (for funding applicability check)
+   * @param feeSchedule - Target exchange's fee schedule
    */
-  executeWithCrossExchange(
+  executeMainExchange(
     event: FundingEvent,
     data: OHLCWindow,
-    fundingRateA: number,
-    fundingRateB: number
+    mainFundingRate: number,
+    targetFundingRate: number,
+    targetFundingTime: Date,
+    feeSchedule: FeeSchedule
   ): TradeResult | null {
     const entryTime = new Date(event.funding_time.getTime() - this.config.entry_offset_seconds * 1000)
-    const deadlineTime = new Date(event.funding_time.getTime() + this.config.deadline_seconds * 1000)
-
     const entryTs = toClickHouseDateTime(entryTime)
-    const deadlineTs = toClickHouseDateTime(deadlineTime)
-    const fundingTs = toClickHouseDateTime(event.funding_time)
+    // Use target's actual funding time so applicability is correct when exchanges are offset
+    const fundingTs = toClickHouseDateTime(targetFundingTime)
 
     const entryCandle = data.getRowAt(entryTs)
     if (!entryCandle) return null
 
-    // SELL MARKET on Exchange B
     const entryFill = fillMarketOrder('sell', entryCandle, 1, 'entry')
     if (!entryFill) return null
 
-    // TP = (F_A - F_B) / 2
-    const tpDistance = (Math.abs(fundingRateA) - Math.abs(fundingRateB)) / 2
-    const tpPrice = entryFill.price * (1 - tpDistance)
+    const entryPrice = entryFill.price
+    const tpDistance = Math.abs(mainFundingRate) * this.config.tp_multiplier
+    const tpPrice = entryPrice * (1 - tpDistance)
+    const slPrice = entryPrice * (1 + this.config.stop_loss)
 
-    // Check for TP in window
-    const windowRows = data.getRowsInRange(entryTs, deadlineTs)
-    let exit: { price: number; reason: ExitReason; feeType: 'maker' | 'taker'; ts: string } | null = null
+    const deadlineTime = new Date(event.funding_time.getTime() + this.config.deadline_seconds * 1000)
+    const deadlineTs = toClickHouseDateTime(deadlineTime)
+    const postEntryRows = data.getRowsInRange(entryTs, deadlineTs)
+    const orderCandles = postEntryRows.slice(1)
 
-    for (let i = 1; i < windowRows.length; i++) {
-      const row = windowRows[i]
-      if (!row) continue
-      const tpFill = checkLimitFill('buy', tpPrice, row, 1, 'tp')
-      if (tpFill) {
-        exit = { price: tpPrice, reason: 'TP_HIT', feeType: 'maker', ts: row.ts }
-        break
-      }
-    }
+    if (orderCandles.length === 0) return null
 
-    if (!exit) {
+    const lastOrderCandle = orderCandles[orderCandles.length - 1]
+    const firstOrderCandle = orderCandles[0]
+    if (!lastOrderCandle || !firstOrderCandle) return null
+    const validUntil = lastOrderCandle.ts
+
+    const orders: Order[] = [
+      {
+        side: 'buy',
+        type: 'stop',
+        price: slPrice,
+        quantity: 1,
+        validFrom: firstOrderCandle.ts,
+        validUntil,
+        reduceOnly: true,
+        label: 'sl',
+      },
+      {
+        side: 'buy',
+        type: 'limit',
+        price: tpPrice,
+        quantity: 1,
+        validFrom: firstOrderCandle.ts,
+        validUntil,
+        reduceOnly: true,
+        label: 'tp',
+      },
+    ]
+
+    const { fills } = simulateOrders(orders, orderCandles, this.slippage, 'short')
+
+    let exitPrice: number
+    let exitReason: ExitReason
+    let exitFeeType: 'maker' | 'taker'
+    let exitTs: string
+
+    const slFill = fills.find(f => f.label === 'sl')
+    const tpFill = fills.find(f => f.label === 'tp')
+
+    if (slFill) {
+      exitPrice = slFill.price
+      exitReason = 'SL_HIT'
+      exitFeeType = 'taker'
+      exitTs = slFill.timestamp
+    } else if (tpFill) {
+      exitPrice = tpFill.price
+      exitReason = 'TP_HIT'
+      exitFeeType = 'maker'
+      exitTs = tpFill.timestamp
+    } else {
       const deadlineCandle = data.getRowAt(deadlineTs)
       if (deadlineCandle) {
         const deadlineFillResult = fillMarketOrder('buy', deadlineCandle, 1, 'deadline')
         if (!deadlineFillResult) return null
-        exit = { price: deadlineFillResult.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
+        exitPrice = deadlineFillResult.price
+        exitReason = 'DEADLINE'
+        exitFeeType = 'taker'
+        exitTs = deadlineTs
       } else {
-        const lastRow = windowRows[windowRows.length - 1]
-        if (!lastRow) return null
-        const lastFillResult = fillMarketOrder('buy', lastRow, 1, 'deadline')
+        const lastFillResult = fillMarketOrder('buy', lastOrderCandle, 1, 'deadline')
         if (!lastFillResult) return null
-        exit = { price: lastFillResult.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
+        exitPrice = lastFillResult.price
+        exitReason = 'DEADLINE'
+        exitFeeType = 'taker'
+        exitTs = deadlineTs
       }
     }
 
     const applyFunding = shouldApplyFunding({
       entryTs,
-      exitTs: exit.ts,
+      exitTs,
       fundingTs,
       fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
     })
 
-    // Shorts on B pay F_B funding
     const pnl = calculatePnl({
       direction: 'short',
-      entryPrice: entryFill.price,
-      exitPrice: exit.price,
-      fundingRate: fundingRateB,
+      entryPrice,
+      exitPrice,
+      fundingRate: targetFundingRate,
       appliedFraction: fundingFraction(applyFunding),
       entryFeeType: 'taker',
-      exitFeeType: exit.feeType,
-      feeSchedule: this.feeSchedule,
+      exitFeeType,
+      feeSchedule,
     })
 
-    const exitTime = new Date(exit.ts.replace(' ', 'T') + 'Z')
+    const exitTime = new Date(exitTs.replace(' ', 'T') + 'Z')
     const holdDuration = (exitTime.getTime() - entryTime.getTime()) / 1000
 
     return {
@@ -127,19 +170,19 @@ export class Strategy5 implements BaseStrategy {
       exchange: event.exchange,
       symbol: event.symbol,
       funding_time: event.funding_time,
-      funding_rate: fundingRateB,
-      entry_price: entryFill.price,
-      exit_price: exit.price,
+      funding_rate: targetFundingRate,
+      entry_price: entryPrice,
+      exit_price: exitPrice,
       pnl,
-      exit_reason: exit.reason,
+      exit_reason: exitReason,
       hold_duration: holdDuration,
       fill_count: 1,
       funding_received: applyFunding,
     }
   }
 
-  execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
-    // S5 should use executeWithCrossExchange instead
-    return this.executeWithCrossExchange(event, data, event.funding_rate, event.funding_rate)
+  execute(_event: FundingEvent, _data: OHLCWindow): TradeResult | null {
+    // S5 execution goes through executeMainExchange with per-trade fee schedule
+    return null
   }
 }

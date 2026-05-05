@@ -28,7 +28,7 @@ function describeMatrixRow(spec: RunSpec): string {
   if (spec.exchange !== null) {
     return `strategy=${spec.strategy} exchange=${spec.exchange}`
   }
-  return `strategy=${spec.strategy} exchange_a=${spec.exchange_a ?? '?'} exchange_b=${spec.exchange_b ?? '?'}`
+  return `strategy=${spec.strategy} main_exchange=${spec.main_exchange ?? '?'}`
 }
 
 function compactRow(row: ResultRow, rationale?: string): string {
@@ -93,7 +93,7 @@ export function buildPrompt(opts: BuildPromptOptions): string {
     `- Edit ONLY: ${allowed.join(', ')}. Do not touch any other file.`,
     '- Do not create new files.',
     opts.spec.strategy === 'strategy_5'
-      ? `- strategy_5 pins: exchange_a=${opts.spec.exchange_a ?? '?'} exchange_b=${opts.spec.exchange_b ?? '?'} — these fields must NOT change.`
+      ? `- strategy_5 pins: main_exchange=${opts.spec.main_exchange ?? '?'} — this field must NOT change.`
       : '- (No pinned fields for this strategy.)',
     `- Also write a proposal file at ${opts.proposalPath} containing JSON: {"rationale": string, "summary": string}.`,
     '- "summary" must be a single short line describing the diff; it goes into the results TSV as the iteration description.',

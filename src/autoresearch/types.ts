@@ -11,8 +11,8 @@ export interface MatrixRowNonCross {
 
 export interface MatrixRowCross {
   strategy: 'strategy_5'
-  exchange_a: string
-  exchange_b: string
+  main_exchange: string
+  exclude_exchanges: string[]
   iterations?: number
   agent: AgentKind
 }
@@ -33,8 +33,8 @@ export interface RunSpec {
   tag: string
   strategy: string
   exchange: string | null
-  exchange_a: string | null
-  exchange_b: string | null
+  main_exchange: string | null
+  exclude_exchanges: string[] | null
   iterations: number
   iteration_timeout_ms: number
   backtest_timeout_ms: number

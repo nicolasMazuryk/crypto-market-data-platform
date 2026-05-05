@@ -478,89 +478,97 @@ Max Gain  = TP + F (if funding received) = 0.3% + F
 
 ---
 
-## Strategy 5: Cross-Exchange Funding Arbitrage
+## Strategy 5: Main-Exchange-Driven Cross-Exchange Short
 
-**Thesis:** When Exchange A has a much larger negative funding rate than Exchange B, the price drop driven by Exchange A's settlement will propagate to Exchange B. Short on Exchange B to capture the price drop without paying the large funding fee.
+**Thesis:** When the most-liquid exchange (main, e.g. Binance) has deeply negative funding, it leads price down. Less-liquid target exchanges follow. Shorting on a target exchange captures the directional move while paying a smaller funding cost (target's rate is less negative than main's). One independent trade is opened per eligible (main_event, target_exchange) pair.
 
 ### Parameters
 
 | Parameter | Variable | Default |
 |---|---|---|
-| Exchange A funding threshold | `F_A_threshold` | 1.5% |
-| Exchange B funding threshold | `F_B_max` | 0.4% (must be significantly smaller) |
-| Funding spread threshold | `F_spread_threshold` | 1.0% (minimum `F_A - F_B`) |
-| Entry offset | `T_entry` | `T_funding − 3s` |
-| Take-profit | `TP` | `(F_A - F_B) / 2` |
-| Volume/liquidity filter | `vol_ratio_threshold` | Exchange A volume > Exchange B volume |
+| Main exchange | `main_exchange` | binance |
+| Excluded exchanges | `exclude_exchanges` | [] |
+| Main funding threshold | `main_exchange_funding_threshold` | 0.005 |
+| Min funding spread | `min_funding_spread` | 0.004 |
+| Stop-loss | `stop_loss` | 0.005 (0.5% above entry) |
+| TP multiplier | `tp_multiplier` | 1.5 |
+| Entry offset | `entry_offset_seconds` | 3 |
+| Deadline | `deadline_seconds` | 60 |
+| Funding time tolerance | `funding_time_tolerance_seconds` | 60 |
 
 ### Selection Logic
 
 ```
-IF current_time == T_funding - 3s
-AND F_A < -F_A_threshold
-AND F_B > -F_B_max                                 # B's funding is much smaller
-AND (F_A - F_B) > F_spread_threshold               # sufficient spread
-AND volume_A > volume_B × vol_ratio_threshold       # A leads price
-THEN trigger strategy
+FOR EACH funding event on main_exchange where:
+  main_exchange.funding_rate < 0
+  AND abs(main_exchange.funding_rate) >= main_exchange_funding_threshold
+  AND EXISTS target_exchange NOT IN (main_exchange ∪ exclude_exchanges):
+    (target.funding_rate - main.funding_rate) >= min_funding_spread
+    AND abs(target.funding_time - main.funding_time) <= funding_time_tolerance_seconds
+THEN open one independent short trade per (main_event, eligible_target) pair
 ```
 
-### Liquidity/Volume Rules
-
-```
-PRICE LEADERSHIP LOGIC:
-  IF volume_A >> volume_B:
-    → Exchange A leads price → Exchange B follows
-    → Strategy is VALID: short on B, expect B to follow A's drop
-  
-  IF volume_A << volume_B:
-    → Exchange B leads price → A's funding event may not drag B
-    → Strategy is INVALID: do not trade
-  
-  IF volume_A ≈ volume_B:
-    → Unclear leadership → higher risk
-    → Strategy is MARGINAL: reduce size or skip
-```
+The spread condition `F_target − F_main >= min_spread` is equivalent to requiring main to be more negative than target by at least `min_spread`.
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 3s (on Exchange B):
-   → ENTRY: SELL MARKET at best bid on Exchange B
-   → Record P_entry_B
+1. AT T_main_funding - entry_offset_seconds (on target_exchange):
+   → ENTRY: SELL MARKET at best bid
+   → Record entry_price
+   → TP_price = entry_price × (1 - |F_main| × tp_multiplier)
+   → SL_price = entry_price × (1 + stop_loss)
 
-2. TAKE-PROFIT:
-   → BUY LIMIT at P_entry_B × (1 - TP)
-   → where TP = (F_A - F_B) / 2
+2. PLACE ORDERS (valid until T_main_funding + deadline_seconds):
+   → BUY LIMIT  at TP_price   [take-profit]
+   → BUY STOP   at SL_price   [stop-loss; wins on same-candle ambiguity]
 
-3. EXIT:
-   → TP hit, OR
-   → T_deadline → BUY MARKET (reduce-only)
+3. EXIT (first trigger wins; SL beats TP on tie):
+   → SL_HIT:    BUY at SL_price (taker)
+   → TP_HIT:    BUY at TP_price (maker)
+   → DEADLINE:  BUY MARKET at T_main_funding + deadline_seconds
 ```
+
+### Funding Applicability
+
+Funding is charged by the **target exchange** at its own `target_funding_time`, which may differ from `main_funding_time` by up to `funding_time_tolerance_seconds`. Funding applies to the position only if `target_funding_time` falls strictly within the position's open window `(entry_time, exit_time]`.
 
 ### P&L Formula
 
 ```
-DELTA_PNL   = (P_entry_B - P_exit_B) / P_entry_B
-FUNDING_PNL = -F_B                                 # shorts pay negative funding on B
-FEES        = taker_fee_B × 2                      # (or taker + maker if limit exit)
+DELTA_PNL   = (entry_price - exit_price) / entry_price   # positive when price drops
+FUNDING_PNL = -|F_target|  if funding applies            # shorts pay on negative rate
+            = 0             otherwise
+FEES        = taker_fee (entry) + maker_fee (TP) or taker_fee (SL / DEADLINE)
 
-NET_PNL = DELTA_PNL - F_B - FEES
+NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 ```
 
 ### Profit Condition
 
 ```
-DELTA_PNL > F_B + FEES
+DELTA_PNL > |F_target| + FEES
 ```
 
-> **The edge:** You capture most of Exchange A's price impact while only paying Exchange B's (much smaller) funding fee.
+> **The edge:** Main exchange's deep negative funding drives a correlated price drop on target. Shorting the target captures the move while paying only the target's (smaller) funding cost.
+
+### Parameter Bounds
+
+| Parameter | Min | Max |
+|---|---|---|
+| `main_exchange_funding_threshold` | 0.002 | 0.015 |
+| `min_funding_spread` | 0.001 | 0.015 |
+| `stop_loss` | 0.001 | 0.020 |
+| `tp_multiplier` | 0.1 | 3.0 |
+| `entry_offset_seconds` | 1 | 5 |
+| `deadline_seconds` | 10 | 900 |
 
 ### Backtesting Variables to Extract
 
-- `F_A`, `F_B` at each funding period
-- `P_A`, `P_B` tick-by-tick around `T_funding`
-- `volume_A`, `volume_B` (24h or 1h rolling)
-- Price correlation between exchanges (lag analysis)
+- `F_main`, `F_target` at each matched funding period (within `funding_time_tolerance_seconds`)
+- Orderbook (1s candles) for each target exchange around `T_main_funding`
+- Per-exchange fee schedules (maker/taker)
+- `target_funding_time` (for correct funding applicability, distinct from `main_funding_time`)
 
 ---
 
@@ -575,8 +583,8 @@ All unique variables across all strategies, for backtester implementation.
 | Variable | Type | Source |
 |---|---|---|
 | `funding_rate` | float | Exchange API (predicted) |
-| `funding_rate_A` | float | Exchange A API (Strategy 5) |
-| `funding_rate_B` | float | Exchange B API (Strategy 5) |
+| `funding_rate_main` | float | Main exchange API (Strategy 5) |
+| `funding_rate_target` | float | Target exchange API (Strategy 5) |
 | `T_funding` | datetime | Exchange funding schedule |
 | `price_timeseries` | float[] | Tick/second-level OHLCV |
 | `volume_24h` | float | Exchange API |
@@ -602,10 +610,9 @@ All unique variables across all strategies, for backtester implementation.
 | `entry_mult` | 4.3 | float | 0.75 |
 | `sl_mult` | 4.3 | float | 1.5 |
 | `T_deadline` | 2, 4.x | int (seconds) | 60s |
-| `F_A_threshold` | 5 | float | 1.5% |
-| `F_B_max` | 5 | float | 0.4% |
-| `F_spread_threshold` | 5 | float | 1.0% |
-| `vol_ratio_threshold` | 5 | float | TBD |
+| `main_exchange_funding_threshold` | 5 | float | 0.5% |
+| `min_funding_spread` | 5 | float | 0.4% |
+| `funding_time_tolerance_seconds` | 5 | int | 60s |
 
 ## Output Variables (per trade)
 
@@ -638,7 +645,7 @@ All unique variables across all strategies, for backtester implementation.
 | **S4.2b** | LONG | Single limit (−5s) | Limit (TP) or Market (deadline) | Delta recovery + funding | Fees | Not filled, or no recovery |
 | **S4.3a** | LONG | Limit (−2s) | Limit (TP) / Stop (SL) / Market (deadline) | Delta recovery | SL risk, fees | Stopped out |
 | **S4.3b** | LONG | Limit (−2s) | Limit (TP) / Stop (SL) / Market (deadline) | Delta recovery + funding | SL risk, fees | Stopped out |
-| **S5** | SHORT (Exch B) | Market (−3s) | Limit (TP) or Market (deadline) | Cross-exchange delta | Funding fee (B) + fees | Price doesn't propagate |
+| **S5** | SHORT (target) | Market (−entry_offset) | Limit (TP) / Stop (SL) / Market (deadline) | Cross-exchange delta | Funding fee (target) + fees | Price doesn't propagate from main |
 
 ---
 
