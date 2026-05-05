@@ -9,7 +9,7 @@
 #   agent: claude | codex   (default: claude) — which coding agent drives the propose step
 #
 # Settings applied to every row unless overridden by a per-row field.
-default_iterations: 50
+default_iterations: 9
 max_parallel: 7            # concurrent runs
 max_parallel_backtests: 7  # concurrent ClickHouse-hitting backtests
 iteration_timeout_ms: 600000

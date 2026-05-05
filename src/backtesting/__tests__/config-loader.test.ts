@@ -98,16 +98,23 @@ describe('Config Loader', () => {
       return tmpPath
     }
 
-    it('accepts entry_offset_seconds=2 (valid lower edge)', () => {
+    it('accepts entry_offset_seconds=1 (valid lower edge)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nfunding_threshold: 0.003\nentry_offset_seconds: 2\nexit_offset_seconds: 2\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_1\nfunding_threshold: 0.003\nentry_offset_seconds: 1\nexit_offset_seconds: 2\nfunding_applied_on_same_second: false\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
-    it('rejects entry_offset_seconds=1 (below minimum 2)', () => {
+    it('rejects entry_offset_seconds=0 (below minimum 1)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nfunding_threshold: 0.003\nentry_offset_seconds: 1\nexit_offset_seconds: 2\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_1\nfunding_threshold: 0.003\nentry_offset_seconds: 0\nexit_offset_seconds: 2\nfunding_applied_on_same_second: false\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('entry_offset_seconds')
+    })
+
+    it('rejects entry_offset_seconds=6 (above maximum 5)', () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_1\nfunding_threshold: 0.003\nentry_offset_seconds: 6\nexit_offset_seconds: 2\nfunding_applied_on_same_second: false\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('entry_offset_seconds')
     })
@@ -126,37 +133,44 @@ describe('Config Loader', () => {
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
-    it('accepts deadline_seconds=2 (valid lower edge)', () => {
+    it('accepts deadline_seconds=5 (valid lower edge for strategy_2)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_2\nfunding_threshold: 0.003\nentry_offset_seconds: 5\nretracement_pct: 0.5\ndeadline_seconds: 2\nsl_mult: 1.5\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_2\nfunding_threshold: 0.003\nentry_offset_seconds: 5\nretracement_pct: 0.5\ndeadline_seconds: 5\nsl_mult: 1.5\nfunding_applied_on_same_second: false\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
-    it('accepts deadline_seconds=181 (no upper cap)', () => {
+    it('accepts deadline_seconds=900 (valid upper edge for strategy_2)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_2\nfunding_threshold: 0.003\nentry_offset_seconds: 5\nretracement_pct: 0.5\ndeadline_seconds: 181\nsl_mult: 1.5\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_2\nfunding_threshold: 0.003\nentry_offset_seconds: 5\nretracement_pct: 0.5\ndeadline_seconds: 900\nsl_mult: 1.5\nfunding_applied_on_same_second: false\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
-    it('rejects deadline_seconds=1 (below minimum 2)', () => {
+    it('rejects deadline_seconds=4 (below minimum 5 for strategy_2)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_2\nfunding_threshold: 0.003\nentry_offset_seconds: 5\nretracement_pct: 0.5\ndeadline_seconds: 1\nsl_mult: 1.5\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_2\nfunding_threshold: 0.003\nentry_offset_seconds: 5\nretracement_pct: 0.5\ndeadline_seconds: 4\nsl_mult: 1.5\nfunding_applied_on_same_second: false\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
     })
 
-    it('accepts deadline_seconds=2 for strategy_3a (valid lower edge)', () => {
+    it('rejects deadline_seconds=901 (above maximum 900 for strategy_2)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_3a\nfunding_threshold: 0.004\nentry_offset_seconds: 5\nstop_loss: 0.01\ntp_mode: A\ntp_multiplier: 1.5\ntp_addend: 0.004\ndeadline_seconds: 2\nfunding_applied_on_same_second: true\n'
+        'strategy_id: strategy_2\nfunding_threshold: 0.003\nentry_offset_seconds: 5\nretracement_pct: 0.5\ndeadline_seconds: 901\nsl_mult: 1.5\nfunding_applied_on_same_second: false\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
+    })
+
+    it('accepts deadline_seconds=3 for strategy_3a (valid lower edge)', () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_3a\nfunding_threshold: 0.004\nentry_offset_seconds: 5\nstop_loss: 0.01\ntp_mode: A\ntp_multiplier: 1.5\ntp_addend: 0.004\ndeadline_seconds: 3\nfunding_applied_on_same_second: true\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
-    it('rejects deadline_seconds=1 for strategy_3a (below minimum 2)', () => {
+    it('rejects deadline_seconds=2 for strategy_3a (below minimum 3)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_3a\nfunding_threshold: 0.004\nentry_offset_seconds: 5\nstop_loss: 0.01\ntp_mode: A\ntp_multiplier: 1.5\ntp_addend: 0.004\ndeadline_seconds: 1\nfunding_applied_on_same_second: true\n'
+        'strategy_id: strategy_3a\nfunding_threshold: 0.004\nentry_offset_seconds: 5\nstop_loss: 0.01\ntp_mode: A\ntp_multiplier: 1.5\ntp_addend: 0.004\ndeadline_seconds: 2\nfunding_applied_on_same_second: true\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
     })
@@ -168,9 +182,9 @@ describe('Config Loader', () => {
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
-    it('rejects deadline_seconds=1 for strategy_3b (below minimum 2)', () => {
+    it('rejects deadline_seconds=2 for strategy_3b (below minimum 3)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_3b\nfunding_threshold: 0.004\nentry_offset_seconds: 5\nstop_loss: 0.01\ntp_mode: B\ntp_multiplier: 1.5\ntp_addend: 0.004\ndeadline_seconds: 1\nfunding_applied_on_same_second: true\n'
+        'strategy_id: strategy_3b\nfunding_threshold: 0.004\nentry_offset_seconds: 5\nstop_loss: 0.01\ntp_mode: B\ntp_multiplier: 1.5\ntp_addend: 0.004\ndeadline_seconds: 2\nfunding_applied_on_same_second: true\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
     })
