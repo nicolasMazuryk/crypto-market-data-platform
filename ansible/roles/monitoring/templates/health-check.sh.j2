@@ -30,6 +30,51 @@ for timer in worker-market-sync worker-funding-rates; do
   fi
 done
 
+# ClickHouse memory overcommit check
+# Detects when the internal tracker drifts above threshold and stays there,
+# which causes OvercommitTracker to reject all queries even with plenty of actual free RAM.
+MEMORY_STATE_FILE="/tmp/clickhouse-memory-alert.state"
+MEMORY_THRESHOLD_PCT={{ clickhouse_memory_alert_threshold_pct | default(80) }}
+MEMORY_ALERT_CONSECUTIVE={{ clickhouse_memory_alert_consecutive_checks | default(3) }}
+MEMORY_COOLDOWN={{ clickhouse_memory_alert_cooldown_checks | default(10) }}
+
+clickhouse_query() {
+  curl -sf --get "http://localhost:{{ clickhouse_http_port }}/" \
+    --user "{{ clickhouse_user }}:{{ clickhouse_password }}" \
+    --data-urlencode "query=$1" \
+    --data-urlencode "default_format=TabSeparated" 2>/dev/null | tr -d '[:space:]'
+}
+
+if curl -sf http://localhost:{{ clickhouse_http_port }}/ping > /dev/null 2>&1; then
+  TRACKED=$(clickhouse_query "SELECT value FROM system.metrics WHERE metric='MemoryTracking' FORMAT TabSeparated")
+  MAX_MEM=$(clickhouse_query "SELECT value FROM system.server_settings WHERE name='max_server_memory_usage' FORMAT TabSeparated")
+
+  if [[ "$MAX_MEM" == "0" || -z "$MAX_MEM" ]]; then
+    TOTAL_RAM=$(clickhouse_query "SELECT value FROM system.asynchronous_metrics WHERE metric='OSMemoryTotal' FORMAT TabSeparated")
+    MAX_MEM=$(( ${TOTAL_RAM:-0} * 9 / 10 ))
+  fi
+
+  if [[ -n "$TRACKED" && -n "$MAX_MEM" && "$MAX_MEM" -gt 0 ]]; then
+    MEM_PCT=$(( TRACKED * 100 / MAX_MEM ))
+    CURRENT_COUNT=$(cat "$MEMORY_STATE_FILE" 2>/dev/null || echo "0")
+
+    if (( MEM_PCT >= MEMORY_THRESHOLD_PCT )); then
+      NEW_COUNT=$(( CURRENT_COUNT + 1 ))
+      echo "$NEW_COUNT" > "$MEMORY_STATE_FILE"
+
+      if (( NEW_COUNT == MEMORY_ALERT_CONSECUTIVE )) || \
+         (( NEW_COUNT > MEMORY_ALERT_CONSECUTIVE && (NEW_COUNT - MEMORY_ALERT_CONSECUTIVE) % MEMORY_COOLDOWN == 0 )); then
+        TRACKED_GIB=$(echo "scale=1; $TRACKED / 1073741824" | bc)
+        MAX_GIB=$(echo "scale=1; $MAX_MEM / 1073741824" | bc)
+        SUSTAINED_MIN=$(( (NEW_COUNT - 1) * 3 ))
+        ERRORS+=("ClickHouse memory tracker at ${MEM_PCT}% (${TRACKED_GIB} GiB / ${MAX_GIB} GiB) — sustained ${SUSTAINED_MIN}+ min. SSH in and restart ClickHouse to fix.")
+      fi
+    else
+      echo "0" > "$MEMORY_STATE_FILE"
+    fi
+  fi
+fi
+
 # Report
 {% raw %}
 if [[ ${#ERRORS[@]} -eq 0 ]]; then

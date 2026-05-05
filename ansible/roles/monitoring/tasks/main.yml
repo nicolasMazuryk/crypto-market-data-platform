@@ -1,0 +1,28 @@
+---
+- name: Install health-check script
+  ansible.builtin.template:
+    src: health-check.sh.j2
+    dest: "{{ app_dir }}/health-check.sh"
+    mode: "0755"
+  notify: Reload systemd
+
+- name: Install health-check systemd service
+  ansible.builtin.template:
+    src: health-check.service.j2
+    dest: /etc/systemd/system/health-check.service
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Install health-check systemd timer
+  ansible.builtin.template:
+    src: health-check.timer.j2
+    dest: /etc/systemd/system/health-check.timer
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Enable and start health-check timer
+  ansible.builtin.systemd:
+    name: health-check.timer
+    enabled: true
+    state: started
+    daemon_reload: true
