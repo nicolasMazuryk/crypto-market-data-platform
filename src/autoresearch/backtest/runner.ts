@@ -24,7 +24,10 @@ export interface BacktestRunOptions {
 }
 
 const DEFAULT_MAX_ATTEMPTS = 3
-const DEFAULT_RETRY_DELAY_MS = 5_000
+// 15 s gives the SSH tunnel supervisor (2 s backoff + SSH handshake + possible
+// first-reconnect failure + 4 s second backoff + handshake) enough time to
+// re-establish the port forward before we retry the backtest.
+const DEFAULT_RETRY_DELAY_MS = 15_000
 const RETRYABLE_FAILURE_PATTERNS = [/\bECONNREFUSED\b/i, /\bECONNRESET\b/i, /\bETIMEDOUT\b/i, /\bsocket hang up\b/i]
 
 function listJsonFiles(dir: string): Set<string> {
