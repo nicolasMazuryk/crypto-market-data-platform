@@ -122,13 +122,8 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 
 ### strategy_spot_futures (delta-neutral: LONG spot + SHORT perp, positive-funding carry)
 - `F_threshold`:                >= 0.0002 AND <= 0.004
-- `entry_offset_seconds`:       >= 1      AND <= 5     ← **integer only** (no decimals)
-- `exit_offset_seconds`:        >= 1      AND <= 5     ← **integer only** (no decimals)
 - `minTotalProfit`:             >= -0.005 AND <= 0.005
 - `fundingConvergenceThreshold`:>= 0      AND <  F_threshold  ← must be strictly less than F_threshold
-- `spreadWideningThreshold`:    >= 0.005  AND <= 0.03
-- `spreadTakeProfit`:           >= 0.005  AND <= 0.02
-- `max_carry_funding_events`:   >= 1      AND <= 336   ← **integer only** (no decimals)
 
 ## Coupling rules
 
