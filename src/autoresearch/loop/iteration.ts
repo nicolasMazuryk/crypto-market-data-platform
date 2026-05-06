@@ -4,7 +4,7 @@ import path from 'path'
 
 import { invokeAgent } from '../agent/invoke.js'
 import { buildPrompt } from '../agent/prompt-builder.js'
-import { clearProposal, readProposalSafe } from '../agent/proposal.js'
+import { clearProposal, readProposalSafe, validateProposalSummary } from '../agent/proposal.js'
 import { extractMetrics, parseReport } from '../backtest/parser.js'
 import { runBacktest } from '../backtest/runner.js'
 import { enforceScope } from '../git/diff-gate.js'
@@ -145,7 +145,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
       agentCostUsd
     )
   }
-  const summary = proposal?.summary ?? ''
+  let summary = proposal?.summary ?? ''
 
   if (proposal !== null) {
     const proposalIterPath = getProposalIterPath(repoRoot, spec.tag, iter)
@@ -201,6 +201,51 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
         agentCostUsd
       )
     }
+  }
+
+  // Step 3.5: validate proposal summary — must be descriptive, not a placeholder.
+  const summaryValidation = validateProposalSummary(summary)
+  if (!summaryValidation.ok) {
+    const summaryRetryPrompt =
+      prompt +
+      '\n\nIMPORTANT: Your previous attempt this iteration wrote a `proposal.json`' +
+      ` whose \`summary\` was missing/empty/placeholder (${summaryValidation.reason}).` +
+      ' The summary is a hard requirement: it must describe the parameter change and the' +
+      ' rationale in the `<param> <old> → <new> (<reason>)` form, ≤120 chars.' +
+      ' Re-write `proposal.json` (and re-Edit the YAML if needed) with a valid summary now.'
+    const summaryRetryResult = await invokeAgent({
+      agent: spec.agent,
+      prompt: summaryRetryPrompt,
+      cwd: worktreePath,
+      addDirs: [getResultsDir(repoRoot, spec.tag)],
+      timeoutMs: spec.iteration_timeout_ms,
+      logWrite,
+    })
+    agentTokensUsed = (agentTokensUsed ?? 0) + (summaryRetryResult.tokensUsed ?? 0)
+    agentCostUsd = (agentCostUsd ?? 0) + (summaryRetryResult.costUsd ?? 0)
+    if (summaryRetryResult.timedOut || summaryRetryResult.code !== 0) {
+      await revertWorktreeToHead(worktreePath)
+      const err = summaryRetryResult.timedOut
+        ? 'agent_timeout_on_summary_retry'
+        : `agent_exit_code_on_summary_retry=${String(summaryRetryResult.code)}`
+      return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt, agentTokensUsed, agentCostUsd)
+    }
+    const { proposal: retriedProposal } = readProposalSafe(proposalPath)
+    const retriedSummary = retriedProposal?.summary ?? ''
+    const retriedValidation = validateProposalSummary(retriedSummary)
+    if (!retriedValidation.ok) {
+      await revertWorktreeToHead(worktreePath)
+      return buildErrorRow(
+        iter,
+        timestamp,
+        preIterationHead,
+        `agent_missing_or_uninformative_summary: ${retriedValidation.reason}`,
+        startedAt,
+        agentTokensUsed,
+        agentCostUsd
+      )
+    }
+    summary = retriedSummary
   }
 
   // Step 4: run backtest.
@@ -269,7 +314,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
   let status: ResultRow['status']
 
   if (improved) {
-    const description = truncate(summary || `iter ${String(iter)} keep`, 200)
+    const description = truncate(summary, 200)
     const message = `autoresearch ${spec.tag} iter ${String(iter)}: ${description}`
     commitHash = await commitAll(worktreePath, message)
     status = 'keep'
@@ -291,7 +336,7 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     ulcer_index: metrics.ulcer_index,
     equity_curve_quality_score: metrics.equity_curve_quality_score,
     status,
-    description: truncate(summary || (status === 'keep' ? 'improved' : 'regressed'), 240),
+    description: truncate(summary, 240),
     report_path: path.relative(repoRoot, iterReportPath),
     duration_s: (Date.now() - startedAt) / 1000,
     error_message: '',

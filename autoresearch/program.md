@@ -180,8 +180,14 @@ not useful; resist the urge to draft them.
      edit. Do NOT restate metrics already in the TSV (trade counts, PnL,
      baseline). Do NOT explain coupling theory in general — only what
      you're changing now and why.
-   - `summary`: one line, ≤120 chars, used as the TSV description.
-     Format: `<param> <old> → <new> (<reason in ≤40 words>)`.
+   - `summary`: **required, non-empty**. One line, ≤120 chars. Format:
+     `<param> <old> → <new> (<reason in ≤40 words>)`. The harness validates
+     this and rejects (then retries, then errors) if it is missing, empty,
+     shorter than 15 chars, or one of the placeholder words `improved`,
+     `regressed`, `keep`, `discard`, `updated`, `tweak`, `change`, `n/a`,
+     `none`, `tbd`. A bare status word is *never* an acceptable summary —
+     the row exists to teach the next iteration what was tried, so name the
+     parameter and the value.
 
 ## Context you receive each iteration
 
@@ -243,3 +249,7 @@ filesystem before editing — every such call is wasted tokens and time.
 The harness runs everything outside the YAML edit. You produce two artifacts
 per iteration: the edited YAML and the proposal file. Anything else you write
 will be reverted by the diff-gate.
+
+A row with no parameter+rationale in the description has zero value and is
+treated as a failed iteration — the backtest is not run, and the row shows as
+an error.
