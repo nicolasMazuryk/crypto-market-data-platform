@@ -76,7 +76,12 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     }
 
     const isAlias = sfConfig.spot_exchange === sfConfig.perp_exchange
-    const FETCH_CONCURRENCY_SF = 5 // lower concurrency due to large windows
+    // In alias mode, carryAlias only needs the entry candle; skip the wide orderbook fetch.
+    const aliasEntryWindow: WindowConfig = {
+      pre_funding_seconds: sfConfig.entry_offset_seconds + 30,
+      post_funding_seconds: 30,
+    }
+    const FETCH_CONCURRENCY_SF = isAlias ? 30 : 5
     for (let i = 0; i < events.length; i += FETCH_CONCURRENCY_SF) {
       const batch = events.slice(i, i + FETCH_CONCURRENCY_SF)
 
@@ -84,7 +89,12 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
         batch.map(async event => {
           const windowEndDate = toClickHouseDateTime(new Date(event.funding_time.getTime() + widePostSeconds * 1000))
           const [perpWindow, maybeSpotWindow, allFundingEvents] = await Promise.all([
-            fetchOrderbookWindow(sfConfig.perp_exchange, event.symbol, event.funding_time, wideWindow),
+            fetchOrderbookWindow(
+              sfConfig.perp_exchange,
+              event.symbol,
+              event.funding_time,
+              isAlias ? aliasEntryWindow : wideWindow
+            ),
             isAlias
               ? Promise.resolve(null)
               : fetchSpotOrderbookWindow(sfConfig.spot_exchange, event.symbol, event.funding_time, wideWindow),
