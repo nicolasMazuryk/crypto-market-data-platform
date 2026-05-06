@@ -22,25 +22,21 @@ import type { RateLimiter } from '../core/types.js'
 import { createEventBus } from '../core/bus.js'
 import { createRestAdapter } from '../adapters/rest/factory.js'
 import type { Exchange } from '../types/exchange.js'
-import {
-  MetricsRegistry,
-  registerRestMetrics,
-} from '../observability/metrics.js'
+import { MetricsRegistry, registerRestMetrics } from '../observability/metrics.js'
 import { createNoopTracer } from '../observability/tracing.js'
 
 function createPassthroughRateLimiter(): RateLimiter {
   return {
     acquire: () => Promise.resolve(),
-    reserve: () => () => { /* noop */ },
+    reserve: () => () => {
+      /* noop */
+    },
   }
 }
 
 const logger = pino({ level: 'info' })
 
-async function flattenExchange(
-  cfg: ExchangeConfig,
-  dryRun: boolean
-): Promise<void> {
+async function flattenExchange(cfg: ExchangeConfig, dryRun: boolean): Promise<void> {
   const clock = createClock()
   const ids = createIds()
   const bus = createEventBus()
@@ -75,7 +71,10 @@ async function flattenExchange(
 
   for (const order of openOrders) {
     if (dryRun) {
-      logger.info({ exchange, clientOrderId: order.clientOrderId, symbol: order.symbol }, 'flatten: [dry-run] would cancel order')
+      logger.info(
+        { exchange, clientOrderId: order.clientOrderId, symbol: order.symbol },
+        'flatten: [dry-run] would cancel order'
+      )
       continue
     }
     try {
@@ -105,7 +104,10 @@ async function flattenExchange(
   for (const pos of positions) {
     const closeSide = pos.side === 'long' ? 'sell' : 'buy'
     if (dryRun) {
-      logger.info({ exchange, symbol: pos.symbol, side: pos.side, qty: pos.qty }, 'flatten: [dry-run] would close position')
+      logger.info(
+        { exchange, symbol: pos.symbol, side: pos.side, qty: pos.qty },
+        'flatten: [dry-run] would close position'
+      )
       continue
     }
     try {
@@ -145,11 +147,12 @@ async function main(): Promise<void> {
   }
 
   const engineConfig = loadEngineConfig({ configPath: values.config })
-  const dryRun = values['dry-run'] ?? false
+  const dryRun = values['dry-run']
 
   const exchangeFilter = values.exchange as Exchange[] | undefined
   const exchanges = engineConfig.exchanges.filter(
-    e => e.enabled && (exchangeFilter === undefined || exchangeFilter.length === 0 || exchangeFilter.includes(e.exchange))
+    e =>
+      e.enabled && (exchangeFilter === undefined || exchangeFilter.length === 0 || exchangeFilter.includes(e.exchange))
   )
 
   if (exchanges.length === 0) {

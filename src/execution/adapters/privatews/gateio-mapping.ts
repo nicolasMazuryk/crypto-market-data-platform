@@ -45,7 +45,12 @@ interface GateioUpdate {
 function mapGateioOrderStatus(data: GateioOrderData): OrderStatus {
   if (data.status === 'finished') {
     const finishAs = data.finish_as ?? ''
-    if (finishAs === 'cancelled' || finishAs === 'ioc' || finishAs === 'reduce_only' || finishAs === 'position_closed') {
+    if (
+      finishAs === 'cancelled' ||
+      finishAs === 'ioc' ||
+      finishAs === 'reduce_only' ||
+      finishAs === 'position_closed'
+    ) {
       return 'cancelled'
     }
     return 'filled'

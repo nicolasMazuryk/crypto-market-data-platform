@@ -109,11 +109,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms))
 }
 
-function waitForEvent<T>(
-  setup: (resolve: (v: T) => void) => () => void,
-  timeoutMs: number,
-  label: string
-): Promise<T> {
+function waitForEvent<T>(setup: (resolve: (v: T) => void) => () => void, timeoutMs: number, label: string): Promise<T> {
   return new Promise((res, rej) => {
     const timer = setTimeout(() => {
       cleanup()
@@ -132,11 +128,11 @@ function waitForEvent<T>(
 // ─────────────────────────────────────────────
 interface ExchangeSpec {
   exchange: Exchange
-  ccxtId: string         // CCXT exchange class for mark price fetch
-  ccxtUnified: string    // CCXT unified symbol for ticker
-  symbol: string         // Normalized symbol (e.g. XRPUSDT)
+  ccxtId: string // CCXT exchange class for mark price fetch
+  ccxtUnified: string // CCXT unified symbol for ticker
+  symbol: string // Normalized symbol (e.g. XRPUSDT)
   exchangeSymbol: string // CCXT unified symbol for REST/WS (e.g. XRP/USDT:USDT)
-  baseAsset: string      // Base asset string for position lookup (e.g. XRP)
+  baseAsset: string // Base asset string for position lookup (e.g. XRP)
   envPrefix: string
   amountUsd: number
 }
@@ -225,7 +221,12 @@ async function fetchMarkPrice(ccxtId: string, unified: string): Promise<number> 
 // ─────────────────────────────────────────────
 // Build trade intent
 // ─────────────────────────────────────────────
-function buildIntent(spec: ExchangeSpec, markPrice: number, strategyLabel: string, exitPolicy: ExitPolicy): TradeIntent {
+function buildIntent(
+  spec: ExchangeSpec,
+  markPrice: number,
+  strategyLabel: string,
+  exitPolicy: ExitPolicy
+): TradeIntent {
   const now = Date.now()
   return {
     id: randomUUID(),
@@ -380,8 +381,7 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
             strategy_3b: { maxConcurrentIntents: 2, maxNotionalUsd: 500 },
           },
         },
-        countIntents: () =>
-          manager.list().filter(s => !['exited', 'error', 'cancelled'].includes(s.status)).length,
+        countIntents: () => manager.list().filter(s => !['exited', 'error', 'cancelled'].includes(s.status)).length,
         notionalInFlight: () =>
           manager
             .list()
@@ -497,7 +497,9 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
     // ── Phase 4: Intent submission ────────────────────────────────────
     const intent = buildIntent(spec, markPrice, run.strategyLabel, run.exitPolicy)
     const entryClientOrderId = ids.forIntent(intent.id, 0)
-    info(`intent=${intent.id.slice(0, 8)} entry=${entryClientOrderId.slice(0, 12)} symbol=${spec.symbol} notional=$${String(spec.amountUsd)}`)
+    info(
+      `intent=${intent.id.slice(0, 8)} entry=${entryClientOrderId.slice(0, 12)} symbol=${spec.symbol} notional=$${String(spec.amountUsd)}`
+    )
 
     const stateHistory: IntentStatus[] = []
     busUnsubs.push(
@@ -560,7 +562,9 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
       if (wsOrderEvents.length > 0) {
         info(`ws.order events received (${String(wsOrderEvents.length)}):`)
         for (const e of wsOrderEvents) {
-          info(`  clientOrderId=${e.clientOrderId.slice(0, 16)} exchangeOrderId=${e.exchangeOrderId.slice(0, 16)} status=${e.status}`)
+          info(
+            `  clientOrderId=${e.clientOrderId.slice(0, 16)} exchangeOrderId=${e.exchangeOrderId.slice(0, 16)} status=${e.status}`
+          )
         }
       } else {
         info('no ws.order events received during test')
@@ -574,16 +578,17 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
 
     // ── Phase 5: WS fill event ────────────────────────────────────────
     const entryExchangeOrderId = monitoringState?.entryExchangeOrderId ?? ''
-    const fillByClientId = wsOrderEvents.find(
-      e => e.clientOrderId === entryClientOrderId && e.status === 'filled'
-    )
+    const fillByClientId = wsOrderEvents.find(e => e.clientOrderId === entryClientOrderId && e.status === 'filled')
     const fillByExchangeId = wsOrderEvents.find(
       e => e.exchangeOrderId === entryExchangeOrderId && e.status === 'filled'
     )
     if (fillByClientId) {
       pass('WS entry fill event', `clientOrderId=${fillByClientId.clientOrderId.slice(0, 12)}`)
     } else if (fillByExchangeId) {
-      pass('WS entry fill event (by exchangeOrderId)', `exchangeOrderId=${fillByExchangeId.exchangeOrderId.slice(0, 12)}`)
+      pass(
+        'WS entry fill event (by exchangeOrderId)',
+        `exchangeOrderId=${fillByExchangeId.exchangeOrderId.slice(0, 12)}`
+      )
     } else {
       pass('WS entry fill (via monitoring state)', 'fill confirmed indirectly')
     }
@@ -592,7 +597,10 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
     try {
       const positions = await rest.getPositions()
       const pos = positions.find(p => p.symbol.includes(spec.baseAsset) && p.side === 'long')
-      if (pos === undefined) throw new Error(`No ${spec.baseAsset} long position found; got: ${positions.map(p => `${p.symbol}:${p.side}`).join(',')}`)
+      if (pos === undefined)
+        throw new Error(
+          `No ${spec.baseAsset} long position found; got: ${positions.map(p => `${p.symbol}:${p.side}`).join(',')}`
+        )
       pass(`${spec.baseAsset} long position open`, `qty=${String(pos.qty)} entry=$${String(pos.entryPrice ?? 'N/A')}`)
     } catch (err) {
       fail('open position verify', err)
@@ -606,13 +614,13 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
         const slOrder = openOrders.find(
           o => o.clientOrderId === ids.forExit(intent.id, 'sl') || o.type === 'stop_market'
         )
-        const tpOrder = openOrders.find(
-          o => o.clientOrderId === ids.forExit(intent.id, 'tp') || o.type === 'limit'
-        )
+        const tpOrder = openOrders.find(o => o.clientOrderId === ids.forExit(intent.id, 'tp') || o.type === 'limit')
         if (slOrder || tpOrder) {
           pass('SL/TP orders placed', `sl=${String(!!slOrder)} tp=${String(!!tpOrder)}`)
         } else {
-          info(`${YL}No open orders found for SL/TP (may have been placed with different IDs or exchange stores differently)${R}`)
+          info(
+            `${YL}No open orders found for SL/TP (may have been placed with different IDs or exchange stores differently)${R}`
+          )
           pass('SL/TP orders (soft)', 'monitoring state reached — exit orders in flight')
         }
       } catch (err) {
@@ -648,7 +656,10 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
     try {
       const exitedState = await exitedPromise
       assert(exitedState.status === 'exited', `expected exited, got ${exitedState.status}`)
-      pass('intent exited', `exitReason=${exitedState.exitReason ?? 'none'} avgExit=$${String(exitedState.avgExitPrice ?? 'N/A')}`)
+      pass(
+        'intent exited',
+        `exitReason=${exitedState.exitReason ?? 'none'} avgExit=$${String(exitedState.avgExitPrice ?? 'N/A')}`
+      )
     } catch (err) {
       fail('intent → exited state', err)
       await emergencyClose()
@@ -678,9 +689,21 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
     monitor.stop()
     manager.stop()
     stateStore.stop()
-    try { await ws.disconnect() } catch { /* ignore */ }
-    try { await marketsHandle.stop() } catch { /* ignore */ }
-    try { if ('dispose' in rest) await (rest as { dispose(): Promise<void> }).dispose() } catch { /* ignore */ }
+    try {
+      await ws.disconnect()
+    } catch {
+      /* ignore */
+    }
+    try {
+      await marketsHandle.stop()
+    } catch {
+      /* ignore */
+    }
+    try {
+      if ('dispose' in rest) await (rest as { dispose(): Promise<void> }).dispose()
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -697,7 +720,7 @@ async function main(): Promise<void> {
   createNoopTracer()
 
   // Define test runs
-  const testRuns: Array<{ spec: ExchangeSpec; run: TestRun }> = []
+  const testRuns: { spec: ExchangeSpec; run: TestRun }[] = []
 
   // Strategy 1 (timed exit) on all exchanges
   for (const spec of EXCHANGE_SPECS) {
@@ -765,7 +788,9 @@ async function main(): Promise<void> {
 
 // Suppress unhandled rejections from WS SDK cleanup (reconnect timers / AggregateError from
 // Bitget SDK firing after disconnect — none of these affect test results).
-process.on('unhandledRejection', () => { /* suppress */ })
+process.on('unhandledRejection', () => {
+  /* suppress */
+})
 
 // SIGINT/SIGTERM: let finally blocks handle cleanup
 process.on('SIGINT', () => {

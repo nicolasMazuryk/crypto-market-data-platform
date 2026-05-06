@@ -1,3 +1,4 @@
+import type { FuturesSymbolInfo } from 'kucoin-api'
 import type { Exchange } from '../types/exchange.js'
 import type { FundingInterval } from '../types/exchange.js'
 import { normalizeSymbol } from '../../utils/symbol-normalizer.js'
@@ -14,14 +15,14 @@ export function createKucoinPuller(): ExchangeFundingPuller {
     async pull(): Promise<FundingSnapshot[]> {
       if (!client) {
         const { FuturesClient } = await import('kucoin-api')
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+
         client = new FuturesClient()
       }
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       const resp = await client.getSymbols()
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-      const symbols: import('kucoin-api').FuturesSymbolInfo[] = resp.data ?? []
+      const symbols: FuturesSymbolInfo[] = resp.data ?? []
 
       const snapshots: FundingSnapshot[] = []
       const now = Date.now()
@@ -36,6 +37,7 @@ export function createKucoinPuller(): ExchangeFundingPuller {
 
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         const fundingRate = s.predictedFundingFeeRate ?? 0
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
         const nextFundingTimestamp = s.nextFundingRateTime ?? now + 8 * 3600 * 1000
 
         snapshots.push({

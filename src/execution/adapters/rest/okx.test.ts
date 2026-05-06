@@ -96,7 +96,7 @@ function makeLogger(): Logger {
 
 runRestAdapterConformance({
   exchange: 'okx',
-  makeAdapter: (ccxtOverrides) => {
+  makeAdapter: ccxtOverrides => {
     const mockCcxt = makeMockCcxt(ccxtOverrides)
     const limiter = makeMockLimiter()
     const registry = new MetricsRegistry()
@@ -116,7 +116,7 @@ runRestAdapterConformance({
   sampleSymbol: 'BTCUSDT',
   sampleCcxtSymbol: 'BTC/USDT:USDT',
   clientOrderIdParam: 'clOrdId',
-  transformClientOrderId: (id) => id.replace(/-/g, '').slice(0, 32),
+  transformClientOrderId: id => id.replace(/-/g, '').slice(0, 32),
 })
 
 describe('okx stop_market params', () => {

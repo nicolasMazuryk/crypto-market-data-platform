@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 async function main() {
   const { createCcxtExchange } = await import('../../exchanges/ccxt-client.js')
   const { ccxtIdMap } = await import('../markets/ccxtIdMap.js')

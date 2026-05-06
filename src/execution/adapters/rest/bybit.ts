@@ -21,8 +21,7 @@ const bybitSpec: CcxtAdapterSpec = {
   },
   // Bybit V5 orderType only accepts 'Market' or 'Limit'. Trigger behaviour
   // is controlled via triggerPrice/triggerDirection in params, not the type string.
-  mapCcxtOrderType: (req: OrderRequest): string =>
-    req.type === 'stop_market' ? 'market' : req.type,
+  mapCcxtOrderType: (req: OrderRequest): string => (req.type === 'stop_market' ? 'market' : req.type),
   buildCreateOrderParams: (req: OrderRequest) => {
     const p: Record<string, unknown> = { orderLinkId: req.clientOrderId }
     if (req.reduceOnly) p.reduceOnly = true
@@ -51,19 +50,21 @@ const bybitSpec: CcxtAdapterSpec = {
     const linkParam = { orderLinkId: clientOrderId }
 
     // 1. Check open (realtime) orders — fastest path when SL/TP is still pending
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const opens = await ccxtEx.fetchOpenOrders!(unified, undefined, undefined, linkParam)
-    if (opens.length > 0) return opens[0] as CcxtOrder
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    if (opens.length > 0) return opens[0]!
 
     // 2. Not open — check order history for filled/cancelled orders
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const history = await ccxtEx.fetchClosedOrders!(unified, undefined, undefined, linkParam)
-    return history.length > 0 ? (history[0] as CcxtOrder) : undefined
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    return history.length > 0 ? history[0]! : undefined
   },
 }
 
 export type BybitRestAdapterOptions = BaseRestAdapterOptions
 
-export function createBybitRestAdapter(
-  opts: BybitRestAdapterOptions
-): ReturnType<typeof createCcxtRestAdapter> {
+export function createBybitRestAdapter(opts: BybitRestAdapterOptions): ReturnType<typeof createCcxtRestAdapter> {
   return createCcxtRestAdapter(bybitSpec, opts)
 }

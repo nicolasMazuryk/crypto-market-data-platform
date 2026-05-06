@@ -1,4 +1,16 @@
-import { pgTable, pgEnum, text, timestamp, boolean, integer, bigint, jsonb, index, unique, foreignKey } from 'drizzle-orm/pg-core'
+import {
+  pgTable,
+  pgEnum,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  bigint,
+  jsonb,
+  index,
+  unique,
+  foreignKey,
+} from 'drizzle-orm/pg-core'
 
 export const engineModeEnum = pgEnum('engine_mode', ['live', 'dry_run', 'drain_only', 'halted'])
 
@@ -282,10 +294,10 @@ export const realizedPnl = pgTable(
   ]
 )
 
-export type EngineMode = typeof engineModeEnum.enumValues[number]
-export type IntentStatusRow = typeof intentStatusEnum.enumValues[number]
-export type OrderStatusRow = typeof orderStatusEnum.enumValues[number]
-export type OpsEventLevel = typeof opsEventLevelEnum.enumValues[number]
+export type EngineMode = (typeof engineModeEnum.enumValues)[number]
+export type IntentStatusRow = (typeof intentStatusEnum.enumValues)[number]
+export type OrderStatusRow = (typeof orderStatusEnum.enumValues)[number]
+export type OpsEventLevel = (typeof opsEventLevelEnum.enumValues)[number]
 
 export type RunRow = typeof runs.$inferSelect
 export type TradeIntentRow = typeof tradeIntents.$inferSelect

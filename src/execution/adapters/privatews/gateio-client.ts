@@ -18,7 +18,6 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
 
   return {
     async connect(): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { WebsocketClient } = await import('gateio-api')
       const clientOpts: Record<string, unknown> = {}
       if (opts.credentials) {
@@ -27,7 +26,6 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
       }
       if (opts.wsBaseUrl) clientOpts.wsUrl = opts.wsBaseUrl
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
       sdkClient = new WebsocketClient(clientOpts as ConstructorParameters<typeof WebsocketClient>[0])
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access

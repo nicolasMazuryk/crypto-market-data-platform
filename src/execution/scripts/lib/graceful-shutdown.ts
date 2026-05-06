@@ -1,7 +1,7 @@
 export interface GracefulShutdownOptions {
-  drainSeconds?: number    // default 10 — wait window after exit before tearing down
+  drainSeconds?: number // default 10 — wait window after exit before tearing down
   exitOnComplete?: boolean // default true — process.exit() fallback for SDK timer leaks
-  onDrained?: () => void   // called after drain, before handle.stop() — use for post-drain summaries
+  onDrained?: () => void // called after drain, before handle.stop() — use for post-drain summaries
 }
 
 const _started = new WeakSet<object>()

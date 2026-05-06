@@ -96,7 +96,7 @@ function makeLogger(): Logger {
 
 runRestAdapterConformance({
   exchange: 'kucoin',
-  makeAdapter: (ccxtOverrides) => {
+  makeAdapter: ccxtOverrides => {
     const mockCcxt = makeMockCcxt(ccxtOverrides)
     const limiter = makeMockLimiter()
     const registry = new MetricsRegistry()

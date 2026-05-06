@@ -213,11 +213,7 @@ export async function writeRowToDb(
 }
 
 /** Drain all WAL entries to DB. Call before runRecovery to ensure DB state is current. */
-export async function drainWalEntriesToDb(
-  db: DrizzleDb,
-  wal: WalHandle,
-  logger: Logger
-): Promise<void> {
+export async function drainWalEntriesToDb(db: DrizzleDb, wal: WalHandle, logger: Logger): Promise<void> {
   const entries = wal.peek()
   if (entries.length === 0) return
   logger.info({ count: entries.length }, 'wal: pre-recovery drain')
@@ -273,7 +269,8 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       leverage: intent.leverage,
       fundingRate: String(intent.fundingRate),
       fundingRatePercent: String(intent.fundingRatePercent),
-      fundingInterval: typeof intent.fundingInterval === 'string' ? parseInt(intent.fundingInterval, 10) : intent.fundingInterval,
+      fundingInterval:
+        typeof intent.fundingInterval === 'string' ? parseInt(intent.fundingInterval, 10) : intent.fundingInterval,
       nextFundingTs: new Date(intent.nextFundingTimestamp),
       decidedAt: new Date(intent.decidedAt),
       entryAt: new Date(intent.entryAt),
@@ -485,9 +482,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
                 and(
                   eq(fundingAttributions.exchange, event.exchange),
                   eq(fundingAttributions.symbol, event.symbol),
-                  ...(event.entryFilledAt != null
-                    ? [gte(fundingAttributions.ts, new Date(event.entryFilledAt))]
-                    : []),
+                  ...(event.entryFilledAt != null ? [gte(fundingAttributions.ts, new Date(event.entryFilledAt))] : []),
                   lte(fundingAttributions.ts, new Date(event.exitFilledAt))
                 )
               )
@@ -519,8 +514,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
 
             const netPnl = grossPnl != null ? grossPnl - entryFees - exitFees + fundingTotal : null
 
-            const holdDurationMs =
-              event.entryFilledAt != null ? event.exitFilledAt - event.entryFilledAt : null
+            const holdDurationMs = event.entryFilledAt != null ? event.exitFilledAt - event.entryFilledAt : null
 
             enqueue({
               table: 'realized_pnl',
@@ -637,7 +631,11 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
           metrics.writesTotal.inc(1, { table: write.table, result: 'discarded' })
         } else {
           logger.warn({ err, table: write.table }, 'persistence: write failed, buffering to WAL')
-          wal.append({ table: write.table, row: write.row, ...(write.onConflict !== undefined ? { onConflict: write.onConflict } : {}) })
+          wal.append({
+            table: write.table,
+            row: write.row,
+            ...(write.onConflict !== undefined ? { onConflict: write.onConflict } : {}),
+          })
           errorCount++
           metrics.writesTotal.inc(1, { table: write.table, result: 'error' })
         }
@@ -726,7 +724,10 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
         await db.insert(orders).values(row).onConflictDoNothing()
         metrics.writesTotal.inc(1, { table: 'orders', result: 'sync_success' })
       } catch (err) {
-        logger.warn({ err, clientOrderId: params.clientOrderId }, 'persistence: sync order write failed, buffering to WAL')
+        logger.warn(
+          { err, clientOrderId: params.clientOrderId },
+          'persistence: sync order write failed, buffering to WAL'
+        )
         wal.append({ table: 'orders', row: row as unknown as Record<string, unknown>, onConflict: 'ignore' })
         metrics.writesTotal.inc(1, { table: 'orders', result: 'wal_fallback' })
       }
@@ -741,7 +742,10 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       }
       const row = intentStateToRow(state)
       try {
-        await db.insert(tradeIntents).values(row as typeof tradeIntents.$inferInsert).onConflictDoNothing()
+        await db
+          .insert(tradeIntents)
+          .values(row as typeof tradeIntents.$inferInsert)
+          .onConflictDoNothing()
         metrics.writesTotal.inc(1, { table: 'trade_intents', result: 'sync_success' })
       } catch (err) {
         logger.warn({ err, intentId: intent.id }, 'persistence: sync intent write failed, buffering to WAL')

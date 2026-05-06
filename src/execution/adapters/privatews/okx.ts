@@ -31,8 +31,6 @@ const okxSpec: PrivateWsAdapterSpec = {
 }
 
 export function createOkxPrivateWsAdapter(opts: OkxPrivateWsAdapterOptions): ExchangePrivateWsAdapter {
-  const spec = opts.wsClientFactory
-    ? { ...okxSpec, createClient: opts.wsClientFactory }
-    : okxSpec
+  const spec = opts.wsClientFactory ? { ...okxSpec, createClient: opts.wsClientFactory } : okxSpec
   return createPrivateWsAdapterFromSpec(spec, opts)
 }

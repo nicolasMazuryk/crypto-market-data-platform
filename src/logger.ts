@@ -88,15 +88,7 @@ export const logger = pino(
   {
     level: config.logLevel,
     redact: {
-      paths: [
-        '*.token',
-        '*.secret',
-        '*.password',
-        '*.apiKey',
-        '*.passphrase',
-        '*.privateKey',
-        '*.cookie',
-      ],
+      paths: ['*.token', '*.secret', '*.password', '*.apiKey', '*.passphrase', '*.privateKey', '*.cookie'],
       remove: true,
     },
     messageKey: 'message',

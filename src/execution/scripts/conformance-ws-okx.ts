@@ -93,7 +93,14 @@ async function main(): Promise<void> {
     logger: console as never,
   })
 
-  const restAdapter = createOkxRestAdapter({ config: cfg, limiter, clock, ids, logger: console as never, metrics: restMetrics })
+  const restAdapter = createOkxRestAdapter({
+    config: cfg,
+    limiter,
+    clock,
+    ids,
+    logger: console as never,
+    metrics: restMetrics,
+  })
   const wsAdapter = createOkxPrivateWsAdapter({ config: cfg, bus, clock, logger: console as never, metrics: wsMetrics })
 
   const orderEvents: OrderEvent[] = []

@@ -295,11 +295,10 @@ export function registerFundingMetrics(registry: MetricsRegistry): FundingMetric
       'Funding snapshots rewritten by time override',
       ['exchange']
     ),
-    evictedTotal: registry.counter(
-      'funding_snapshots_evicted_total',
-      'Funding snapshots evicted from store',
-      ['exchange', 'reason']
-    ),
+    evictedTotal: registry.counter('funding_snapshots_evicted_total', 'Funding snapshots evicted from store', [
+      'exchange',
+      'reason',
+    ]),
   }
 }
 

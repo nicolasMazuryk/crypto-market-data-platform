@@ -27,7 +27,7 @@ export function fundingFraction(applied: boolean): number {
  * (fill.timestamp, exitTs) pair. Returns weighted fraction in [0, 1].
  */
 export function fundingFractionForLadder(params: {
-  fills: ReadonlyArray<Pick<Fill, 'timestamp' | 'quantity'>>
+  fills: readonly Pick<Fill, 'timestamp' | 'quantity'>[]
   exitTs: ClickHouseDateTime
   fundingTs: ClickHouseDateTime
   fundingAppliedOnSameSecond: boolean

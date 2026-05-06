@@ -122,9 +122,7 @@ export function createShadowRestAdapter(opts: ShadowRestAdapterOptions): Exchang
     },
 
     getOpenOrders(_symbol?: string): Promise<Order[]> {
-      const open = Array.from(orderStore.values()).filter(
-        o => o.status === 'new' || o.status === 'partially_filled'
-      )
+      const open = Array.from(orderStore.values()).filter(o => o.status === 'new' || o.status === 'partially_filled')
       return Promise.resolve(open)
     },
 

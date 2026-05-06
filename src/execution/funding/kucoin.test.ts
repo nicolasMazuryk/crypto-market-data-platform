@@ -11,14 +11,16 @@ import { createKucoinPuller } from './kucoin.js'
 const RAW_SYMBOL = 'XBTUSDTM'
 const NORMALIZED_SYMBOL = 'BTCUSDT'
 
-function makeSymbol(overrides: Partial<{
-  symbol: string
-  settleCurrency: string
-  expireDate: null | number
-  fundingFeeRate: number
-  predictedFundingFeeRate: number | undefined | null
-  nextFundingRateTime: number
-}> = {}) {
+function makeSymbol(
+  overrides: Partial<{
+    symbol: string
+    settleCurrency: string
+    expireDate: null | number
+    fundingFeeRate: number
+    predictedFundingFeeRate: number | undefined | null
+    nextFundingRateTime: number
+  }> = {}
+) {
   return {
     symbol: RAW_SYMBOL,
     settleCurrency: 'USDT',
@@ -37,9 +39,12 @@ describe('KuCoin funding puller', () => {
 
   it('uses predictedFundingFeeRate when present', async () => {
     const sym = makeSymbol({ fundingFeeRate: 0.001, predictedFundingFeeRate: -0.0025 })
-    vi.mocked(FuturesClient).mockImplementation(() => ({
-      getSymbols: vi.fn().mockResolvedValue({ data: [sym] }),
-    }) as never)
+    vi.mocked(FuturesClient).mockImplementation(
+      () =>
+        ({
+          getSymbols: vi.fn().mockResolvedValue({ data: [sym] }),
+        }) as never
+    )
 
     const puller = createKucoinPuller()
     const snapshots = await puller.pull()
@@ -53,9 +58,12 @@ describe('KuCoin funding puller', () => {
 
   it('defaults to 0 and still emits the snapshot when predictedFundingFeeRate is missing', async () => {
     const sym = makeSymbol({ fundingFeeRate: 0.001, predictedFundingFeeRate: undefined })
-    vi.mocked(FuturesClient).mockImplementation(() => ({
-      getSymbols: vi.fn().mockResolvedValue({ data: [sym] }),
-    }) as never)
+    vi.mocked(FuturesClient).mockImplementation(
+      () =>
+        ({
+          getSymbols: vi.fn().mockResolvedValue({ data: [sym] }),
+        }) as never
+    )
 
     const puller = createKucoinPuller()
     const snapshots = await puller.pull()

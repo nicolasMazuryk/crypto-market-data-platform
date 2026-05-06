@@ -3,10 +3,17 @@ import { createHash } from 'node:crypto'
 import type { Logger } from 'pino'
 
 import { normalizeSymbol } from '../../utils/symbol-normalizer.js'
-import type { Clock, EventBus, IntentExitedEvent, OrderPlacedEvent, OrderFilledEvent, PositionOpenedEvent } from '../core/types.js'
+import type {
+  Clock,
+  EventBus,
+  IntentExitedEvent,
+  OrderPlacedEvent,
+  OrderFilledEvent,
+  PositionOpenedEvent,
+} from '../core/types.js'
 import type { ExecutionIds } from '../core/ids.js'
 import type { ExecutionMetrics } from '../observability/metrics.js'
-import type { ExchangeRestAdapter, OrderSide } from '../adapters/rest/types.js'
+import type { ExchangeRestAdapter, Order, OrderSide } from '../adapters/rest/types.js'
 import type { StateStore } from '../state/types.js'
 import type { MarketMetadataProvider } from '../markets/types.js'
 import type { KillSwitch } from '../risk/types.js'
@@ -69,15 +76,17 @@ export interface ExecutionManagerHandle extends ExecutionManager {
 export function createExecutionManager(opts: ExecutionManagerOptions): ExecutionManagerHandle {
   const { bus, clock, ids, logger, metrics, restAdapters, monitor, preflight, refPrice } = opts
 
-  const intentStates: Map<string, IntentState> = opts.initialState?.intentStates ?? new Map()
+  const intentStates: Map<string, IntentState> = opts.initialState?.intentStates ?? new Map<string, IntentState>()
   // clientOrderId → intentId for entry orders
-  const byEntryOrderId: Map<string, string> = opts.initialState?.byEntryOrderId ?? new Map()
+  const byEntryOrderId: Map<string, string> = opts.initialState?.byEntryOrderId ?? new Map<string, string>()
   // exchangeOrderId → intentId for entry orders (fallback when clientOrderId absent in WS, e.g. Bitget/KuCoin market fills)
-  const byEntryExchangeOrderId: Map<string, string> = opts.initialState?.byEntryExchangeOrderId ?? new Map()
+  const byEntryExchangeOrderId: Map<string, string> =
+    opts.initialState?.byEntryExchangeOrderId ?? new Map<string, string>()
   // clientOrderId → intentId for market-close orders (timed/deadline/kill_switch)
-  const byCloseOrderId: Map<string, string> = opts.initialState?.byCloseOrderId ?? new Map()
+  const byCloseOrderId: Map<string, string> = opts.initialState?.byCloseOrderId ?? new Map<string, string>()
   // exchangeOrderId → intentId for market-close orders (fallback)
-  const byCloseExchangeOrderId: Map<string, string> = opts.initialState?.byCloseExchangeOrderId ?? new Map()
+  const byCloseExchangeOrderId: Map<string, string> =
+    opts.initialState?.byCloseExchangeOrderId ?? new Map<string, string>()
   // (exchange, symbol, leverage) → already-set flag
   const leverageSet = new Set<string>()
   // single-flight: prevents duplicate concurrent setLeverage calls for the same key
@@ -212,30 +221,38 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
         if (opts.beforeCreateOrder) {
           await Promise.all([
-            opts.beforeCreateOrder({
-              intentId: intent.id,
-              clientOrderId: slId,
-              exchange: intent.exchange,
-              symbol: intent.exchangeSymbol,
-              side: exitSide,
-              kind: 'sl',
-              orderType: 'stop_market',
-              qty: exitQty,
-              stopPrice: slPrice,
-              reduceOnly: true,
-            }).catch((err: unknown) => logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for sl order')),
-            opts.beforeCreateOrder({
-              intentId: intent.id,
-              clientOrderId: tpId,
-              exchange: intent.exchange,
-              symbol: intent.exchangeSymbol,
-              side: exitSide,
-              kind: 'tp',
-              orderType: 'limit',
-              qty: exitQty,
-              price: tpPrice,
-              reduceOnly: true,
-            }).catch((err: unknown) => logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for tp order')),
+            opts
+              .beforeCreateOrder({
+                intentId: intent.id,
+                clientOrderId: slId,
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                side: exitSide,
+                kind: 'sl',
+                orderType: 'stop_market',
+                qty: exitQty,
+                stopPrice: slPrice,
+                reduceOnly: true,
+              })
+              .catch((err: unknown) => {
+                logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for sl order')
+              }),
+            opts
+              .beforeCreateOrder({
+                intentId: intent.id,
+                clientOrderId: tpId,
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                side: exitSide,
+                kind: 'tp',
+                orderType: 'limit',
+                qty: exitQty,
+                price: tpPrice,
+                reduceOnly: true,
+              })
+              .catch((err: unknown) => {
+                logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for tp order')
+              }),
           ])
         }
 
@@ -384,12 +401,14 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
   const POLL_GET_ORDER_TIMEOUT_MS = 3_000
 
-  function withGetOrderTimeout(
-    promise: Promise<import('../adapters/rest/types.js').Order | undefined>
-  ): Promise<import('../adapters/rest/types.js').Order | undefined> {
+  function withGetOrderTimeout(promise: Promise<Order | undefined>): Promise<Order | undefined> {
     return Promise.race([
       promise,
-      new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), POLL_GET_ORDER_TIMEOUT_MS)),
+      new Promise<undefined>(resolve =>
+        setTimeout(() => {
+          resolve(undefined)
+        }, POLL_GET_ORDER_TIMEOUT_MS)
+      ),
     ])
   }
 
@@ -489,14 +508,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               ...(slRef.exchangeOrderId ? { exchangeOrderId: slRef.exchangeOrderId } : {}),
             })
           )
-          if (slOrder?.status === 'filled' && s.status === 'monitoring') {
+          if (slOrder?.status === 'filled') {
             if (slOrder.avgFillPrice !== undefined) s.avgExitPrice = slOrder.avgFillPrice
             monitor.disarm(intent.id)
             await handleMonitorExit(s, 'sl')
             return
           }
         }
-        if (s.status !== 'monitoring') return
         if (tpRef) {
           const tpOrder = await withGetOrderTimeout(
             rest.getOrder({
@@ -505,7 +523,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               ...(tpRef.exchangeOrderId ? { exchangeOrderId: tpRef.exchangeOrderId } : {}),
             })
           )
-          if (tpOrder?.status === 'filled' && s.status === 'monitoring') {
+          if (tpOrder?.status === 'filled') {
             if (tpOrder.avgFillPrice !== undefined) s.avgExitPrice = tpOrder.avgFillPrice
             monitor.disarm(intent.id)
             await handleMonitorExit(s, 'tp')
@@ -532,7 +550,14 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const reduceOnly = open.filter(o => o.reduceOnly)
       if (reduceOnly.length === 0) {
         logger.info(
-          { event: 'oco.sweep.complete', intentId, exchange: rest.exchange, symbol: exchangeSymbol, foundCount: 0, cancelledCount: 0 },
+          {
+            event: 'oco.sweep.complete',
+            intentId,
+            exchange: rest.exchange,
+            symbol: exchangeSymbol,
+            foundCount: 0,
+            cancelledCount: 0,
+          },
           'oco.sweep.complete'
         )
         return
@@ -545,17 +570,24 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               ...(o.clientOrderId ? { clientOrderId: o.clientOrderId } : {}),
               ...(o.exchangeOrderId ? { exchangeOrderId: o.exchangeOrderId } : {}),
             })
-            .catch((err: unknown) =>
+            .catch((err: unknown) => {
               logger.warn(
                 { intentId, exchange: rest.exchange, orderId: o.clientOrderId, err },
                 'manager: post-exit cancel failed'
               )
-            )
+            })
         )
       )
       const cancelledCount = results.filter(r => r.status === 'fulfilled').length
       logger.info(
-        { event: 'oco.sweep.complete', intentId, exchange: rest.exchange, symbol: exchangeSymbol, foundCount: reduceOnly.length, cancelledCount },
+        {
+          event: 'oco.sweep.complete',
+          intentId,
+          exchange: rest.exchange,
+          symbol: exchangeSymbol,
+          foundCount: reduceOnly.length,
+          cancelledCount,
+        },
         'oco.sweep.complete'
       )
     } catch (err) {
@@ -634,7 +666,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
     const exitStartedAt = clock.now()
     logger.info(
-      { event: 'intent.exiting.start', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, reason },
+      {
+        event: 'intent.exiting.start',
+        intentId: s.intent.id,
+        exchange: s.intent.exchange,
+        symbol: s.intent.symbol,
+        reason,
+      },
       'intent.exiting.start'
     )
 
@@ -664,7 +702,14 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       emitIntentExited(s)
       transition(s, 'exited')
       logger.info(
-        { event: 'intent.exited.complete', intentId: intent.id, exchange: intent.exchange, symbol: intent.symbol, exitReason: reason, durationMs: clock.now() - exitStartedAt },
+        {
+          event: 'intent.exited.complete',
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          exitReason: reason,
+          durationMs: clock.now() - exitStartedAt,
+        },
         'intent.exited.complete'
       )
     } else {
@@ -805,7 +850,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (rest && s.entryOrderId) {
         void rest
           .cancelOrder({ symbol: s.intent.exchangeSymbol, clientOrderId: s.entryOrderId })
-          .catch((err: unknown) => logger.warn({ intentId: s.intent.id, err }, 'preempt: cancel entry failed'))
+          .catch((err: unknown) => {
+            logger.warn({ intentId: s.intent.id, err }, 'preempt: cancel entry failed')
+          })
       }
       void handleMonitorExit(s, 'kill_switch')
       return
@@ -818,9 +865,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     if (rest && s.entryOrderId) {
       void rest
         .cancelOrder({ symbol: s.intent.exchangeSymbol, clientOrderId: s.entryOrderId })
-        .catch((err: unknown) =>
+        .catch((err: unknown) => {
           logger.warn({ intentId: s.intent.id, err }, 'preempt: cancel order failed (best effort)')
-        )
+        })
     }
   }
 
@@ -1015,7 +1062,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               restQty: number
               restSide?: 'long' | 'short' | 'flat'
             }
-            if (typeof details?.symbol !== 'string') return
+            if (typeof details.symbol !== 'string') return
             void flattenOrphanPosition(event.exchange, details)
             return
           }
@@ -1025,7 +1072,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               clientOrderId: string
               exchangeOrderId?: string
             }
-            if (typeof details?.symbol !== 'string' || typeof details?.clientOrderId !== 'string') return
+            if (typeof details.symbol !== 'string' || typeof details.clientOrderId !== 'string') return
             void cancelOrphanReduceOnlyOrder(event.exchange, details)
           }
         })
@@ -1349,9 +1396,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (!rest) return
       const market = opts.markets.get(exchange, symbol)
       if (!market) return
-      void ensureLeverage(rest, exchange, market.exchangeSymbol, symbol, leverage).catch((err: unknown) =>
+      void ensureLeverage(rest, exchange, market.exchangeSymbol, symbol, leverage).catch((err: unknown) => {
         logger.warn({ event: 'prewarm.leverage_failed', exchange, symbol, leverage, err }, 'prewarmLeverage failed')
-      )
+      })
     },
   }
 }

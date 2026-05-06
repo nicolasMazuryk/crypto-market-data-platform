@@ -147,7 +147,11 @@ function makeMockMarketsProvider(initial: Map<Exchange, string[]>): {
     trigger(delta: MarketMetadataDelta) {
       for (const m of delta.removed) {
         const symbols = listed.get(m.exchange)
-        if (symbols) listed.set(m.exchange, symbols.filter(s => s !== m.symbol))
+        if (symbols)
+          listed.set(
+            m.exchange,
+            symbols.filter(s => s !== m.symbol)
+          )
       }
       for (const listener of listeners) listener(delta)
     },
@@ -481,9 +485,7 @@ describe('FundingRateSource', () => {
     }
 
     const { bus, metrics, logger, registry } = makeOptions(['binance'])
-    const mockMarkets = makeMockMarketsProvider(
-      new Map([['binance' as Exchange, ['BTCUSDT', 'ETHUSDT']]])
-    )
+    const mockMarkets = makeMockMarketsProvider(new Map([['binance' as Exchange, ['BTCUSDT', 'ETHUSDT']]]))
     const handle = createFundingRateSource({
       bus,
       logger,
@@ -499,7 +501,17 @@ describe('FundingRateSource', () => {
       added: [],
       changed: [],
       removed: [
-        { exchange: 'binance' as Exchange, symbol: 'ETHUSDT', exchangeSymbol: 'ETH/USDT:USDT', contractSize: 1, pricePrecision: 2, amountPrecision: 4, makerFee: 0, takerFee: 0, status: 'delisted' },
+        {
+          exchange: 'binance' as Exchange,
+          symbol: 'ETHUSDT',
+          exchangeSymbol: 'ETH/USDT:USDT',
+          contractSize: 1,
+          pricePrecision: 2,
+          amountPrecision: 4,
+          makerFee: 0,
+          takerFee: 0,
+          status: 'delisted',
+        },
       ],
     })
 
@@ -527,9 +539,7 @@ describe('FundingRateSource', () => {
 
     // markets provider only knows about BTCUSDT — DEGENUSDT is delisted
     const { bus, metrics, logger, registry } = makeOptions(['binance'])
-    const mockMarkets = makeMockMarketsProvider(
-      new Map([['binance' as Exchange, ['BTCUSDT']]])
-    )
+    const mockMarkets = makeMockMarketsProvider(new Map([['binance' as Exchange, ['BTCUSDT']]]))
     const handle = createFundingRateSource({
       bus,
       logger,

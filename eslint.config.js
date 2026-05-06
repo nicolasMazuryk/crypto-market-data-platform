@@ -22,15 +22,13 @@ export default tseslint.config(
   ...stylisticTypeChecked,
   eslintConfigPrettier,
   {
-    ignores: ["dist/", "node_modules/", ".sst/", "infra/", "sst.config.ts", "sst-env.d.ts"],
+    ignores: ["dist/", "node_modules/", ".sst/", "infra/", "sst.config.ts", "sst-env.d.ts", ".claude/"],
   },
   {
     files: tsFiles,
     languageOptions: {
       parserOptions: {
-        projectService: {
-          allowDefaultProject: ["*.config.ts"],
-        },
+        project: './tsconfig.eslint.json',
         tsconfigRootDir: import.meta.dirname,
       },
     },

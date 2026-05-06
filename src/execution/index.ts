@@ -42,7 +42,7 @@ import { registerPrivateWsMetrics, registerStateMetrics } from './observability/
 import { createPositionMonitor } from './execution/monitor.js'
 import type { PositionMonitorHandle } from './execution/monitor.js'
 import { createExecutionManager } from './execution/manager.js'
-import type { ExecutionManagerHandle } from './execution/manager.js'
+import type { ExecutionManagerHandle, ExecutionManagerInitialState } from './execution/manager.js'
 import { createStrategyRegistry } from './strategies/registry.js'
 import type { StrategyRegistry } from './strategies/registry.js'
 import { createStrategyEvaluator } from './strategies/evaluator.js'
@@ -59,6 +59,7 @@ import { createWal } from './persistence/wal.js'
 import { createPersistenceWriter, drainWalEntriesToDb } from './persistence/writer.js'
 import type { PersistenceWriterHandle } from './persistence/writer.js'
 import { runRecovery } from './recovery/index.js'
+import type { RecoveryOptions } from './recovery/index.js'
 
 import type { EngineConfig } from './config/types.js'
 import type { Exchange } from './types/exchange.js'
@@ -225,7 +226,9 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
         bus,
         tracer,
         ...(marketsHandle?.provider !== undefined ? { marketMetadataProvider: marketsHandle.provider } : {}),
-        ...(config.testing?.shadowFillDelayMs !== undefined ? { shadowFillDelayMs: config.testing.shadowFillDelayMs } : {}),
+        ...(config.testing?.shadowFillDelayMs !== undefined
+          ? { shadowFillDelayMs: config.testing.shadowFillDelayMs }
+          : {}),
       })
       restAdapters.set(cfg.exchange, adapter)
       if ('dispose' in adapter && typeof adapter.dispose === 'function') {
@@ -238,8 +241,14 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
 
   // Pre-warm all REST adapters (loads markets so the first createOrder has no cold-start penalty)
   await Promise.allSettled(
-    Array.from(restAdapters.values()).map(a =>
-      a.warm?.().catch((err: unknown) => logger.warn({ err }, 'rest.adapter.warm.failed'))
+    Array.from(restAdapters.values()).flatMap(a =>
+      a.warm
+        ? [
+            a.warm().catch((err: unknown) => {
+              logger.warn({ err }, 'rest.adapter.warm.failed')
+            }),
+          ]
+        : []
     )
   )
 
@@ -247,7 +256,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
   let dbHandle: DbHandle | undefined
   let persistenceWriter: PersistenceWriterHandle | undefined
   let runId: string | undefined
-  let recoveredInitialState: import('./execution/manager.js').ExecutionManagerInitialState | undefined
+  let recoveredInitialState: ExecutionManagerInitialState | undefined
 
   const postgresUrl = config.persistence.postgresUrl
   if (postgresUrl) {
@@ -264,7 +273,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
         // Any intent-status or order updates buffered from the previous run are applied first.
         await drainWalEntriesToDb(dbHandle.db, wal, logger.childFor('wal-predrain'))
 
-        const recoveryOpts: import('./recovery/index.js').RecoveryOptions = {
+        const recoveryOpts: RecoveryOptions = {
           db: dbHandle.db,
           config,
           bus,
@@ -320,9 +329,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     }
   } else {
     if (config.mode === 'live') {
-      throw new Error(
-        'persistence.postgresUrl must be set in live mode — refusing to start without persistence'
-      )
+      throw new Error('persistence.postgresUrl must be set in live mode — refusing to start without persistence')
     }
     logger.warn('persistence.postgresUrl not set in config — running in ephemeral mode (no persistence)')
   }
@@ -449,9 +456,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     refPrice: (exchange, symbol) => fundingSource?.latest(exchange).get(symbol)?.markPrice,
     risk: config.risk,
     ...(recoveredInitialState ? { initialState: recoveredInitialState } : {}),
-    ...(persistenceWriter
-      ? { beforeCreateOrder: (params) => persistenceWriter.writeOrderSync(params) }
-      : {}),
+    ...(persistenceWriter ? { beforeCreateOrder: params => persistenceWriter.writeOrderSync(params) } : {}),
   })
   execManager.start()
 
@@ -465,7 +470,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     await origSetMode(mode, reason)
     killSwitchMetrics.update(mode)
   }
-  killSwitch.trip = async (reason) => {
+  killSwitch.trip = async reason => {
     await origTrip(reason)
     killSwitchMetrics.update('halted')
     void alertDispatcher.dispatch('page', 'risk.killSwitch.trip', { reason, mode: config.mode })
@@ -512,7 +517,9 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
       exchanges: enabledExchanges,
       configsByStrategy,
       config: config.scheduler,
-      leveragePrewarmer: (ex, sym, lev) => { execManager.prewarmLeverage(ex, sym, lev) },
+      leveragePrewarmer: (ex, sym, lev) => {
+        execManager.prewarmLeverage(ex, sym, lev)
+      },
       ...(symbolFilter ? { symbolFilter } : {}),
       ...(config.testing?.fundingTimeOverride
         ? { fundingTimeOverrideMs: config.testing.fundingTimeOverride.resolvedMs }
@@ -625,7 +632,10 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
               )
             )
             const failed = results.filter(r => r.status === 'rejected').length
-            logger.info({ event: 'shutdown.sweep', exchange, cancelled: reduceOnly.length - failed, failed }, 'shutdown.sweep')
+            logger.info(
+              { event: 'shutdown.sweep', exchange, cancelled: reduceOnly.length - failed, failed },
+              'shutdown.sweep'
+            )
           } catch (err) {
             logger.warn({ err, exchange }, 'shutdown.sweep failed')
           }

@@ -33,11 +33,7 @@ export function calculateDeltaPnl(direction: 'long' | 'short', entryPrice: numbe
  * @param direction - Position direction
  * @param appliedFraction - 0 = none, 1 = full, in-between = partial (ladder proportional accrual)
  */
-export function calculateFundingPnl(
-  fundingRate: number,
-  direction: 'long' | 'short',
-  appliedFraction: number
-): number {
+export function calculateFundingPnl(fundingRate: number, direction: 'long' | 'short', appliedFraction: number): number {
   if (appliedFraction <= 0) return 0
 
   // F in the spec is expressed as absolute value. The funding rate from DB is negative.
@@ -69,7 +65,7 @@ export function calculatePnl(params: {
   const fees = entryFee + exitFee
   const net_pnl = delta_pnl + funding_pnl - fees
 
-  return { delta_pnl, funding_pnl, fees, net_pnl }
+  return { delta_pnl, spread_pnl: 0, funding_pnl, fees, net_pnl }
 }
 
 /**
@@ -95,5 +91,30 @@ export function calculateLadderPnl(params: {
   const fees = entryFees + exitFee
   const net_pnl = delta_pnl + funding_pnl - fees
 
-  return { delta_pnl, funding_pnl, fees, net_pnl }
+  return { delta_pnl, spread_pnl: 0, funding_pnl, fees, net_pnl }
+}
+
+/**
+ * Calculate P&L for the spot-futures delta-neutral carry strategy.
+ *
+ * Position: LONG spot + SHORT perp.
+ * NET_PNL = SPREAD_PNL + FUNDING_PNL - FEES
+ */
+export function calculateSpotFuturesPnl(params: {
+  /** (perp_entry - spot_entry) / spot_entry */
+  entrySpread: number
+  /** (perp_exit - spot_exit) / spot_entry */
+  exitSpread: number
+  /** Sum of funding_rate across all collected funding events */
+  cumulativeFundingRate: number
+  /** Spot taker fee per order leg */
+  spotFeePerLeg: number
+  /** Perp taker fee per order leg */
+  perpTakerFee: number
+}): PnlBreakdown {
+  const spread_pnl = params.entrySpread - params.exitSpread
+  const funding_pnl = params.cumulativeFundingRate
+  const fees = 2 * params.spotFeePerLeg + 2 * params.perpTakerFee
+  const net_pnl = spread_pnl + funding_pnl - fees
+  return { delta_pnl: 0, spread_pnl, funding_pnl, fees, net_pnl }
 }

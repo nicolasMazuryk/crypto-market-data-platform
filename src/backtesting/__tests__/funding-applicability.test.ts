@@ -63,9 +63,9 @@ describe('fundingFractionForLadder', () => {
 
   it('returns 0 when all fills are after funding tick', () => {
     const fills = [makeFill(T_PLUS_2, 1), makeFill(T_PLUS_60, 1)]
-    expect(fundingFractionForLadder({ fills, exitTs: T_PLUS_60, fundingTs: T, fundingAppliedOnSameSecond: false })).toBe(
-      0
-    )
+    expect(
+      fundingFractionForLadder({ fills, exitTs: T_PLUS_60, fundingTs: T, fundingAppliedOnSameSecond: false })
+    ).toBe(0)
   })
 
   it('returns 0 when exit is before funding tick', () => {
@@ -106,7 +106,12 @@ describe('fundingFractionForLadder', () => {
 
   it('applies same-second flag to each fill independently (flag=true)', () => {
     const fills = [makeFill(T, 1), makeFill(T_PLUS_2, 1)]
-    const result = fundingFractionForLadder({ fills, exitTs: T_PLUS_60, fundingTs: T, fundingAppliedOnSameSecond: true })
+    const result = fundingFractionForLadder({
+      fills,
+      exitTs: T_PLUS_60,
+      fundingTs: T,
+      fundingAppliedOnSameSecond: true,
+    })
     expect(result).toBeCloseTo(0.5)
   })
 
@@ -122,8 +127,8 @@ describe('fundingFractionForLadder', () => {
   })
 
   it('returns 0 for empty fills', () => {
-    expect(fundingFractionForLadder({ fills: [], exitTs: T_PLUS_60, fundingTs: T, fundingAppliedOnSameSecond: true })).toBe(
-      0
-    )
+    expect(
+      fundingFractionForLadder({ fills: [], exitTs: T_PLUS_60, fundingTs: T, fundingAppliedOnSameSecond: true })
+    ).toBe(0)
   })
 })

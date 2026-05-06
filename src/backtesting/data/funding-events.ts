@@ -45,6 +45,72 @@ export async function queryFundingEvents(
   }))
 }
 
+export async function queryPositiveFundingEvents(
+  exchange: string,
+  symbol: string | undefined,
+  startDate: string,
+  endDate: string,
+  threshold: number
+): Promise<FundingEvent[]> {
+  const symbolFilter = symbol ? 'AND symbol = {symbol: String}' : ''
+  const params: Record<string, unknown> = { exchange, startDate, endDate, threshold }
+  if (symbol) params.symbol = symbol
+
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `
+      SELECT exchange, symbol, funding_time, toFloat64(funding_rate) AS funding_rate
+      FROM funding_rates
+      WHERE exchange = {exchange: String}
+        ${symbolFilter}
+        AND funding_time >= {startDate: DateTime}
+        AND funding_time <= {endDate: DateTime}
+        AND funding_rate >= {threshold: Float64}
+      ORDER BY funding_time ASC
+    `,
+    query_params: params,
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{ exchange: string; symbol: string; funding_time: string; funding_rate: number }>()
+  return rows.map(r => ({
+    exchange: r.exchange,
+    symbol: r.symbol,
+    funding_time: new Date(r.funding_time.includes('T') ? r.funding_time : `${r.funding_time.replace(' ', 'T')}Z`),
+    funding_rate: r.funding_rate,
+  }))
+}
+
+export async function queryAllFundingEventsInRange(
+  exchange: string,
+  symbol: string,
+  startDate: string,
+  endDate: string
+): Promise<FundingEvent[]> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `
+      SELECT exchange, symbol, funding_time, toFloat64(funding_rate) AS funding_rate
+      FROM funding_rates
+      WHERE exchange = {exchange: String}
+        AND symbol = {symbol: String}
+        AND funding_time >= {startDate: DateTime}
+        AND funding_time <= {endDate: DateTime}
+      ORDER BY funding_time ASC
+    `,
+    query_params: { exchange, symbol, startDate, endDate },
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{ exchange: string; symbol: string; funding_time: string; funding_rate: number }>()
+  return rows.map(r => ({
+    exchange: r.exchange,
+    symbol: r.symbol,
+    funding_time: new Date(r.funding_time.includes('T') ? r.funding_time : `${r.funding_time.replace(' ', 'T')}Z`),
+    funding_rate: r.funding_rate,
+  }))
+}
+
 export async function queryCrossExchangeFundingEvents(
   exchangeA: string,
   exchangeB: string,
@@ -189,9 +255,7 @@ export async function queryMainExchangeCrossEvents(
     main_funding_rate: r.main_funding_rate,
     target_exchange: r.target_exchange,
     target_funding_time: new Date(
-      r.target_funding_time.includes('T')
-        ? r.target_funding_time
-        : `${r.target_funding_time.replace(' ', 'T')}Z`
+      r.target_funding_time.includes('T') ? r.target_funding_time : `${r.target_funding_time.replace(' ', 'T')}Z`
     ),
     target_funding_rate: r.target_funding_rate,
   }))

@@ -19,7 +19,6 @@ export function createOkxWsClient(opts: OkxWsClientOptions): PrivateWsClient {
 
   return {
     async connect(): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { WebsocketClient } = await import('okx-api')
       const clientOpts: Record<string, unknown> = {}
       if (opts.credentials) {
@@ -33,7 +32,6 @@ export function createOkxWsClient(opts: OkxWsClientOptions): PrivateWsClient {
       }
       if (opts.wsBaseUrl) clientOpts.wsUrl = opts.wsBaseUrl
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
       sdkClient = new WebsocketClient(clientOpts as ConstructorParameters<typeof WebsocketClient>[0])
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
@@ -52,11 +50,7 @@ export function createOkxWsClient(opts: OkxWsClientOptions): PrivateWsClient {
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       await sdkClient.subscribe(
-        [
-          { channel: 'orders', instType: 'ANY' },
-          { channel: 'positions', instType: 'ANY' },
-          { channel: 'account' },
-        ],
+        [{ channel: 'orders', instType: 'ANY' }, { channel: 'positions', instType: 'ANY' }, { channel: 'account' }],
         true // isPrivateTopic
       )
     },

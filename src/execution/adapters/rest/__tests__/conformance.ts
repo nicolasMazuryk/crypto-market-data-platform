@@ -51,6 +51,7 @@ export function runRestAdapterConformance(fixtures: RestConformanceFixtures): vo
         type: 'market',
         qty: 0.001,
       })
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       const createOrder = ccxt.createOrder as ReturnType<typeof vi.fn>
       const expectedId = fixtures.transformClientOrderId ? fixtures.transformClientOrderId('cid-1') : 'cid-1'
       expect(createOrder).toHaveBeenCalledWith(
@@ -229,6 +230,7 @@ export function runRestAdapterConformance(fixtures: RestConformanceFixtures): vo
       }
       await adapter.createOrder(req)
       await adapter.createOrder(req)
+      // eslint-disable-next-line @typescript-eslint/unbound-method
       const setLeverage = ccxt.setLeverage as ReturnType<typeof vi.fn>
       expect(setLeverage).toHaveBeenCalledTimes(1)
     })

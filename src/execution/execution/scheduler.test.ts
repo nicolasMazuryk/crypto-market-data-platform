@@ -179,9 +179,7 @@ describe('FundingEventScheduler (hourly wake)', () => {
           if (Date.now() >= FIRST_WAKE) {
             wakeCount++
           }
-          return wakeCount >= 2
-          ? new Map([['ETHUSDT', makeSnapshot('ETHUSDT', nft2, Date.now() - 5_000)]])
-          : latestMap
+          return wakeCount >= 2 ? new Map([['ETHUSDT', makeSnapshot('ETHUSDT', nft2, Date.now() - 5_000)]]) : latestMap
         },
         onSnapshot: () => () => undefined,
         start: async () => Promise.resolve(),
@@ -445,7 +443,7 @@ describe('FundingEventScheduler with fundingTimeOverrideMs', () => {
           exitOffsetSeconds: 2,
           amountUsd: 20,
           leverage: 4,
-        } satisfies import('../strategies/types.js').StrategyConfig,
+        } satisfies StrategyConfig,
       ],
     ])
 

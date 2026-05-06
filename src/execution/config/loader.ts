@@ -24,10 +24,7 @@ export interface LoadEngineConfigOptions {
 }
 
 /** Deep-merge two plain objects. `override` wins; arrays are replaced, not merged. */
-export function deepMerge(
-  base: Record<string, unknown>,
-  override: Record<string, unknown>
-): Record<string, unknown> {
+export function deepMerge(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = { ...base }
   for (const [key, val] of Object.entries(override)) {
     const baseVal = base[key]
@@ -142,7 +139,9 @@ export function loadEngineConfig(options: LoadEngineConfigOptions): EngineConfig
   const exchanges = injectCredentials(parsed.exchanges, parsed.mode, env)
 
   const postgresUrlOverride = env.EXECUTION_POSTGRES_URL
-  const persistence = postgresUrlOverride ? { ...parsed.persistence, postgresUrl: postgresUrlOverride } : parsed.persistence
+  const persistence = postgresUrlOverride
+    ? { ...parsed.persistence, postgresUrl: postgresUrlOverride }
+    : parsed.persistence
 
   return Object.freeze({ ...parsed, exchanges, persistence }) as EngineConfig
 }

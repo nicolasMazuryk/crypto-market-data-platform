@@ -30,8 +30,6 @@ const binanceSpec: CcxtAdapterSpec = {
 
 export type BinanceRestAdapterOptions = BaseRestAdapterOptions
 
-export function createBinanceRestAdapter(
-  opts: BinanceRestAdapterOptions
-): ReturnType<typeof createCcxtRestAdapter> {
+export function createBinanceRestAdapter(opts: BinanceRestAdapterOptions): ReturnType<typeof createCcxtRestAdapter> {
   return createCcxtRestAdapter(binanceSpec, opts)
 }

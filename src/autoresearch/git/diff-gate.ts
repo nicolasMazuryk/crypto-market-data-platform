@@ -79,9 +79,7 @@ function checkStrategy5Pins(worktreePath: string, spec: RunSpec): boolean {
   if (parsed === null) return false
   if (parsed.main_exchange !== spec.main_exchange) return true
   if (spec.exclude_exchanges !== null) {
-    const yamlExcludes: string[] = Array.isArray(parsed.exclude_exchanges)
-      ? (parsed.exclude_exchanges as string[])
-      : []
+    const yamlExcludes: string[] = Array.isArray(parsed.exclude_exchanges) ? (parsed.exclude_exchanges as string[]) : []
     const specExcludes = spec.exclude_exchanges
     if (JSON.stringify([...yamlExcludes].sort()) !== JSON.stringify([...specExcludes].sort())) return true
   }

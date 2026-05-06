@@ -73,15 +73,9 @@ function reevaluateIntent(lc: IntentLifecycle): ReevaluateDiff {
 function formatTable(results: LifecyclePnL[]): string {
   const header = ['intentId', 'exchange', 'symbol', 'strategy', 'side', 'status', 'pnlUsdt'].join('\t')
   const rows = results.map(r =>
-    [
-      r.intentId.slice(0, 12),
-      r.exchange,
-      r.symbol,
-      r.strategy,
-      r.side,
-      r.status,
-      r.estimatedPnlUsdt.toFixed(4),
-    ].join('\t')
+    [r.intentId.slice(0, 12), r.exchange, r.symbol, r.strategy, r.side, r.status, r.estimatedPnlUsdt.toFixed(4)].join(
+      '\t'
+    )
   )
   return [header, ...rows].join('\n')
 }
@@ -104,7 +98,8 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const { db, close } = openDb(url)
+  const dbHandle = openDb(url)
+  const { db } = dbHandle
 
   try {
     let lifecycles: IntentLifecycle[]
@@ -139,7 +134,9 @@ async function main(): Promise<void> {
           if (d.diverged) {
             console.log(`Intent ${d.intentId}: DIVERGED`)
             for (const diff of d.diffs) {
-              console.log(`  ${diff.field}: persisted=${String(diff.persisted)}, reevaluated=${String(diff.reevaluated)}`)
+              console.log(
+                `  ${diff.field}: persisted=${String(diff.persisted)}, reevaluated=${String(diff.reevaluated)}`
+              )
             }
           } else {
             console.log(`Intent ${d.intentId}: parity OK`)
@@ -150,7 +147,7 @@ async function main(): Promise<void> {
       console.log(JSON.stringify(result, null, 2))
     }
   } finally {
-    await close()
+    await dbHandle.close()
   }
 }
 

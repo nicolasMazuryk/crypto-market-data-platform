@@ -85,7 +85,10 @@ const PersistenceRawSchema = z.object({
   walPath: z.string().default(''),
   batchSize: z.number().int().positive().default(100),
   flushIntervalMs: z.number().positive().default(250),
-  walMaxBytes: z.number().positive().default(50 * 1024 * 1024),
+  walMaxBytes: z
+    .number()
+    .positive()
+    .default(50 * 1024 * 1024),
 })
 
 const SchedulerRawSchema = z.object({
@@ -250,7 +253,11 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
 
   // Live safety ceiling
   const LIVE_SAFETY_CEILING = 100_000
-  if (parsed.mode === 'live' && parsed.risk.globalMaxNotionalUsd > LIVE_SAFETY_CEILING && !parsed.risk.acknowledgeUncapped) {
+  if (
+    parsed.mode === 'live' &&
+    parsed.risk.globalMaxNotionalUsd > LIVE_SAFETY_CEILING &&
+    !parsed.risk.acknowledgeUncapped
+  ) {
     throw new ConfigError(
       'risk.globalMaxNotionalUsd',
       `live mode with notional > $${LIVE_SAFETY_CEILING.toLocaleString()} requires risk.acknowledgeUncapped: true`

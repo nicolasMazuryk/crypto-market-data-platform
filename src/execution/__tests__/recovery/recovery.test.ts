@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { EventEmitter } from 'node:events'
+import type { Logger } from 'pino'
 import type { EventBus } from '../../core/types.js'
 import type { PersistenceMetrics } from '../../observability/metrics.js'
 import type { DrizzleDb } from '../../persistence/db.js'
@@ -110,7 +111,13 @@ describe('runRecovery', () => {
       config: makeMockConfig(),
       bus,
       restAdapters,
-      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), childFor: () => ({}) } as unknown as import('pino').Logger,
+      logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+        childFor: () => ({}),
+      } as unknown as Logger,
       metrics,
     })
 
@@ -144,9 +151,7 @@ describe('runRecovery', () => {
       cancelOrder,
     }
 
-    const restAdapters = new Map<Exchange, ExchangeRestAdapter>([
-      ['binance', mockRest as ExchangeRestAdapter],
-    ])
+    const restAdapters = new Map<Exchange, ExchangeRestAdapter>([['binance', mockRest as ExchangeRestAdapter]])
 
     const db = {
       select: vi.fn().mockReturnValue({
@@ -177,7 +182,13 @@ describe('runRecovery', () => {
       config: makeMockConfig(),
       bus,
       restAdapters,
-      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), childFor: () => ({}) } as unknown as import('pino').Logger,
+      logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+        childFor: () => ({}),
+      } as unknown as Logger,
       metrics,
     })
 
@@ -206,9 +217,7 @@ describe('runRecovery', () => {
       createOrder,
     }
 
-    const restAdapters = new Map<Exchange, ExchangeRestAdapter>([
-      ['binance', mockRest as ExchangeRestAdapter],
-    ])
+    const restAdapters = new Map<Exchange, ExchangeRestAdapter>([['binance', mockRest as ExchangeRestAdapter]])
 
     const db = {
       select: vi.fn().mockReturnValue({
@@ -239,7 +248,13 @@ describe('runRecovery', () => {
       config: makeMockConfig(),
       bus,
       restAdapters,
-      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), childFor: () => ({}) } as unknown as import('pino').Logger,
+      logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn(),
+        debug: vi.fn(),
+        childFor: () => ({}),
+      } as unknown as Logger,
       metrics,
     })
 

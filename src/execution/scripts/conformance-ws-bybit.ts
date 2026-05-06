@@ -92,8 +92,21 @@ async function main(): Promise<void> {
     logger: console as never,
   })
 
-  const restAdapter = createBybitRestAdapter({ config: cfg, limiter, clock, ids, logger: console as never, metrics: restMetrics })
-  const wsAdapter = createBybitPrivateWsAdapter({ config: cfg, bus, clock, logger: console as never, metrics: wsMetrics })
+  const restAdapter = createBybitRestAdapter({
+    config: cfg,
+    limiter,
+    clock,
+    ids,
+    logger: console as never,
+    metrics: restMetrics,
+  })
+  const wsAdapter = createBybitPrivateWsAdapter({
+    config: cfg,
+    bus,
+    clock,
+    logger: console as never,
+    metrics: wsMetrics,
+  })
 
   const orderEvents: OrderEvent[] = []
   const balanceEvents: BalanceEvent[] = []

@@ -1,0 +1,19 @@
+# Strategy: Delta-Neutral Spot-Futures Funding Capture
+#
+# Simultaneously LONG spot + SHORT perp to harvest positive funding.
+# Spot data is currently aliased to perp data (spread_pnl ≈ 0).
+# When real spot ingestion lands, only fetchSpotOrderbookWindow changes.
+
+strategy_id: 'strategy_spot_futures'
+exchange: 'binance' # mirrors perp_exchange; required by base config
+perp_exchange: 'binance'
+spot_exchange: 'binance'
+
+F_threshold: 0.0015 # 0.15% — minimum positive funding rate to enter
+entry_offset_seconds: 5 # enter at T_funding - 5s
+exit_offset_seconds: 5 # open exit window at next_funding_time - 5s
+minTotalProfit: 0.0005 # 0.05% — minimum expected net profit at entry
+fundingConvergenceThreshold: 0.0002 # exit when rate falls to/below 0.02%
+spreadWideningThreshold: 0.03 # 3% spread widening triggers stop-loss
+spreadTakeProfit: 0.005 # 0.5% spread narrowing triggers take-profit
+max_carry_funding_events: 8 # safety bound: force exit after 8 funding cycles (~3 days)

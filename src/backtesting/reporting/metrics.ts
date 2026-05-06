@@ -58,7 +58,8 @@ export function kurtosis(values: number[]): number {
 
 /**
  * Calculate Sharpe ratio (annualized, risk-free = 0).
- * Assumes 3 funding events per day (8-hour intervals) = ~1095 per year.
+ * Default periodsPerYear=1095 assumes 3 events/day (8h intervals). For markets
+ * with 1h, 2h, or 4h intervals use 8760, 4380, or 2190 respectively.
  */
 export function sharpeRatio(returns: number[], periodsPerYear = 1095): number {
   if (returns.length <= 1) return 0
@@ -118,7 +119,7 @@ export function maxDrawdown(cumulativePnls: number[]): {
 
   return {
     maxDrawdownPct: maxDd,
-    // Approximate: each trade represents ~8 hours = 28800 seconds
+    // Approximate duration: assumes one trade per funding event (interval varies 1h–8h; 8h used as upper bound)
     maxDrawdownDurationSeconds: maxDdDuration * 28800,
   }
 }

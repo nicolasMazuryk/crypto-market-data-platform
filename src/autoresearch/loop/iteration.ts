@@ -12,7 +12,10 @@ import { commitAll, diffNameOnlyHead, resetHard, revParseHead } from '../git/rat
 import { getProposalIterPath, getProposalJsonPath, getReportsDir, getResultsDir } from '../paths.js'
 import { appendRow } from '../results/tsv.js'
 import type { ResultRow, RunSpec, RunState } from '../types.js'
-import { renderEquityCurveChart, renderTimeBasedEquityCurveChart } from '../../backtesting/reporting/equity-curve-chart.js'
+import {
+  renderEquityCurveChart,
+  renderTimeBasedEquityCurveChart,
+} from '../../backtesting/reporting/equity-curve-chart.js'
 import type { BacktestReport } from '../../backtesting/reporting/types.js'
 
 import type { Semaphore } from './pool.js'
@@ -176,7 +179,15 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
     }
     const gate2 = await enforceScope(worktreePath, spec)
     if (gate2.errorMessage !== null) {
-      return buildErrorRow(iter, timestamp, preIterationHead, gate2.errorMessage, startedAt, agentTokensUsed, agentCostUsd)
+      return buildErrorRow(
+        iter,
+        timestamp,
+        preIterationHead,
+        gate2.errorMessage,
+        startedAt,
+        agentTokensUsed,
+        agentCostUsd
+      )
     }
     if (hashFile(yamlPath) === beforeHash) {
       await revertWorktreeToHead(worktreePath)
@@ -212,7 +223,9 @@ export async function runIteration(args: IterationArgs): Promise<ResultRow> {
       err = 'backtest_timeout'
     } else {
       const detail = extractBacktestError(backtest.stderr, backtest.stdout)
-      err = detail ? `backtest_exit_code=${String(backtest.code)}: ${detail}` : `backtest_exit_code=${String(backtest.code)}`
+      err = detail
+        ? `backtest_exit_code=${String(backtest.code)}: ${detail}`
+        : `backtest_exit_code=${String(backtest.code)}`
     }
     return buildErrorRow(iter, timestamp, preIterationHead, err, startedAt, agentTokensUsed, agentCostUsd)
   }

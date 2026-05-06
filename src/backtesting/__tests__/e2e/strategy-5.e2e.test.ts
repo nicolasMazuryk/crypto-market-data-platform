@@ -25,15 +25,15 @@ describe('E2E: Strategy 5 — Main-Exchange-Driven Cross-Exchange Short', () => 
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
     const basePrice = 50000
-    const mainFundingRate = -0.02  // -2% on main exchange
-    const targetFundingRate = -0.003  // -0.3% on target exchange
+    const mainFundingRate = -0.02 // -2% on main exchange
+    const targetFundingRate = -0.003 // -0.3% on target exchange
 
     // tpDistance = |mainFundingRate| * tp_multiplier = 0.02 * 1.5 = 0.03
     // tpPrice = entryPrice * (1 - 0.03)
     const entryBidOpen = basePrice
-    const tpDistance = Math.abs(mainFundingRate) * BASE_CONFIG.tp_multiplier  // 0.03
-    const tpPrice = entryBidOpen * (1 - tpDistance)  // 50000 * 0.97 = 48500
-    const slPrice = entryBidOpen * (1 + BASE_CONFIG.stop_loss)  // 50000 * 1.005 = 50250
+    const tpDistance = Math.abs(mainFundingRate) * BASE_CONFIG.tp_multiplier // 0.03
+    const tpPrice = entryBidOpen * (1 - tpDistance) // 50000 * 0.97 = 48500
+    const _slPrice = entryBidOpen * (1 + BASE_CONFIG.stop_loss) // 50000 * 1.005 = 50250
 
     const overrides = new Map<number, Partial<{ bidOpen: number; askOpen: number; askLow: number }>>()
     overrides.set(-3, { bidOpen: entryBidOpen, askOpen: entryBidOpen + 5 })
@@ -43,7 +43,14 @@ describe('E2E: Strategy 5 — Main-Exchange-Driven Cross-Exchange Short', () => 
     const window = buildWindow({ fundingTime, basePrice, overrides })
     const event = makeFundingEvent({ fundingTime, fundingRate: targetFundingRate, exchange: 'bybit' })
 
-    const result = strategy.executeMainExchange(event, window, mainFundingRate, targetFundingRate, fundingTime, BINANCE_FEES)
+    const result = strategy.executeMainExchange(
+      event,
+      window,
+      mainFundingRate,
+      targetFundingRate,
+      fundingTime,
+      BINANCE_FEES
+    )
     if (!result) throw new Error('expected result')
 
     // SHORT: DELTA_PNL = (P_entry - P_exit) / P_entry
@@ -72,8 +79,8 @@ describe('E2E: Strategy 5 — Main-Exchange-Driven Cross-Exchange Short', () => 
 
     const fundingTime = new Date('2025-06-01T08:00:00Z')
     const basePrice = 40000
-    const mainFundingRate = -0.01  // -1% on main exchange
-    const targetFundingRate = -0.002  // -0.2% on target exchange
+    const mainFundingRate = -0.01 // -1% on main exchange
+    const targetFundingRate = -0.002 // -0.2% on target exchange
 
     // slPrice = entryPrice * (1 + stop_loss) = 40000 * 1.005 = 40200
     const entryBidOpen = basePrice
@@ -87,12 +94,19 @@ describe('E2E: Strategy 5 — Main-Exchange-Driven Cross-Exchange Short', () => 
     const window = buildWindow({ fundingTime, basePrice, overrides })
     const event = makeFundingEvent({ fundingTime, fundingRate: targetFundingRate, exchange: 'okx' })
 
-    const result = strategy.executeMainExchange(event, window, mainFundingRate, targetFundingRate, fundingTime, BINANCE_FEES)
+    const result = strategy.executeMainExchange(
+      event,
+      window,
+      mainFundingRate,
+      targetFundingRate,
+      fundingTime,
+      BINANCE_FEES
+    )
     if (!result) throw new Error('expected result')
 
     expect(result.exit_reason).toBe('SL_HIT')
     expect(result.exit_price).toBeGreaterThan(entryBidOpen)
-    expect(result.pnl.net_pnl).toBeLessThan(0)  // Loss
+    expect(result.pnl.net_pnl).toBeLessThan(0) // Loss
     expect(result.exchange).toBe('okx')
   })
 
@@ -102,8 +116,8 @@ describe('E2E: Strategy 5 — Main-Exchange-Driven Cross-Exchange Short', () => 
 
     const fundingTime = new Date('2025-06-01T16:00:00Z')
     const basePrice = 30000
-    const mainFundingRate = -0.006  // -0.6% on main exchange
-    const targetFundingRate = -0.001  // -0.1% on target exchange
+    const mainFundingRate = -0.006 // -0.6% on main exchange
+    const targetFundingRate = -0.001 // -0.1% on target exchange
 
     // tpDistance = 0.006 * 1.5 = 0.009; tpPrice = 30000 * 0.991 = 29730
     // slPrice = 30000 * 1.005 = 30150
@@ -112,7 +126,14 @@ describe('E2E: Strategy 5 — Main-Exchange-Driven Cross-Exchange Short', () => 
     const window = buildWindow({ fundingTime, basePrice })
     const event = makeFundingEvent({ fundingTime, fundingRate: targetFundingRate, exchange: 'gateio' })
 
-    const result = strategy.executeMainExchange(event, window, mainFundingRate, targetFundingRate, fundingTime, BINANCE_FEES)
+    const result = strategy.executeMainExchange(
+      event,
+      window,
+      mainFundingRate,
+      targetFundingRate,
+      fundingTime,
+      BINANCE_FEES
+    )
     if (!result) throw new Error('expected result')
 
     expect(result.exit_reason).toBe('DEADLINE')

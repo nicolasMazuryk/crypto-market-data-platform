@@ -5,12 +5,25 @@ export type StrategyDirection = 'long' | 'short'
 export type TpMode = 'A' | 'B'
 
 /** Exit reason for a trade */
-export type ExitReason = 'TP_HIT' | 'SL_HIT' | 'DEADLINE' | 'MARKET_EXIT' | 'UNFILLED'
+export type ExitReason =
+  | 'TP_HIT'
+  | 'SL_HIT'
+  | 'DEADLINE'
+  | 'MARKET_EXIT'
+  | 'UNFILLED'
+  | 'FUNDING_FLOOR'
+  | 'SPREAD_TP'
+  | 'SPREAD_SL'
 
 /** Exchange fee schedule */
 export interface FeeSchedule {
   taker_fee: number
   maker_fee: number
+}
+
+/** Spot exchange fee (single taker rate used for market orders) */
+export interface SpotFeeSchedule {
+  fee: number
 }
 
 /** Data validation thresholds */
@@ -71,6 +84,11 @@ export interface BaseConfig {
    * considered the same funding event (Strategy 5 cross-exchange join).
    */
   funding_time_tolerance_seconds: number
+  /**
+   * Spot exchange fee per order leg, keyed by exchange name.
+   * Used by strategy_spot_futures; defaults to 0.001 if exchange not found.
+   */
+  spot_fees: Record<string, SpotFeeSchedule>
 }
 
 /** Strategy 1: Negative Funding LONG - Instant Exit */
@@ -206,6 +224,31 @@ export interface Strategy5Config {
   funding_applied_on_same_second: boolean
 }
 
+/** Strategy: Delta-Neutral Spot-Futures Funding Capture */
+export interface SpotFuturesConfig {
+  strategy_id: 'strategy_spot_futures'
+  /** Spot exchange (same as perp_exchange until real spot data is ingested) */
+  spot_exchange: string
+  /** Perpetual exchange to short */
+  perp_exchange: string
+  /** Minimum positive funding rate to trigger entry (e.g., 0.0015 for 0.15%) */
+  F_threshold: number
+  /** Seconds before T_funding to enter (1..5, integer) */
+  entry_offset_seconds: number
+  /** Seconds before each next funding event to open the exit window (1..5, integer) */
+  exit_offset_seconds: number
+  /** Minimum expected net profit gate at entry; negative values loosen the gate (e.g., -0.005 to 0.005) */
+  minTotalProfit: number
+  /** Exit when the current funding rate falls to or below this level (e.g., 0.0002) */
+  fundingConvergenceThreshold: number
+  /** Exit when the spread widens by this fraction vs entry (e.g., 0.05 for 5%) */
+  spreadWideningThreshold: number
+  /** Take-profit when spread narrows by this fraction vs entry (e.g., 0.004 for 0.4%) */
+  spreadTakeProfit: number
+  /** Safety bound: force exit after collecting this many funding events (integer, >= 1) */
+  max_carry_funding_events: number
+}
+
 /** Union of all strategy configs */
 export type StrategyConfig =
   | Strategy1Config
@@ -215,6 +258,7 @@ export type StrategyConfig =
   | Strategy42Config
   | Strategy43Config
   | Strategy5Config
+  | SpotFuturesConfig
 
 /** Fully resolved config: base merged with strategy */
 export interface ResolvedConfig {
@@ -235,6 +279,7 @@ export const VALID_STRATEGY_IDS = [
   'strategy_4_3a',
   'strategy_4_3b',
   'strategy_5',
+  'strategy_spot_futures',
 ] as const
 
 export type StrategyId = (typeof VALID_STRATEGY_IDS)[number]

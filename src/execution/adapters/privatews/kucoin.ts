@@ -31,8 +31,6 @@ const kucoinSpec: PrivateWsAdapterSpec = {
 }
 
 export function createKucoinPrivateWsAdapter(opts: KucoinPrivateWsAdapterOptions): ExchangePrivateWsAdapter {
-  const spec = opts.wsClientFactory
-    ? { ...kucoinSpec, createClient: opts.wsClientFactory }
-    : kucoinSpec
+  const spec = opts.wsClientFactory ? { ...kucoinSpec, createClient: opts.wsClientFactory } : kucoinSpec
   return createPrivateWsAdapterFromSpec(spec, opts)
 }

@@ -84,7 +84,9 @@ export function createFundingRateSource(options: FundingRateSourceOptions): Fund
     return Promise.race([
       promise,
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`funding pull timeout after ${PULL_TIMEOUT_MS}ms`)), PULL_TIMEOUT_MS)
+        setTimeout(() => {
+          reject(new Error(`funding pull timeout after ${String(PULL_TIMEOUT_MS)}ms`))
+        }, PULL_TIMEOUT_MS)
       ),
     ])
   }

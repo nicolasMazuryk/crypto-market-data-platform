@@ -19,7 +19,6 @@ export function createKucoinWsClient(opts: KucoinWsClientOptions): PrivateWsClie
 
   return {
     async connect(): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const { WebsocketClient } = await import('kucoin-api')
       const clientOpts: Record<string, unknown> = {}
       if (opts.credentials) {
@@ -29,7 +28,6 @@ export function createKucoinWsClient(opts: KucoinWsClientOptions): PrivateWsClie
       }
       if (opts.wsBaseUrl) clientOpts.wsUrl = opts.wsBaseUrl
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
       sdkClient = new WebsocketClient(clientOpts as ConstructorParameters<typeof WebsocketClient>[0])
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
@@ -48,10 +46,7 @@ export function createKucoinWsClient(opts: KucoinWsClientOptions): PrivateWsClie
 
       // KuCoin Futures private topics — wsKey must be 'futuresPrivateV1'
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      await sdkClient.subscribe(
-        ['/contractMarket/tradeOrders', '/contractAccount/wallet'],
-        'futuresPrivateV1'
-      )
+      await sdkClient.subscribe(['/contractMarket/tradeOrders', '/contractAccount/wallet'], 'futuresPrivateV1')
     },
 
     async disconnect(): Promise<void> {

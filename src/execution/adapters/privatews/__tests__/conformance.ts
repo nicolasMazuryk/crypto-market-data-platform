@@ -22,10 +22,18 @@ export function createFakeWsClient(): FakeWsClient {
     connect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     disconnect: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
     events: ev,
-    triggerClose: (reason = 'test close') => ev.emit('close', reason),
-    triggerError: (err = new Error('test error')) => ev.emit('error', err),
-    triggerMessage: (raw: unknown) => ev.emit('message', raw),
-    triggerAuthExpired: () => ev.emit('authExpired'),
+    triggerClose: (reason = 'test close') => {
+      ev.emit('close', reason)
+    },
+    triggerError: (err = new Error('test error')) => {
+      ev.emit('error', err)
+    },
+    triggerMessage: (raw: unknown) => {
+      ev.emit('message', raw)
+    },
+    triggerAuthExpired: () => {
+      ev.emit('authExpired')
+    },
   }
 }
 

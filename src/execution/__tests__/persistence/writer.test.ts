@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 
+import type { Logger } from 'pino'
 import type { EventBus } from '../../core/types.js'
 import type { PersistenceMetrics } from '../../observability/metrics.js'
 import type { DrizzleDb } from '../../persistence/db.js'
@@ -54,8 +55,8 @@ function makeMockWal(): WalHandle & { entries: WalEntry[] } {
 function makeMockDb(shouldFail = false): DrizzleDb {
   const insertMock = vi.fn().mockImplementation(() => ({
     values: () => ({
-      onConflictDoNothing: () => shouldFail ? Promise.reject(new Error('DB error')) : Promise.resolve(),
-      onConflictDoUpdate: () => shouldFail ? Promise.reject(new Error('DB error')) : Promise.resolve(),
+      onConflictDoNothing: () => (shouldFail ? Promise.reject(new Error('DB error')) : Promise.resolve()),
+      onConflictDoUpdate: () => (shouldFail ? Promise.reject(new Error('DB error')) : Promise.resolve()),
     }),
   }))
   return { insert: insertMock } as unknown as DrizzleDb
@@ -107,7 +108,13 @@ describe('PersistenceWriter', () => {
       wal,
       bus,
       runId: 'run-1',
-      logger: { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn(), childFor: () => ({}) } as unknown as import('pino').Logger,
+      logger: {
+        warn: vi.fn(),
+        info: vi.fn(),
+        debug: vi.fn(),
+        error: vi.fn(),
+        childFor: () => ({}),
+      } as unknown as Logger,
       metrics,
       batchSize: 100,
       flushIntervalMs: 250,
@@ -128,9 +135,17 @@ describe('PersistenceWriter', () => {
 
   it('drops writes when queue is full and increments drop metric', () => {
     const db = makeMockDb(false)
-    const logger = { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn(), childFor: () => ({}) } as unknown as import('pino').Logger
+    const logger = {
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+      error: vi.fn(),
+      childFor: () => ({}),
+    } as unknown as Logger
     const writer = createPersistenceWriter({
-      db, wal, bus,
+      db,
+      wal,
+      bus,
       runId: 'run-1',
       logger,
       metrics,
@@ -150,9 +165,17 @@ describe('PersistenceWriter', () => {
 
   it('writes to WAL when DB fails, drains WAL on recovery', async () => {
     const failingDb = makeMockDb(true)
-    const logger = { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn(), childFor: () => ({}) } as unknown as import('pino').Logger
+    const logger = {
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+      error: vi.fn(),
+      childFor: () => ({}),
+    } as unknown as Logger
     const writer = createPersistenceWriter({
-      db: failingDb, wal, bus,
+      db: failingDb,
+      wal,
+      bus,
       runId: 'run-1',
       logger,
       metrics,
@@ -160,7 +183,6 @@ describe('PersistenceWriter', () => {
       flushIntervalMs: 250,
     })
     writer.start()
-
     ;(bus as unknown as { emit: (e: string, ...args: unknown[]) => void }).emit('intent.decided', makeMockIntent())
 
     await writer.flushAndWait()
@@ -173,9 +195,17 @@ describe('PersistenceWriter', () => {
 
   it('flushAndWait drains queue before resolving', async () => {
     const db = makeMockDb(false)
-    const logger = { warn: vi.fn(), info: vi.fn(), debug: vi.fn(), error: vi.fn(), childFor: () => ({}) } as unknown as import('pino').Logger
+    const logger = {
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+      error: vi.fn(),
+      childFor: () => ({}),
+    } as unknown as Logger
     const writer = createPersistenceWriter({
-      db, wal, bus,
+      db,
+      wal,
+      bus,
       runId: 'run-1',
       logger,
       metrics,

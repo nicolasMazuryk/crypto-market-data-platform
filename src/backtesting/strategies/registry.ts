@@ -7,6 +7,7 @@ import { Strategy41 } from './strategy-4-1.js'
 import { Strategy42 } from './strategy-4-2.js'
 import { Strategy43 } from './strategy-4-3.js'
 import { Strategy5 } from './strategy-5.js'
+import { SpotFuturesStrategy } from './strategy-spot-futures.js'
 
 /** Create a strategy instance by ID */
 export function createStrategy(id: StrategyId): BaseStrategy {
@@ -33,5 +34,7 @@ export function createStrategy(id: StrategyId): BaseStrategy {
       return new Strategy43('strategy_4_3b')
     case 'strategy_5':
       return new Strategy5()
+    case 'strategy_spot_futures':
+      return new SpotFuturesStrategy()
   }
 }

@@ -25,7 +25,7 @@ const metrics = registerPrivateWsMetrics(registry)
 
 runWsAdapterConformance({
   exchange: 'bybit',
-  createAdapter: (clientFactory) => {
+  createAdapter: clientFactory => {
     const adapterOpts: Parameters<typeof createBybitPrivateWsAdapter>[0] = {
       config: makeConfig(),
       bus,

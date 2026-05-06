@@ -29,8 +29,6 @@ const bitgetSpec: CcxtAdapterSpec = {
 
 export type BitgetRestAdapterOptions = BaseRestAdapterOptions
 
-export function createBitgetRestAdapter(
-  opts: BitgetRestAdapterOptions
-): ReturnType<typeof createCcxtRestAdapter> {
+export function createBitgetRestAdapter(opts: BitgetRestAdapterOptions): ReturnType<typeof createCcxtRestAdapter> {
   return createCcxtRestAdapter(bitgetSpec, opts)
 }

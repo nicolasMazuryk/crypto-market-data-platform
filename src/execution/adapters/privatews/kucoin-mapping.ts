@@ -74,7 +74,7 @@ export function parseKucoinMessage(
         ? typeof d.ts === 'string'
           ? Number(BigInt(d.ts) / 1_000_000n)
           : Math.floor(d.ts / 1_000_000)
-        : d.createdAt ?? receivedAt
+        : (d.createdAt ?? receivedAt)
     const order: Order = {
       exchange,
       symbol: d.symbol,
@@ -115,7 +115,8 @@ export function parseKucoinMessage(
 
   if (topic.startsWith('/contractAccount/wallet')) {
     const d = data as KucoinWalletData
-    const available = typeof d.availableBalance === 'string' ? parseFloat(d.availableBalance) : (d.availableBalance ?? 0)
+    const available =
+      typeof d.availableBalance === 'string' ? parseFloat(d.availableBalance) : (d.availableBalance ?? 0)
     const locked = typeof d.holdBalance === 'string' ? parseFloat(d.holdBalance) : (d.holdBalance ?? 0)
     const balance: Balance = {
       exchange,

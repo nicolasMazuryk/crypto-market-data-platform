@@ -34,8 +34,6 @@ const okxSpec: CcxtAdapterSpec = {
 
 export type OkxRestAdapterOptions = BaseRestAdapterOptions
 
-export function createOkxRestAdapter(
-  opts: OkxRestAdapterOptions
-): ReturnType<typeof createCcxtRestAdapter> {
+export function createOkxRestAdapter(opts: OkxRestAdapterOptions): ReturnType<typeof createCcxtRestAdapter> {
   return createCcxtRestAdapter(okxSpec, opts)
 }

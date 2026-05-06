@@ -53,3 +53,16 @@ reporting:
   output_dir: "reports"
 
 funding_time_tolerance_seconds: 60  # Max seconds between exchanges' funding timestamps to be treated as the same event
+
+# Spot exchange fee per order leg (market/taker rate).
+# Used by strategy_spot_futures; standard strategies use the 'fees' map above.
+spot_fees:
+  binance:       {fee: 0.001}   # 0.10%
+  binanceusdm:   {fee: 0.001}
+  bybit:         {fee: 0.001}   # 0.10%
+  okx:           {fee: 0.001}   # 0.10%
+  mexc:          {fee: 0.001}
+  bitget:        {fee: 0.001}   # 0.10%
+  gateio:        {fee: 0.001}   # 0.10%
+  kucoinfutures: {fee: 0.001}
+  kucoin:        {fee: 0.001}   # 0.10%

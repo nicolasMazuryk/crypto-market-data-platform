@@ -31,8 +31,6 @@ const bitgetSpec: PrivateWsAdapterSpec = {
 }
 
 export function createBitgetPrivateWsAdapter(opts: BitgetPrivateWsAdapterOptions): ExchangePrivateWsAdapter {
-  const spec = opts.wsClientFactory
-    ? { ...bitgetSpec, createClient: opts.wsClientFactory }
-    : bitgetSpec
+  const spec = opts.wsClientFactory ? { ...bitgetSpec, createClient: opts.wsClientFactory } : bitgetSpec
   return createPrivateWsAdapterFromSpec(spec, opts)
 }

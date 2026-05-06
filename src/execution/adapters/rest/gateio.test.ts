@@ -96,7 +96,7 @@ function makeLogger(): Logger {
 
 runRestAdapterConformance({
   exchange: 'gateio',
-  makeAdapter: (ccxtOverrides) => {
+  makeAdapter: ccxtOverrides => {
     const mockCcxt = makeMockCcxt(ccxtOverrides)
     const limiter = makeMockLimiter()
     const registry = new MetricsRegistry()

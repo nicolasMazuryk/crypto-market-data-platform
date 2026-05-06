@@ -25,7 +25,7 @@ const metrics = registerPrivateWsMetrics(registry)
 
 runWsAdapterConformance({
   exchange: 'kucoin',
-  createAdapter: (clientFactory) => {
+  createAdapter: clientFactory => {
     const adapterOpts: Parameters<typeof createKucoinPrivateWsAdapter>[0] = {
       config: makeConfig(),
       bus,

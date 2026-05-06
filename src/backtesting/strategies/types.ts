@@ -28,6 +28,14 @@ export interface TradeResult {
   fill_count: number
   /** Whether funding was received/paid */
   funding_received: boolean
+  /** Number of funding events collected (spot-futures only) */
+  funding_events_collected?: number
+  /** Sum of all collected funding rates (spot-futures only) */
+  cumulative_funding_rate?: number
+  /** (perp_entry - spot_entry) / spot_entry at T_entry (spot-futures only) */
+  entry_spread?: number
+  /** (perp_exit - spot_exit) / spot_entry at exit (spot-futures only) */
+  exit_spread?: number
 }
 
 /** Base strategy interface that all strategies implement */

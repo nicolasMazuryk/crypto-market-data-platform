@@ -58,7 +58,7 @@ function rowToTradeIntent(row: TradeIntentRow): TradeIntent {
   // rows written before migration 0001 (exitPolicy column defaulted to '{}').
   const storedPolicy = row.exitPolicy as ExitPolicy | Record<string, never> | null
   const exitPolicy: ExitPolicy =
-    storedPolicy && 'kind' in storedPolicy && storedPolicy.kind
+    storedPolicy && 'kind' in storedPolicy
       ? (storedPolicy as ExitPolicy)
       : { kind: 'timed', exitAt: row.decidedAt.getTime() + 3600_000 }
 
@@ -158,7 +158,7 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
       // Reconstruct filledQty from the entry order row. If the engine was killed while
       // the entry was partially or fully filled, the ws.order handler will have updated
       // filled_qty in the DB via the periodic flush.
-      const filledQty = entryOrder ? parseFloat(entryOrder.filledQty ?? '0') : 0
+      const filledQty = entryOrder ? parseFloat(entryOrder.filledQty) : 0
 
       const state: IntentState = {
         intent,
@@ -228,10 +228,7 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
 
     for (const order of restOrders) {
       if (!rehydratedClientOrderIds.has(order.clientOrderId)) {
-        logger.warn(
-          { exchange, clientOrderId: order.clientOrderId },
-          'recovery: orphan order found, cancelling'
-        )
+        logger.warn({ exchange, clientOrderId: order.clientOrderId }, 'recovery: orphan order found, cancelling')
         try {
           await rest.cancelOrder({ symbol: order.symbol, clientOrderId: order.clientOrderId })
           orphansCancelled++

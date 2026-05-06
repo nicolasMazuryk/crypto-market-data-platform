@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { parse } from 'yaml'
 
-import type { BaseConfig, ResolvedConfig, StrategyConfig, StrategyId, FeeSchedule } from './schema.js'
+import type { BaseConfig, ResolvedConfig, StrategyConfig, StrategyId, FeeSchedule, SpotFeeSchedule } from './schema.js'
 import { VALID_STRATEGY_IDS } from './schema.js'
 import { SUPPORTED_EXCHANGES } from './exchanges.js'
 
@@ -130,6 +130,16 @@ function parseStringArray(obj: Record<string, unknown>, field: string, context: 
   return val as string[]
 }
 
+function validateSpotFeeSchedule(obj: unknown, exchange: string): SpotFeeSchedule {
+  if (obj === null || obj === undefined || typeof obj !== 'object' || Array.isArray(obj)) {
+    throw new Error(`Spot fee schedule for '${exchange}' must be an object`)
+  }
+  const feeObj = obj as Record<string, unknown>
+  return {
+    fee: requireNonNegativeNumber(feeObj, 'fee', `spot_fees.${exchange}`),
+  }
+}
+
 function validateFeeSchedule(obj: unknown, exchange: string): FeeSchedule {
   if (obj === null || obj === undefined || typeof obj !== 'object' || Array.isArray(obj)) {
     throw new Error(`Fee schedule for '${exchange}' must be an object`)
@@ -227,6 +237,18 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
       ? 60
       : requirePositiveInt(merged, 'funding_time_tolerance_seconds', ctx)
 
+  // spot_fees — optional; defaults to empty map if not present
+  const spotFeesRaw = merged.spot_fees
+  const spot_fees: Record<string, SpotFeeSchedule> = {}
+  if (spotFeesRaw !== null && spotFeesRaw !== undefined) {
+    if (typeof spotFeesRaw !== 'object' || Array.isArray(spotFeesRaw)) {
+      throw new Error(`${ctx}: 'spot_fees' must be an object`)
+    }
+    for (const [exch, schedule] of Object.entries(spotFeesRaw as Record<string, unknown>)) {
+      spot_fees[exch] = validateSpotFeeSchedule(schedule, exch)
+    }
+  }
+
   return {
     exchange,
     ...(symbol ? { symbol } : {}),
@@ -238,6 +260,7 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
     slippage,
     reporting,
     funding_time_tolerance_seconds,
+    spot_fees,
   }
 }
 
@@ -364,11 +387,40 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
           ctx
         ),
         min_funding_spread: requireNumberInRange(merged, 'min_funding_spread', 0.001, 0.015, ctx),
-        stop_loss: requireNumberInRange(merged, 'stop_loss', 0.001, 0.020, ctx),
+        stop_loss: requireNumberInRange(merged, 'stop_loss', 0.001, 0.02, ctx),
         tp_multiplier: requireNumberInRange(merged, 'tp_multiplier', 0.1, 3.0, ctx),
         entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
         deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 10, 900, ctx),
         funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
+      }
+    }
+
+    case 'strategy_spot_futures': {
+      const perp_exchange = requireString(merged, 'perp_exchange', ctx)
+      const spot_exchange_raw = merged.spot_exchange
+      const spot_exchange =
+        typeof spot_exchange_raw === 'string' && spot_exchange_raw.length > 0 ? spot_exchange_raw : perp_exchange
+
+      const F_threshold = requireNumberInRange(merged, 'F_threshold', 0.0002, 0.004, ctx)
+      const fundingConvergenceThreshold = requireNonNegativeNumber(merged, 'fundingConvergenceThreshold', ctx)
+      if (fundingConvergenceThreshold >= F_threshold) {
+        throw new Error(
+          `${ctx}: 'fundingConvergenceThreshold' (${String(fundingConvergenceThreshold)}) must be < 'F_threshold' (${String(F_threshold)})`
+        )
+      }
+
+      return {
+        strategy_id: strategyId,
+        spot_exchange,
+        perp_exchange,
+        F_threshold,
+        entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
+        exit_offset_seconds: requireIntInRange(merged, 'exit_offset_seconds', 1, 5, ctx),
+        minTotalProfit: requireNumberInRange(merged, 'minTotalProfit', -0.005, 0.005, ctx),
+        fundingConvergenceThreshold,
+        spreadWideningThreshold: requireNumberInRange(merged, 'spreadWideningThreshold', 0.005, 0.03, ctx),
+        spreadTakeProfit: requireNumberInRange(merged, 'spreadTakeProfit', 0.005, 0.02, ctx),
+        max_carry_funding_events: requireIntInRange(merged, 'max_carry_funding_events', 1, 336, ctx),
       }
     }
   }

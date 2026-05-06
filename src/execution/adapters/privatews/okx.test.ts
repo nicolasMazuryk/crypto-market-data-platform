@@ -25,7 +25,7 @@ const metrics = registerPrivateWsMetrics(registry)
 
 runWsAdapterConformance({
   exchange: 'okx',
-  createAdapter: (clientFactory) => {
+  createAdapter: clientFactory => {
     const adapterOpts: Parameters<typeof createOkxPrivateWsAdapter>[0] = {
       config: makeConfig(),
       bus,

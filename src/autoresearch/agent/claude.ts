@@ -24,8 +24,12 @@ function parseClaudeUsage(stdout: string): { tokensUsed: number | null; costUsd:
       if (event.type === 'result') {
         if (typeof event.total_cost_usd === 'number') costUsd = event.total_cost_usd
         if (event.usage !== undefined) {
-          const { input_tokens = 0, output_tokens = 0, cache_creation_input_tokens = 0, cache_read_input_tokens = 0 } =
-            event.usage
+          const {
+            input_tokens = 0,
+            output_tokens = 0,
+            cache_creation_input_tokens = 0,
+            cache_read_input_tokens = 0,
+          } = event.usage
           tokensUsed = input_tokens + output_tokens + cache_creation_input_tokens + cache_read_input_tokens
         }
       }

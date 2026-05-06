@@ -81,7 +81,7 @@ describe.skipIf(!LIVE)('bybit live testnet SL placement', () => {
   it('fetchOpenOrders finds the order with triggerDirection=2 in raw info', async () => {
     if (!ccxtEx.fetchOpenOrders) throw new Error('fetchOpenOrders not available on this exchange')
     const openOrders = await ccxtEx.fetchOpenOrders('BTC/USDT:USDT')
-    const order = openOrders.find((o) => o.clientOrderId === placedClientOrderId)
+    const order = openOrders.find(o => o.clientOrderId === placedClientOrderId)
     expect(order).toBeDefined()
     // Bybit V5 API returns triggerDirection as the string "2" in the raw response
     expect(order?.info.triggerDirection).toBe('2')

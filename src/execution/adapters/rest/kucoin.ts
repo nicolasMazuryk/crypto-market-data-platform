@@ -38,8 +38,6 @@ const kucoinSpec: CcxtAdapterSpec = {
 
 export type KucoinRestAdapterOptions = BaseRestAdapterOptions
 
-export function createKucoinRestAdapter(
-  opts: KucoinRestAdapterOptions
-): ReturnType<typeof createCcxtRestAdapter> {
+export function createKucoinRestAdapter(opts: KucoinRestAdapterOptions): ReturnType<typeof createCcxtRestAdapter> {
   return createCcxtRestAdapter(kucoinSpec, opts)
 }

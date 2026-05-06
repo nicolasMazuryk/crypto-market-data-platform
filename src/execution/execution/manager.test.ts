@@ -540,9 +540,7 @@ describe('ExecutionManager', () => {
   // Prewarm failure: a failed prewarm clears the in-flight slot so submit retries
   it('when prewarmLeverage fails, submit retries setLeverage and succeeds', async () => {
     const rest = makeRestAdapter()
-    vi.mocked(rest.setLeverage)
-      .mockRejectedValueOnce(new Error('timeout'))
-      .mockResolvedValue(undefined)
+    vi.mocked(rest.setLeverage).mockRejectedValueOnce(new Error('timeout')).mockResolvedValue(undefined)
     const { manager } = makeManager({ restAdapter: rest })
 
     manager.prewarmLeverage('binance', 'BTCUSDT', 4)
@@ -570,10 +568,7 @@ describe('OCO cancel strategies', () => {
     })
   }
 
-  async function setupMonitoringIntent(
-    restAdapter: ExchangeRestAdapter,
-    monitor: ReturnType<typeof makeMonitor>
-  ) {
+  async function setupMonitoringIntent(restAdapter: ExchangeRestAdapter, monitor: ReturnType<typeof makeMonitor>) {
     // Use per-clientOrderId exchangeOrderId so SL and TP get distinct exchange IDs.
     vi.mocked(restAdapter.createOrder).mockImplementation(async params => ({
       clientOrderId: params.clientOrderId,
@@ -631,7 +626,9 @@ describe('OCO cancel strategies', () => {
 
     // getOpenOrders: order present after Strategy A attempt, gone after Strategy B
     vi.mocked(rest.getOpenOrders)
-      .mockResolvedValueOnce([makeOrder(slRef.clientOrderId, { reduceOnly: true, exchangeOrderId: slRef.exchangeOrderId })])
+      .mockResolvedValueOnce([
+        makeOrder(slRef.clientOrderId, { reduceOnly: true, exchangeOrderId: slRef.exchangeOrderId }),
+      ])
       .mockResolvedValue([])
 
     monitor.triggerExit(intent.id, 'tp')

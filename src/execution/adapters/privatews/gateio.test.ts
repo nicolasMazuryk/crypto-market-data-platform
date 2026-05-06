@@ -25,7 +25,7 @@ const metrics = registerPrivateWsMetrics(registry)
 
 runWsAdapterConformance({
   exchange: 'gateio',
-  createAdapter: (clientFactory) => {
+  createAdapter: clientFactory => {
     const adapterOpts: Parameters<typeof createGateioPrivateWsAdapter>[0] = {
       config: makeConfig(),
       bus,

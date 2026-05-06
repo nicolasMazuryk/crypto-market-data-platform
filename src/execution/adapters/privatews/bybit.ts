@@ -27,8 +27,6 @@ const bybitSpec: PrivateWsAdapterSpec = {
 }
 
 export function createBybitPrivateWsAdapter(opts: BybitPrivateWsAdapterOptions): ExchangePrivateWsAdapter {
-  const spec = opts.wsClientFactory
-    ? { ...bybitSpec, createClient: opts.wsClientFactory }
-    : bybitSpec
+  const spec = opts.wsClientFactory ? { ...bybitSpec, createClient: opts.wsClientFactory } : bybitSpec
   return createPrivateWsAdapterFromSpec(spec, opts)
 }

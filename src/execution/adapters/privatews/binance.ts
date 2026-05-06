@@ -17,16 +17,26 @@ export interface BinancePrivateWsAdapterOptions extends PrivateWsAdapterOptions 
   wsClientFactory?: BinanceWsClientFactory
 }
 
-type BinanceRaw = { e: string; E: number; [key: string]: unknown }
+interface BinanceRaw {
+  e: string
+  E: number
+  [key: string]: unknown
+}
 
-function wrapBinanceClient(
-  inner: ReturnType<typeof createBinanceWsClient>
-): PrivateWsClient {
+function wrapBinanceClient(inner: ReturnType<typeof createBinanceWsClient>): PrivateWsClient {
   const ev = makeTypedEmitter<PrivateWsClientEvents>()
-  inner.events.on('close', reason => ev.emit('close', reason))
-  inner.events.on('error', err => ev.emit('error', err))
-  inner.events.on('message', msg => ev.emit('message', msg as unknown))
-  inner.events.on('listenKeyExpired', () => ev.emit('authExpired'))
+  inner.events.on('close', reason => {
+    ev.emit('close', reason)
+  })
+  inner.events.on('error', err => {
+    ev.emit('error', err)
+  })
+  inner.events.on('message', msg => {
+    ev.emit('message', msg as unknown)
+  })
+  inner.events.on('listenKeyExpired', () => {
+    ev.emit('authExpired')
+  })
   return {
     connect: () => inner.connect(),
     disconnect: () => inner.disconnect(),
@@ -55,8 +65,9 @@ function parseBinanceMessage(raw: BinanceRaw, receivedAt: number, seq: number) {
 }
 
 export function createBinancePrivateWsAdapter(opts: BinancePrivateWsAdapterOptions): ExchangePrivateWsAdapter {
-  const createClientFn: PrivateWsAdapterSpec<BinanceRaw>['createClient'] = opts.wsClientFactory
-    ? () => wrapBinanceClient(opts.wsClientFactory!())
+  const wsClientFactory = opts.wsClientFactory
+  const createClientFn: PrivateWsAdapterSpec<BinanceRaw>['createClient'] = wsClientFactory
+    ? () => wrapBinanceClient(wsClientFactory())
     : (config: ExchangeConfig & { credentials?: ExchangeCredentials }) => {
         const clientOpts: Parameters<typeof createBinanceWsClient>[0] = {}
         if (config.credentials) clientOpts.credentials = config.credentials

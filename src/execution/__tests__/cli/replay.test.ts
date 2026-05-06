@@ -99,7 +99,10 @@ describe('replay lifecycle PnL computation', () => {
     const totalFees = fills.reduce((s, f) => s + parseFloat(f.feeAmount), 0)
     const fundingTotal = fundingAttributions.reduce((s, f) => s + parseFloat(f.fundingAmount), 0)
 
-    const pnl = intent.side === 'long' ? exitValue - entryValue - totalFees + fundingTotal : entryValue - exitValue - totalFees + fundingTotal
+    const pnl =
+      intent.side === 'long'
+        ? exitValue - entryValue - totalFees + fundingTotal
+        : entryValue - exitValue - totalFees + fundingTotal
 
     expect(pnl).toBe(0)
     expect(entryFills.length).toBe(0)
@@ -133,7 +136,13 @@ describe('replay lifecycle PnL computation', () => {
     const entryOrder = makeOrderRow({ id: 'entry-order', reduceOnly: false })
     const exitOrder = makeOrderRow({ id: 'exit-order', reduceOnly: true, side: 'buy' })
     const entryFill = makeFillRow({ orderId: 'entry-order', qty: '0.001', price: '40000', feeAmount: '0.02' })
-    const exitFill = makeFillRow({ id: 'fill-2', orderId: 'exit-order', qty: '0.001', price: '39000', feeAmount: '0.02' })
+    const exitFill = makeFillRow({
+      id: 'fill-2',
+      orderId: 'exit-order',
+      qty: '0.001',
+      price: '39000',
+      feeAmount: '0.02',
+    })
 
     const lc = makeLifecycle({
       orders: [entryOrder, exitOrder],

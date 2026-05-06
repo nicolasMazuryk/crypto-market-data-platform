@@ -27,8 +27,6 @@ const gateioSpec: PrivateWsAdapterSpec = {
 }
 
 export function createGateioPrivateWsAdapter(opts: GateioPrivateWsAdapterOptions): ExchangePrivateWsAdapter {
-  const spec = opts.wsClientFactory
-    ? { ...gateioSpec, createClient: opts.wsClientFactory }
-    : gateioSpec
+  const spec = opts.wsClientFactory ? { ...gateioSpec, createClient: opts.wsClientFactory } : gateioSpec
   return createPrivateWsAdapterFromSpec(spec, opts)
 }

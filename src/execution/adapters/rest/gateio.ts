@@ -53,8 +53,6 @@ const gateioSpec: CcxtAdapterSpec = {
 
 export type GateioRestAdapterOptions = BaseRestAdapterOptions
 
-export function createGateioRestAdapter(
-  opts: GateioRestAdapterOptions
-): ReturnType<typeof createCcxtRestAdapter> {
+export function createGateioRestAdapter(opts: GateioRestAdapterOptions): ReturnType<typeof createCcxtRestAdapter> {
   return createCcxtRestAdapter(gateioSpec, opts)
 }

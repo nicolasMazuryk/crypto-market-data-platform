@@ -63,7 +63,7 @@ describe('execution engine slice 1 bootstrap', () => {
     handle = await startEngine({
       configPath: 'config/execution.dry-run.yaml',
       metricsPort: 0,
-        healthPort: 0,
+      healthPort: 0,
     })
 
     expect(handle.config.mode).toBe('dry_run')
@@ -118,7 +118,7 @@ describe('execution engine slice 2 markets', () => {
     handle = await startEngine({
       configPath: 'config/execution.dry-run.yaml',
       metricsPort: 0,
-        healthPort: 0,
+      healthPort: 0,
     })
 
     expect(handle.markets).toBeDefined()
@@ -143,7 +143,7 @@ describe('execution engine slice 2 markets', () => {
     handle = await startEngine({
       configPath: 'config/execution.dry-run.yaml',
       metricsPort: 0,
-        healthPort: 0,
+      healthPort: 0,
     })
 
     const { body } = await fetchText(`http://127.0.0.1:${String(handle.metricsPort)}/metrics`)
@@ -162,7 +162,7 @@ describe('execution engine slice 2 markets', () => {
     handle = await startEngine({
       configPath: 'config/execution.dry-run.yaml',
       metricsPort: 0,
-        healthPort: 0,
+      healthPort: 0,
     })
 
     expect(handle.markets).toBeDefined()
@@ -187,7 +187,7 @@ describe('execution engine slice 7 strategy_1 + scheduler', () => {
     handle = await startEngine({
       configPath: 'config/execution.dry-run.yaml',
       metricsPort: 0,
-        healthPort: 0,
+      healthPort: 0,
     })
 
     expect(handle.strategies).toBeDefined()
@@ -203,7 +203,7 @@ describe('execution engine slice 7 strategy_1 + scheduler', () => {
     handle = await startEngine({
       configPath: 'config/execution.dry-run.yaml',
       metricsPort: 0,
-        healthPort: 0,
+      healthPort: 0,
     })
 
     const received: unknown[] = []
@@ -228,7 +228,7 @@ describe('execution engine slice 5 WS + StateStore', () => {
     handle = await startEngine({
       configPath: 'config/execution.dry-run.yaml',
       metricsPort: 0,
-        healthPort: 0,
+      healthPort: 0,
     })
 
     expect(handle.state).toBeDefined()

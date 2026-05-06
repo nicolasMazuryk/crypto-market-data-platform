@@ -163,3 +163,23 @@ runs:
     exclude_exchanges: []
     agent: claude
     iterations: 9
+
+  # strategy_spot_futures
+  - strategy: strategy_spot_futures
+    exchange: binance
+    agent: claude
+  - strategy: strategy_spot_futures
+    exchange: bybit
+    agent: claude
+  - strategy: strategy_spot_futures
+    exchange: okx
+    agent: claude
+  - strategy: strategy_spot_futures
+    exchange: bitget
+    agent: claude
+  - strategy: strategy_spot_futures
+    exchange: gateio
+    agent: claude
+  - strategy: strategy_spot_futures
+    exchange: kucoin
+    agent: claude

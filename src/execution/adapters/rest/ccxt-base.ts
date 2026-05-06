@@ -247,7 +247,10 @@ export function createCcxtRestAdapter(
     exchange,
 
     ...(spec.canonicalizeClientOrderId
-      ? { canonicalizeClientOrderId: (id: string) => spec.canonicalizeClientOrderId!(id) }
+      ? {
+          // eslint-disable-next-line @typescript-eslint/unbound-method
+          canonicalizeClientOrderId: spec.canonicalizeClientOrderId,
+        }
       : {}),
 
     async warm(): Promise<void> {

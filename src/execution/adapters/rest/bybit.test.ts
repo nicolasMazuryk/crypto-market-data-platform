@@ -96,7 +96,7 @@ function makeLogger(): Logger {
 
 runRestAdapterConformance({
   exchange: 'bybit',
-  makeAdapter: (ccxtOverrides) => {
+  makeAdapter: ccxtOverrides => {
     const mockCcxt = makeMockCcxt(ccxtOverrides)
     const limiter = makeMockLimiter()
     const registry = new MetricsRegistry()
@@ -151,9 +151,9 @@ describe('bybit getOrder via open→history fallback', () => {
 
     expect(order).toBeDefined()
     expect(order?.status).toBe('new')
-    expect(vi.mocked(ccxt.fetchOpenOrders)).toHaveBeenCalledWith(
-      'BTC/USDT:USDT', undefined, undefined, { orderLinkId: 'sl-cid' }
-    )
+    expect(vi.mocked(ccxt.fetchOpenOrders)).toHaveBeenCalledWith('BTC/USDT:USDT', undefined, undefined, {
+      orderLinkId: 'sl-cid',
+    })
     expect(vi.mocked(ccxt.fetchClosedOrders)).not.toHaveBeenCalled()
   })
 
@@ -165,12 +165,12 @@ describe('bybit getOrder via open→history fallback', () => {
 
     expect(order).toBeDefined()
     expect(order?.status).toBe('filled')
-    expect(vi.mocked(ccxt.fetchOpenOrders)).toHaveBeenCalledWith(
-      'BTC/USDT:USDT', undefined, undefined, { orderLinkId: 'sl-cid' }
-    )
-    expect(vi.mocked(ccxt.fetchClosedOrders)).toHaveBeenCalledWith(
-      'BTC/USDT:USDT', undefined, undefined, { orderLinkId: 'sl-cid' }
-    )
+    expect(vi.mocked(ccxt.fetchOpenOrders)).toHaveBeenCalledWith('BTC/USDT:USDT', undefined, undefined, {
+      orderLinkId: 'sl-cid',
+    })
+    expect(vi.mocked(ccxt.fetchClosedOrders)).toHaveBeenCalledWith('BTC/USDT:USDT', undefined, undefined, {
+      orderLinkId: 'sl-cid',
+    })
   })
 
   it('returns undefined when order not found in either open or history', async () => {

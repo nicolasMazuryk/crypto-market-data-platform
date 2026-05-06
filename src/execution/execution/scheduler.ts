@@ -144,9 +144,7 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
     const overrideMs = opts.fundingTimeOverrideMs
     const delta = overrideMs - now
     if (delta <= 0) {
-      throw new Error(
-        `funding time override is in the past (${String(-delta)}ms ago) — use a future time`
-      )
+      throw new Error(`funding time override is in the past (${String(-delta)}ms ago) — use a future time`)
     }
     if (delta > config.fundingWindowMs) {
       throw new Error(

@@ -38,10 +38,7 @@ export async function findLatestOpenRun(db: DrizzleDb): Promise<RunRow | undefin
   return rows[0]
 }
 
-export async function insertRun(
-  db: DrizzleDb,
-  row: Omit<RunRow, 'endedAt' | 'notes'>
-): Promise<RunRow> {
+export async function insertRun(db: DrizzleDb, row: Omit<RunRow, 'endedAt' | 'notes'>): Promise<RunRow> {
   const inserted = await db
     .insert(runs)
     .values({ ...row, endedAt: null, notes: null })
@@ -58,25 +55,14 @@ export async function closeRun(db: DrizzleDb, id: string): Promise<void> {
   await db.update(runs).set({ endedAt: new Date() }).where(eq(runs.id, id))
 }
 
-export async function loadActiveIntents(
-  db: DrizzleDb,
-  runId: string
-): Promise<TradeIntentRow[]> {
+export async function loadActiveIntents(db: DrizzleDb, runId: string): Promise<TradeIntentRow[]> {
   return db
     .select()
     .from(tradeIntents)
-    .where(
-      and(
-        eq(tradeIntents.runId, runId),
-        inArray(tradeIntents.status, [...ACTIVE_STATUSES])
-      )
-    )
+    .where(and(eq(tradeIntents.runId, runId), inArray(tradeIntents.status, [...ACTIVE_STATUSES])))
 }
 
-export async function loadOrdersForIntents(
-  db: DrizzleDb,
-  intentIds: string[]
-): Promise<OrderRow[]> {
+export async function loadOrdersForIntents(db: DrizzleDb, intentIds: string[]): Promise<OrderRow[]> {
   if (intentIds.length === 0) return []
   return db.select().from(orders).where(inArray(orders.intentId, intentIds))
 }
@@ -94,10 +80,7 @@ export interface IntentLifecycle {
   opsEvents: OpsEventRow[]
 }
 
-export async function loadIntentLifecycle(
-  db: DrizzleDb,
-  intentId: string
-): Promise<IntentLifecycle | undefined> {
+export async function loadIntentLifecycle(db: DrizzleDb, intentId: string): Promise<IntentLifecycle | undefined> {
   const intentRows = await db.select().from(tradeIntents).where(eq(tradeIntents.id, intentId))
   const intent = intentRows[0]
   if (!intent) return undefined
@@ -105,13 +88,9 @@ export async function loadIntentLifecycle(
   const orderRows = await db.select().from(orders).where(eq(orders.intentId, intentId))
   const orderIds = orderRows.map(o => o.id)
 
-  const fillRows =
-    orderIds.length > 0 ? await db.select().from(fills).where(inArray(fills.orderId, orderIds)) : []
+  const fillRows = orderIds.length > 0 ? await db.select().from(fills).where(inArray(fills.orderId, orderIds)) : []
 
-  const fundingRows = await db
-    .select()
-    .from(fundingAttributions)
-    .where(eq(fundingAttributions.symbol, intent.symbol))
+  const fundingRows = await db.select().from(fundingAttributions).where(eq(fundingAttributions.symbol, intent.symbol))
 
   const opsRows = await db
     .select()
@@ -127,10 +106,7 @@ export async function loadIntentLifecycle(
   }
 }
 
-export async function loadRunLifecycles(
-  db: DrizzleDb,
-  runId: string
-): Promise<IntentLifecycle[]> {
+export async function loadRunLifecycles(db: DrizzleDb, runId: string): Promise<IntentLifecycle[]> {
   const intentRows = await db.select().from(tradeIntents).where(eq(tradeIntents.runId, runId))
   if (intentRows.length === 0) return []
 

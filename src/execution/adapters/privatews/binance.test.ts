@@ -315,16 +315,20 @@ const conformanceLogger = createExecutionLogger()
 const conformanceRegistry = new MetricsRegistry()
 const conformanceMetrics = registerPrivateWsMetrics(conformanceRegistry)
 
-type BinanceRaw = { e: string; E: number; [key: string]: unknown }
+interface BinanceRaw {
+  e: string
+  E: number
+  [key: string]: unknown
+}
 
 function parseBinanceRaw(raw: unknown, receivedAt: number, seq: number) {
   const r = raw as BinanceRaw
   if (r.e === 'ORDER_TRADE_UPDATE') {
-    const orderEv = mapOrderTradeUpdate(raw as unknown as BinanceOrderUpdateRaw, receivedAt, seq)
+    const orderEv = mapOrderTradeUpdate(raw as BinanceOrderUpdateRaw, receivedAt, seq)
     return { orders: [orderEv], eventType: r.e, eventTimestampMs: r.E }
   }
   if (r.e === 'ACCOUNT_UPDATE') {
-    const acctRaw = raw as unknown as BinanceAccountUpdateRaw
+    const acctRaw = raw as BinanceAccountUpdateRaw
     const { balances, positions } = mapAccountUpdate(acctRaw, receivedAt, seq)
     const fee = mapFundingFee(acctRaw, receivedAt, seq)
     return { balances, positions, fundingFees: fee ? [fee] : undefined, eventType: r.e, eventTimestampMs: r.E }
@@ -334,11 +338,17 @@ function parseBinanceRaw(raw: unknown, receivedAt: number, seq: number) {
 
 runWsAdapterConformance({
   exchange: 'binance',
-  createAdapter: (clientFactory) => {
+  createAdapter: clientFactory => {
     const fakeWs: PrivateWsClient = clientFactory ? clientFactory() : createFakeWsClient()
     return createPrivateWsAdapterFromSpec(
       { exchange: 'binance', createClient: () => fakeWs, parseMessage: parseBinanceRaw },
-      { config: makeConfig(), bus: conformanceBus, clock: conformanceClock, logger: conformanceLogger, metrics: conformanceMetrics }
+      {
+        config: makeConfig(),
+        bus: conformanceBus,
+        clock: conformanceClock,
+        logger: conformanceLogger,
+        metrics: conformanceMetrics,
+      }
     )
   },
   sampleOrderRaw,
