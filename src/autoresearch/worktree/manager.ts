@@ -235,18 +235,18 @@ function applyBaseConfigOverrides(worktreePath: string, spec: RunSpec): void {
 
   fs.writeFileSync(baseConfigPath, stringifyYaml(parsed))
 
-  // strategy_spot_futures uses perp_exchange/spot_exchange (not base.exchange)
-  // for data queries — patch the strategy YAML directly so all runs target the right exchange.
-  if (spec.exchange !== null && spec.strategy === 'strategy_spot_futures') {
-    const sfConfigPath = path.join(worktreePath, 'config', 'strategies', 'strategy_spot_futures.yaml')
-    if (fs.existsSync(sfConfigPath)) {
-      const sfRaw = fs.readFileSync(sfConfigPath, 'utf-8')
-      const sfParsed = parseYaml(sfRaw) as Record<string, unknown> | null
-      if (sfParsed !== null) {
-        sfParsed.exchange = spec.exchange
-        sfParsed.perp_exchange = spec.exchange
-        sfParsed.spot_exchange = spec.exchange
-        fs.writeFileSync(sfConfigPath, stringifyYaml(sfParsed))
+  // strategy_spot_futures reads perp_exchange/spot_exchange from its own YAML,
+  // not from base_config. Patch those fields so each worktree queries the right exchange.
+  if (spec.strategy === 'strategy_spot_futures' && spec.exchange !== null) {
+    const stratYamlPath = path.join(worktreePath, 'config', 'strategies', 'strategy_spot_futures.yaml')
+    if (fs.existsSync(stratYamlPath)) {
+      const stratRaw = fs.readFileSync(stratYamlPath, 'utf-8')
+      const stratParsed = parseYaml(stratRaw) as Record<string, unknown> | null
+      if (stratParsed !== null) {
+        stratParsed.exchange = spec.exchange
+        stratParsed.perp_exchange = spec.exchange
+        stratParsed.spot_exchange = spec.exchange
+        fs.writeFileSync(stratYamlPath, stringifyYaml(stratParsed))
       }
     }
   }
