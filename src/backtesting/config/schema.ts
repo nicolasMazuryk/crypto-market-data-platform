@@ -233,20 +233,10 @@ export interface SpotFuturesConfig {
   perp_exchange: string
   /** Minimum positive funding rate to trigger entry (e.g., 0.0015 for 0.15%) */
   F_threshold: number
-  /** Seconds before T_funding to enter (1..5, integer) */
-  entry_offset_seconds: number
-  /** Seconds before each next funding event to open the exit window (1..5, integer) */
-  exit_offset_seconds: number
   /** Minimum expected net profit gate at entry; negative values loosen the gate (e.g., -0.005 to 0.005) */
   minTotalProfit: number
   /** Exit when the current funding rate falls to or below this level (e.g., 0.0002) */
   fundingConvergenceThreshold: number
-  /** Exit when the spread widens by this fraction vs entry (e.g., 0.05 for 5%) */
-  spreadWideningThreshold: number
-  /** Take-profit when spread narrows by this fraction vs entry (e.g., 0.004 for 0.4%) */
-  spreadTakeProfit: number
-  /** Safety bound: force exit after collecting this many funding events (integer, >= 1) */
-  max_carry_funding_events: number
 }
 
 /** Union of all strategy configs */

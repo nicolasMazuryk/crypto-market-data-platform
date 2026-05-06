@@ -111,6 +111,46 @@ export async function queryAllFundingEventsInRange(
   }))
 }
 
+export async function queryAllFundingEventsByExchange(
+  exchange: string,
+  startDate: string,
+  endDate: string,
+  symbols: string[]
+): Promise<Map<string, FundingEvent[]>> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `
+      SELECT exchange, symbol, funding_time, toFloat64(funding_rate) AS funding_rate
+      FROM funding_rates
+      WHERE exchange = {exchange: String}
+        AND symbol IN {symbols: Array(String)}
+        AND funding_time >= {startDate: DateTime}
+        AND funding_time <= {endDate: DateTime}
+      ORDER BY symbol ASC, funding_time ASC
+    `,
+    query_params: { exchange, symbols, startDate, endDate },
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{ exchange: string; symbol: string; funding_time: string; funding_rate: number }>()
+  const map = new Map<string, FundingEvent[]>()
+  for (const r of rows) {
+    const event: FundingEvent = {
+      exchange: r.exchange,
+      symbol: r.symbol,
+      funding_time: new Date(r.funding_time.includes('T') ? r.funding_time : `${r.funding_time.replace(' ', 'T')}Z`),
+      funding_rate: r.funding_rate,
+    }
+    const existing = map.get(r.symbol)
+    if (existing) {
+      existing.push(event)
+    } else {
+      map.set(r.symbol, [event])
+    }
+  }
+  return map
+}
+
 export async function queryCrossExchangeFundingEvents(
   exchangeA: string,
   exchangeB: string,

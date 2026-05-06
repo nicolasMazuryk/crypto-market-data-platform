@@ -11,7 +11,7 @@
 # Settings applied to every row unless overridden by a per-row field.
 default_iterations: 2
 max_parallel: 7            # concurrent runs
-max_parallel_backtests: 4  # concurrent ClickHouse-hitting backtests
+max_parallel_backtests: 1  # concurrent ClickHouse-hitting backtests (1 = serialized pre-fetches avoid SSH tunnel overload)
 iteration_timeout_ms: 600000
 backtest_timeout_ms: 600000
 per_iteration_budget_usd: 0.75

@@ -4,17 +4,20 @@ import {
   queryFundingEvents,
   queryMainExchangeCrossEvents,
   queryPositiveFundingEvents,
-  queryAllFundingEventsInRange,
+  queryAllFundingEventsByExchange,
 } from '../data/funding-events.js'
 import { fetchOrderbookWindow } from '../data/orderbook-window.js'
 import { fetchSpotOrderbookWindow } from '../data/spot-data.js'
 import { validateEventData } from '../data/validation.js'
 import type { FundingEvent, SkipReason } from '../data/types.js'
-import { toClickHouseDateTime } from '../../db/types.js'
+
 import { createStrategy } from '../strategies/registry.js'
 import type { TradeResult } from '../strategies/types.js'
 import type { Strategy5 } from '../strategies/strategy-5.js'
-import type { SpotFuturesStrategy } from '../strategies/strategy-spot-futures.js'
+import {
+  type SpotFuturesStrategy,
+  SPOT_FUTURES_ENTRY_OFFSET_SECONDS,
+} from '../strategies/strategy-spot-futures.js'
 import { buildReport } from '../reporting/report-builder.js'
 import type { BacktestReport } from '../reporting/types.js'
 import { getGitCommit } from './utils.js'
@@ -65,30 +68,47 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     )
 
     totalEventsScanned = events.length
+    const sfStartMs = Date.now()
     logger.info({ events: events.length, perp_exchange: sfConfig.perp_exchange }, 'Found positive funding events')
 
-    // Wide window: spans max_carry_funding_events cycles; 9h/cycle is a conservative
-    // upper bound since funding intervals vary (1h, 2h, 4h, or 8h per market).
-    const widePostSeconds = sfConfig.max_carry_funding_events * 9 * 3600
+    // Wide window: spans the full remaining backtest period from any entry point.
+    const widePostSeconds = Math.ceil(
+      (new Date(base.end_date).getTime() - new Date(base.start_date).getTime()) / 1000
+    )
     const wideWindow: WindowConfig = {
-      pre_funding_seconds: Math.max(base.window.pre_funding_seconds, sfConfig.entry_offset_seconds + 10),
+      pre_funding_seconds: Math.max(base.window.pre_funding_seconds, SPOT_FUTURES_ENTRY_OFFSET_SECONDS + 10),
       post_funding_seconds: widePostSeconds,
     }
 
     const isAlias = sfConfig.spot_exchange === sfConfig.perp_exchange
     // In alias mode, carryAlias only needs the entry candle; skip the wide orderbook fetch.
     const aliasEntryWindow: WindowConfig = {
-      pre_funding_seconds: sfConfig.entry_offset_seconds + 30,
+      pre_funding_seconds: SPOT_FUTURES_ENTRY_OFFSET_SECONDS + 30,
       post_funding_seconds: 30,
     }
     const FETCH_CONCURRENCY_SF = isAlias ? 30 : 5
+
+    // Pre-fetch funding events for all triggering symbols in one round-trip, eliminating
+    // per-event queryAllFundingEventsInRange calls (dominant cost on exchanges with many markets).
+    // Fetch funding events only up to the backtest end date
+    const maxFetchEndDate = base.end_date
+    const uniqueSymbols = [...new Set(events.map(e => e.symbol))]
+    const fundingEventsBySymbol =
+      events.length > 0
+        ? await queryAllFundingEventsByExchange(sfConfig.perp_exchange, base.start_date, maxFetchEndDate, uniqueSymbols)
+        : new Map<string, FundingEvent[]>()
+
     for (let i = 0; i < events.length; i += FETCH_CONCURRENCY_SF) {
       const batch = events.slice(i, i + FETCH_CONCURRENCY_SF)
 
       const tuples = await Promise.all(
         batch.map(async event => {
-          const windowEndDate = toClickHouseDateTime(new Date(event.funding_time.getTime() + widePostSeconds * 1000))
-          const [perpWindow, maybeSpotWindow, allFundingEvents] = await Promise.all([
+          const endDate = new Date(base.end_date)
+          const symbolEvents = fundingEventsBySymbol.get(event.symbol) ?? []
+          const allFundingEvents = symbolEvents.filter(
+            e => e.funding_time >= event.funding_time && e.funding_time <= endDate
+          )
+          const [perpWindow, maybeSpotWindow] = await Promise.all([
             fetchOrderbookWindow(
               sfConfig.perp_exchange,
               event.symbol,
@@ -98,12 +118,6 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
             isAlias
               ? Promise.resolve(null)
               : fetchSpotOrderbookWindow(sfConfig.spot_exchange, event.symbol, event.funding_time, wideWindow),
-            queryAllFundingEventsInRange(
-              sfConfig.perp_exchange,
-              event.symbol,
-              toClickHouseDateTime(event.funding_time),
-              windowEndDate
-            ),
           ])
           // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           const spotWindow = isAlias ? perpWindow : maybeSpotWindow!
@@ -137,6 +151,11 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
         logger.info({ processed: i, total: events.length }, 'Spot-futures backtest progress')
       }
     }
+
+    logger.info(
+      { perp_exchange: sfConfig.perp_exchange, durationMs: Date.now() - sfStartMs, trades: trades.length },
+      'Spot-futures backtest timing'
+    )
   } else if (strategyConfig.strategy_id === 'strategy_5') {
     // Handle S5 separately (main-exchange-driven, scans all target exchanges)
     const s5Config = strategyConfig
@@ -270,12 +289,18 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     }
   }
 
+  const tradesOpenAtEnd =
+    strategyConfig.strategy_id === 'strategy_spot_futures'
+      ? (strategy as SpotFuturesStrategy).openAtEndCount
+      : 0
+
   logger.info(
     {
       trades: trades.length,
       skipped: allSkipReasons.length,
       triggered: triggeredCount,
       unfilled: unfilledCount,
+      openAtEnd: tradesOpenAtEnd,
     },
     'Backtest complete'
   )
@@ -289,6 +314,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     skipReasons: allSkipReasons,
     triggeredCount,
     unfilledCount,
+    tradesOpenAtEnd,
     dataRowCount: totalDataRows,
     gitCommit,
   })

@@ -25,13 +25,23 @@ interface BuildReportInput {
   skipReasons: SkipReason[]
   triggeredCount: number
   unfilledCount: number
+  tradesOpenAtEnd?: number
   dataRowCount: number
   gitCommit: string | null
 }
 
 export function buildReport(input: BuildReportInput): BacktestReport {
-  const { config, trades, totalEventsScanned, skipReasons, triggeredCount, unfilledCount, dataRowCount, gitCommit } =
-    input
+  const {
+    config,
+    trades,
+    totalEventsScanned,
+    skipReasons,
+    triggeredCount,
+    unfilledCount,
+    tradesOpenAtEnd = 0,
+    dataRowCount,
+    gitCommit,
+  } = input
 
   // Trade stats
   const skipReasonCounts: Record<string, number> = {}
@@ -46,6 +56,7 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     events_triggered: triggeredCount,
     trades_executed: trades.length,
     unfilled_events: unfilledCount,
+    trades_open_at_end: tradesOpenAtEnd,
   }
 
   // Return metrics
@@ -107,8 +118,17 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     calmar_ratio: m.calmarRatio(pnls, ddResult.maxDrawdownPct),
   }
 
-  // Exit reason distribution
-  const exitReasons: ExitReason[] = ['TP_HIT', 'SL_HIT', 'DEADLINE', 'MARKET_EXIT', 'UNFILLED']
+  // Exit reason distribution (all reasons, zero-filled for unused ones)
+  const exitReasons: ExitReason[] = [
+    'TP_HIT',
+    'SL_HIT',
+    'DEADLINE',
+    'MARKET_EXIT',
+    'UNFILLED',
+    'FUNDING_FLOOR',
+    'SPREAD_TP',
+    'SPREAD_SL',
+  ]
   const exitReasonDist: ExitReasonDistribution = {} as ExitReasonDistribution
   for (const reason of exitReasons) {
     const count = trades.filter(t => t.exit_reason === reason).length
@@ -150,10 +170,11 @@ export function buildReport(input: BuildReportInput): BacktestReport {
       timestamp: t.funding_time.toISOString(),
       symbol: t.symbol,
       exchange: t.exchange,
-      funding_rate: t.funding_rate,
-      entry_price: t.entry_price,
-      exit_price: t.exit_price,
+      trigger_funding_rate: t.funding_rate,
+      cumulative_funding_rate: t.cumulative_funding_rate ?? t.funding_rate,
+      funding_events_collected: t.funding_events_collected ?? 1,
       delta_pnl: t.pnl.delta_pnl,
+      spread_pnl: t.pnl.spread_pnl,
       funding_pnl: t.pnl.funding_pnl,
       fees: t.pnl.fees,
       net_pnl: t.pnl.net_pnl,

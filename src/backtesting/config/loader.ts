@@ -414,13 +414,8 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         spot_exchange,
         perp_exchange,
         F_threshold,
-        entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
-        exit_offset_seconds: requireIntInRange(merged, 'exit_offset_seconds', 1, 5, ctx),
         minTotalProfit: requireNumberInRange(merged, 'minTotalProfit', -0.005, 0.005, ctx),
         fundingConvergenceThreshold,
-        spreadWideningThreshold: requireNumberInRange(merged, 'spreadWideningThreshold', 0.005, 0.03, ctx),
-        spreadTakeProfit: requireNumberInRange(merged, 'spreadTakeProfit', 0.005, 0.02, ctx),
-        max_carry_funding_events: requireIntInRange(merged, 'max_carry_funding_events', 1, 336, ctx),
       }
     }
   }

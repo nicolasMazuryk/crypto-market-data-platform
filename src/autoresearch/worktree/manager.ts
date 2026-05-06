@@ -234,4 +234,20 @@ function applyBaseConfigOverrides(worktreePath: string, spec: RunSpec): void {
   parsed.reporting = reporting
 
   fs.writeFileSync(baseConfigPath, stringifyYaml(parsed))
+
+  // strategy_spot_futures uses perp_exchange/spot_exchange (not base.exchange)
+  // for data queries — patch the strategy YAML directly so all runs target the right exchange.
+  if (spec.exchange !== null && spec.strategy === 'strategy_spot_futures') {
+    const sfConfigPath = path.join(worktreePath, 'config', 'strategies', 'strategy_spot_futures.yaml')
+    if (fs.existsSync(sfConfigPath)) {
+      const sfRaw = fs.readFileSync(sfConfigPath, 'utf-8')
+      const sfParsed = parseYaml(sfRaw) as Record<string, unknown> | null
+      if (sfParsed !== null) {
+        sfParsed.exchange = spec.exchange
+        sfParsed.perp_exchange = spec.exchange
+        sfParsed.spot_exchange = spec.exchange
+        fs.writeFileSync(sfConfigPath, stringifyYaml(sfParsed))
+      }
+    }
+  }
 }

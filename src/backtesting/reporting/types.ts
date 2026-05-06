@@ -8,6 +8,8 @@ export interface TradeStats {
   events_triggered: number
   trades_executed: number
   unfilled_events: number
+  /** Positions still open when backtest data ran out (no exit signal fired). */
+  trades_open_at_end: number
 }
 
 /** Return metrics */
@@ -73,10 +75,14 @@ export interface TradeLogEntry {
   timestamp: string
   symbol: string
   exchange: string
-  funding_rate: number
-  entry_price: number
-  exit_price: number
+  /** Funding rate of the trigger event (single event). */
+  trigger_funding_rate: number
+  /** Sum of all collected funding rates across the carry period. */
+  cumulative_funding_rate: number
+  /** Number of funding events accrued during the carry period. */
+  funding_events_collected: number
   delta_pnl: number
+  spread_pnl: number
   funding_pnl: number
   fees: number
   net_pnl: number

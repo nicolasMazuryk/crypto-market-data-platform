@@ -18,13 +18,8 @@ function makeConfig(overrides?: Partial<Parameters<SpotFuturesStrategy['initiali
     spot_exchange: 'binance',
     perp_exchange: 'binance',
     F_threshold: 0.0015,
-    entry_offset_seconds: 5,
-    exit_offset_seconds: 5,
     minTotalProfit: 0.0005,
     fundingConvergenceThreshold: 0.0002,
-    spreadWideningThreshold: 0.05,
-    spreadTakeProfit: 0.004,
-    max_carry_funding_events: 4,
     ...overrides,
   }
 }
@@ -43,17 +38,18 @@ function makeFundingEvents(triggerTime: Date, triggerRate: number, nextRates: nu
 }
 
 describe('E2E: SpotFuturesStrategy', () => {
-  it('exits FUNDING_FLOOR after one cycle when next funding rate drops below threshold', () => {
+  it('exits FUNDING_FLOOR after one cycle: peek-ahead skips the sub-threshold event', () => {
     const strategy = new SpotFuturesStrategy()
     strategy.initialize(makeConfig(), BINANCE_FEES)
 
     const triggerTime = new Date('2025-06-01T00:00:00Z')
     const basePrice = 50000
     const nextFundingTime = new Date(triggerTime.getTime() + 8 * 3600 * 1000)
+    const belowThresholdRate = 0.00015 // below convergence threshold 0.0002
 
     const allFundingEvents = [
       makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE }),
-      makeFundingEvent({ fundingTime: nextFundingTime, fundingRate: 0.00015 }), // below convergence threshold
+      makeFundingEvent({ fundingTime: nextFundingTime, fundingRate: belowThresholdRate }),
     ]
 
     const perpWindow = buildWideWindow(triggerTime, basePrice)
@@ -75,28 +71,34 @@ describe('E2E: SpotFuturesStrategy', () => {
     if (!result) throw new Error('expected result')
 
     expect(result.exit_reason).toBe('FUNDING_FLOOR')
-    expect(result.funding_events_collected).toBeGreaterThanOrEqual(1)
-    expect(Math.abs(result.pnl.spread_pnl)).toBeLessThan(0.001) // alias mode: spread ≈ 0
-    expect(result.pnl.funding_pnl).toBeGreaterThan(0)
+    // Only the trigger event accrues — the sub-threshold event is never collected
+    expect(result.funding_events_collected).toBe(1)
+    expect(result.cumulative_funding_rate).toBeCloseTo(TRIGGER_RATE, 10)
+    // Sub-threshold rate must NOT appear in funding_pnl
+    expect(result.pnl.funding_pnl).toBeCloseTo(TRIGGER_RATE, 10)
+    expect(Math.abs(result.pnl.spread_pnl)).toBeLessThan(0.001) // alias mode: spread = 0
     expect(result.funding_received).toBe(true)
-    // Alias fast path: exit lands exactly at the funding event candle (nextFundingTime)
-    expect(result.hold_duration).toBe(8 * 3600 + makeConfig().entry_offset_seconds)
+    // hold_duration = (nextFundingTime - exit_offset) - (triggerTime - entry_offset) = 8h
+    expect(result.hold_duration).toBe(8 * 3600)
   })
 
-  it('exits DEADLINE when max_carry_funding_events is reached', () => {
+  it('carries multiple profitable events before hitting FUNDING_FLOOR', () => {
     const strategy = new SpotFuturesStrategy()
-    const cfg = makeConfig({ max_carry_funding_events: 2 })
-    strategy.initialize(cfg, BINANCE_FEES)
+    strategy.initialize(makeConfig(), BINANCE_FEES)
 
     const triggerTime = new Date('2025-06-01T00:00:00Z')
     const basePrice = 50000
+    const t1 = new Date(triggerTime.getTime() + 8 * 3600 * 1000) // above threshold
+    const t2 = new Date(triggerTime.getTime() + 16 * 3600 * 1000) // below threshold → exit before this
 
-    // All events well above convergence threshold → no FUNDING_FLOOR exit
-    const allFundingEvents = makeFundingEvents(triggerTime, TRIGGER_RATE, [TRIGGER_RATE, TRIGGER_RATE, TRIGGER_RATE])
+    const allFundingEvents = [
+      makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE }),
+      makeFundingEvent({ fundingTime: t1, fundingRate: 0.003 }),
+      makeFundingEvent({ fundingTime: t2, fundingRate: 0.00015 }),
+    ]
 
-    const widePostSeconds = cfg.max_carry_funding_events * 9 * 3600
-    const perpWindow = buildWideWindow(triggerTime, basePrice, widePostSeconds)
-    const spotWindow = buildWideWindow(triggerTime, basePrice, widePostSeconds)
+    const perpWindow = buildWideWindow(triggerTime, basePrice, 18 * 3600)
+    const spotWindow = buildWideWindow(triggerTime, basePrice, 18 * 3600)
     const perpEvent = makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE })
 
     const result = strategy.executeSpotFutures(
@@ -111,10 +113,49 @@ describe('E2E: SpotFuturesStrategy', () => {
     expect(result).not.toBeNull()
     if (!result) throw new Error('expected result')
 
-    expect(result.exit_reason).toBe('DEADLINE')
-    expect(result.funding_events_collected).toBe(cfg.max_carry_funding_events)
-    // Alias fast path: exit lands exactly at the 2nd funding event candle (triggerTime + 8h)
-    expect(result.hold_duration).toBe(8 * 3600 + makeConfig().entry_offset_seconds)
+    expect(result.exit_reason).toBe('FUNDING_FLOOR')
+    // Trigger + t1 accrue; t2 is peeked and skipped
+    expect(result.funding_events_collected).toBe(2)
+    expect(result.pnl.funding_pnl).toBeCloseTo(TRIGGER_RATE + 0.003, 10)
+    // hold_duration = (t2 - exit_offset) - (triggerTime - entry_offset) = 16h
+    expect(result.hold_duration).toBe(16 * 3600)
+  })
+
+  it('returns null when all funding events remain above threshold (open at end of data)', () => {
+    const strategy = new SpotFuturesStrategy()
+    strategy.initialize(makeConfig(), BINANCE_FEES)
+
+    const triggerTime = new Date('2025-06-01T00:00:00Z')
+    const basePrice = 50000
+
+    // All future events above convergence threshold — no funding floor exit fires
+    const allFundingEvents: FundingEvent[] = [
+      makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE }),
+    ]
+    for (let i = 1; i <= 5; i++) {
+      allFundingEvents.push(
+        makeFundingEvent({
+          fundingTime: new Date(triggerTime.getTime() + i * 8 * 3600 * 1000),
+          fundingRate: TRIGGER_RATE,
+        })
+      )
+    }
+
+    const perpWindow = buildWideWindow(triggerTime, basePrice, 30)
+    const spotWindow = buildWideWindow(triggerTime, basePrice, 30)
+    const perpEvent = makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE })
+
+    const result = strategy.executeSpotFutures(
+      perpEvent,
+      perpWindow,
+      spotWindow,
+      allFundingEvents,
+      BINANCE_FEES,
+      SPOT_FEE
+    )
+
+    expect(result).toBeNull()
+    expect(strategy.openAtEndCount).toBe(1)
   })
 
   it('rejects entry when expected profit < minTotalProfit (UNFILLED)', () => {
@@ -137,12 +178,13 @@ describe('E2E: SpotFuturesStrategy', () => {
     )
 
     expect(result).toBeNull()
+    // openAtEndCount must NOT be incremented for entry rejections
+    expect(strategy.openAtEndCount).toBe(0)
   })
 
   it('T_exit_first gate: hold_duration >= one funding cycle even with tiny TP threshold', () => {
     const strategy = new SpotFuturesStrategy()
-    // spreadTakeProfit so small it would fire immediately — but should be gated until T_exit_first
-    strategy.initialize(makeConfig({ spreadTakeProfit: 0.000001 }), BINANCE_FEES)
+    strategy.initialize(makeConfig(), BINANCE_FEES)
 
     const triggerTime = new Date('2025-06-01T00:00:00Z')
     const basePrice = 50000
@@ -169,11 +211,9 @@ describe('E2E: SpotFuturesStrategy', () => {
     expect(result).not.toBeNull()
     if (!result) throw new Error('expected result')
 
-    // At least one funding event collected before gate opened
-    expect(result.funding_events_collected).toBeGreaterThanOrEqual(1)
-    // Hold duration >= one funding cycle minus small exit offset
-    const minHoldSeconds = 8 * 3600 - 10
-    expect(result.hold_duration).toBeGreaterThanOrEqual(minHoldSeconds)
+    expect(result.funding_events_collected).toBe(1)
+    // Hold duration = exactly 8h (trigger to next event, both offset-adjusted)
+    expect(result.hold_duration).toBe(8 * 3600)
   })
 
   it('shouldTrigger returns false for negative and sub-threshold funding', () => {
@@ -187,7 +227,7 @@ describe('E2E: SpotFuturesStrategy', () => {
     expect(strategy.shouldTrigger(makeFundingEvent({ fundingTime: t, fundingRate: TRIGGER_RATE }))).toBe(true)
   })
 
-  it('alias mode: spread_pnl ≈ 0 and net_pnl ≈ funding_pnl - fees', () => {
+  it('alias mode: spread_pnl = 0 and net_pnl = funding_pnl - fees', () => {
     const strategy = new SpotFuturesStrategy()
     strategy.initialize(makeConfig(), BINANCE_FEES)
 
@@ -216,14 +256,17 @@ describe('E2E: SpotFuturesStrategy', () => {
     expect(result).not.toBeNull()
     if (!result) throw new Error('expected result')
 
-    expect(Math.abs(result.pnl.spread_pnl)).toBeLessThan(0.001) // alias mode
+    // F3: alias mid-price → spread_pnl = 0 exactly
+    expect(result.pnl.spread_pnl).toBe(0)
     expect(Math.abs(result.pnl.delta_pnl)).toBeLessThan(TOLERANCE)
 
     const expectedFees = 2 * SPOT_FEE + 2 * BINANCE_FEES.taker_fee
     expect(Math.abs(result.pnl.fees - expectedFees)).toBeLessThan(TOLERANCE)
 
-    // net_pnl = spread_pnl + funding_pnl - fees ≈ funding_pnl - fees (spread ≈ 0)
-    expect(Math.abs(result.pnl.net_pnl - (result.pnl.funding_pnl - expectedFees))).toBeLessThan(0.001)
+    // Reconciliation: net_pnl = spread_pnl + funding_pnl - fees = funding_pnl - fees
+    expect(Math.abs(result.pnl.net_pnl - (result.pnl.funding_pnl - expectedFees))).toBeLessThan(TOLERANCE)
+    // Only trigger event accrued; next rate (0.00015) was peeked and not collected
+    expect(result.pnl.funding_pnl).toBeCloseTo(TRIGGER_RATE, 10)
   })
 
   it('returns null when no entry candle exists', () => {
@@ -247,5 +290,23 @@ describe('E2E: SpotFuturesStrategy', () => {
     )
 
     expect(result).toBeNull()
+    expect(strategy.openAtEndCount).toBe(0)
+  })
+
+  it('openAtEndCount resets on re-initialize', () => {
+    const strategy = new SpotFuturesStrategy()
+    strategy.initialize(makeConfig(), BINANCE_FEES)
+
+    const triggerTime = new Date('2025-06-01T00:00:00Z')
+    const allFundingEvents = [makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE })]
+    const perpWindow = buildWideWindow(triggerTime, 50000, 30)
+    const spotWindow = buildWideWindow(triggerTime, 50000, 30)
+    const perpEvent = makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE })
+
+    strategy.executeSpotFutures(perpEvent, perpWindow, spotWindow, allFundingEvents, BINANCE_FEES, SPOT_FEE)
+    expect(strategy.openAtEndCount).toBe(1)
+
+    strategy.initialize(makeConfig(), BINANCE_FEES)
+    expect(strategy.openAtEndCount).toBe(0)
   })
 })
