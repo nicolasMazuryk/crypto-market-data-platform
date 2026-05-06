@@ -16,4 +16,4 @@ minTotalProfit: 0.0005 # 0.05% — minimum expected net profit at entry
 fundingConvergenceThreshold: 0.0002 # exit when rate falls to/below 0.02%
 spreadWideningThreshold: 0.03 # 3% spread widening triggers stop-loss
 spreadTakeProfit: 0.005 # 0.5% spread narrowing triggers take-profit
-max_carry_funding_events: 336 # safety bound: force exit after 336 funding cycles (~14 days)
+max_carry_funding_events: 8 # safety bound: force exit after 8 funding cycles (~3 days)
