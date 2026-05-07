@@ -14,10 +14,7 @@ import type { FundingEvent, SkipReason } from '../data/types.js'
 import { createStrategy } from '../strategies/registry.js'
 import type { TradeResult } from '../strategies/types.js'
 import type { Strategy5 } from '../strategies/strategy-5.js'
-import {
-  type SpotFuturesStrategy,
-  SPOT_FUTURES_ENTRY_OFFSET_SECONDS,
-} from '../strategies/strategy-spot-futures.js'
+import { type SpotFuturesStrategy, SPOT_FUTURES_ENTRY_OFFSET_SECONDS } from '../strategies/strategy-spot-futures.js'
 import { buildReport } from '../reporting/report-builder.js'
 import type { BacktestReport } from '../reporting/types.js'
 import { getGitCommit } from './utils.js'
@@ -72,9 +69,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     logger.info({ events: events.length, perp_exchange: sfConfig.perp_exchange }, 'Found positive funding events')
 
     // Wide window: spans the full remaining backtest period from any entry point.
-    const widePostSeconds = Math.ceil(
-      (new Date(base.end_date).getTime() - new Date(base.start_date).getTime()) / 1000
-    )
+    const widePostSeconds = Math.ceil((new Date(base.end_date).getTime() - new Date(base.start_date).getTime()) / 1000)
     const wideWindow: WindowConfig = {
       pre_funding_seconds: Math.max(base.window.pre_funding_seconds, SPOT_FUTURES_ENTRY_OFFSET_SECONDS + 10),
       post_funding_seconds: widePostSeconds,
@@ -86,7 +81,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
       pre_funding_seconds: SPOT_FUTURES_ENTRY_OFFSET_SECONDS + 30,
       post_funding_seconds: 30,
     }
-    const FETCH_CONCURRENCY_SF = isAlias ? 30 : 5
+    const SYMBOL_CONCURRENCY = isAlias ? 30 : 5
 
     // Pre-fetch funding events for all triggering symbols in one round-trip, eliminating
     // per-event queryAllFundingEventsInRange calls (dominant cost on exchanges with many markets).
@@ -98,59 +93,89 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
         ? await queryAllFundingEventsByExchange(sfConfig.perp_exchange, base.start_date, maxFetchEndDate, uniqueSymbols)
         : new Map<string, FundingEvent[]>()
 
-    for (let i = 0; i < events.length; i += FETCH_CONCURRENCY_SF) {
-      const batch = events.slice(i, i + FETCH_CONCURRENCY_SF)
+    // Group already-sorted events by symbol (queryPositiveFundingEvents returns funding_time ASC,
+    // so per-symbol arrays inherit ascending order).
+    const eventsBySymbolForRun = new Map<string, FundingEvent[]>()
+    for (const event of events) {
+      const arr = eventsBySymbolForRun.get(event.symbol) ?? []
+      arr.push(event)
+      eventsBySymbolForRun.set(event.symbol, arr)
+    }
 
-      const tuples = await Promise.all(
-        batch.map(async event => {
-          const endDate = new Date(base.end_date)
-          const symbolEvents = fundingEventsBySymbol.get(event.symbol) ?? []
-          const allFundingEvents = symbolEvents.filter(
-            e => e.funding_time >= event.funding_time && e.funding_time <= endDate
-          )
-          const [perpWindow, maybeSpotWindow] = await Promise.all([
-            fetchOrderbookWindow(
-              sfConfig.perp_exchange,
-              event.symbol,
-              event.funding_time,
-              isAlias ? aliasEntryWindow : wideWindow
-            ),
-            isAlias
-              ? Promise.resolve(null)
-              : fetchSpotOrderbookWindow(sfConfig.spot_exchange, event.symbol, event.funding_time, wideWindow),
-          ])
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          const spotWindow = isAlias ? perpWindow : maybeSpotWindow!
-          return { event, perpWindow, spotWindow, allFundingEvents }
+    const symbols = [...eventsBySymbolForRun.keys()]
+
+    for (let s = 0; s < symbols.length; s += SYMBOL_CONCURRENCY) {
+      const symBatch = symbols.slice(s, s + SYMBOL_CONCURRENCY)
+      const perSymbolResults = await Promise.all(
+        symBatch.map(async symbol => {
+          const symEvents = eventsBySymbolForRun.get(symbol) ?? []
+          const localTrades: TradeResult[] = []
+          let triggered = 0
+          let unfilled = 0
+          let dataRows = 0
+          let nextEntryAllowedMs = -Infinity
+
+          for (const event of symEvents) {
+            // Skip events whose entry would land inside an open position.
+            if (event.funding_time.getTime() < nextEntryAllowedMs) continue
+            if (!strategy.shouldTrigger(event)) continue
+
+            const symbolEvents = fundingEventsBySymbol.get(symbol) ?? []
+            const allFundingEvents = symbolEvents.filter(
+              e => e.funding_time >= event.funding_time && e.funding_time <= new Date(base.end_date)
+            )
+            const [perpWindow, maybeSpotWindow] = await Promise.all([
+              fetchOrderbookWindow(
+                sfConfig.perp_exchange,
+                event.symbol,
+                event.funding_time,
+                isAlias ? aliasEntryWindow : wideWindow
+              ),
+              isAlias
+                ? Promise.resolve(null)
+                : fetchSpotOrderbookWindow(sfConfig.spot_exchange, event.symbol, event.funding_time, wideWindow),
+            ])
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const spotWindow = isAlias ? perpWindow : maybeSpotWindow!
+            dataRows += perpWindow.length + (isAlias ? 0 : spotWindow.length)
+
+            triggered++
+            const result = sfStrategy.executeSpotFutures(
+              event,
+              perpWindow,
+              spotWindow,
+              allFundingEvents,
+              perpFeeSchedule,
+              spotFee
+            )
+            if (result) {
+              localTrades.push(result)
+              const exitMs = result.exit_time
+                ? result.exit_time.getTime()
+                : event.funding_time.getTime() + result.hold_duration * 1000
+              nextEntryAllowedMs = exitMs
+            } else {
+              unfilled++
+            }
+          }
+          return { localTrades, triggered, unfilled, dataRows }
         })
       )
 
-      for (const { event, perpWindow, spotWindow, allFundingEvents } of tuples) {
-        totalDataRows += perpWindow.length + (isAlias ? 0 : spotWindow.length)
-
-        if (!strategy.shouldTrigger(event)) continue
-        triggeredCount++
-
-        const result = sfStrategy.executeSpotFutures(
-          event,
-          perpWindow,
-          spotWindow,
-          allFundingEvents,
-          perpFeeSchedule,
-          spotFee
-        )
-
-        if (result) {
-          trades.push(result)
-        } else {
-          unfilledCount++
-        }
+      for (const r of perSymbolResults) {
+        trades.push(...r.localTrades)
+        triggeredCount += r.triggered
+        unfilledCount += r.unfilled
+        totalDataRows += r.dataRows
       }
 
-      if (i > 0 && i % 100 === 0) {
-        logger.info({ processed: i, total: events.length }, 'Spot-futures backtest progress')
+      if (s > 0 && s % 100 === 0) {
+        logger.info({ processed: s, total: symbols.length }, 'Spot-futures backtest progress')
       }
     }
+
+    // Sort trades by funding_time so the equity curve advances monotonically in time.
+    trades.sort((a, b) => a.funding_time.getTime() - b.funding_time.getTime())
 
     logger.info(
       { perp_exchange: sfConfig.perp_exchange, durationMs: Date.now() - sfStartMs, trades: trades.length },
@@ -290,9 +315,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   }
 
   const tradesOpenAtEnd =
-    strategyConfig.strategy_id === 'strategy_spot_futures'
-      ? (strategy as SpotFuturesStrategy).openAtEndCount
-      : 0
+    strategyConfig.strategy_id === 'strategy_spot_futures' ? (strategy as SpotFuturesStrategy).openAtEndCount : 0
 
   logger.info(
     {

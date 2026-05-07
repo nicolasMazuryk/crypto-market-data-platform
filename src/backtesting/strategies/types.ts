@@ -36,6 +36,8 @@ export interface TradeResult {
   entry_spread?: number
   /** (perp_exit - spot_exit) / spot_entry at exit (spot-futures only) */
   exit_spread?: number
+  /** Actual exit time of the trade; used by the runner to prevent re-entry while a position is open */
+  exit_time?: Date
 }
 
 /** Base strategy interface that all strategies implement */

@@ -45,6 +45,7 @@
     "autoresearch:run": "tsx src/autoresearch/orchestrate.ts --run",
     "autoresearch:list": "tsx src/autoresearch/orchestrate.ts --list",
     "autoresearch:dashboard": "tsx src/autoresearch/orchestrate.ts --dashboard",
+    "autoresearch:collect-best": "tsx scripts/collect-best-configs.ts",
     "remote:clickhouse:query": "bash scripts/remote-clickhouse-query.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

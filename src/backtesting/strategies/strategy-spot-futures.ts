@@ -317,6 +317,7 @@ export class SpotFuturesStrategy implements BaseStrategy {
       cumulative_funding_rate: funding_pnl,
       entry_spread,
       exit_spread,
+      exit_time: logicalExitTime,
     }
   }
 }

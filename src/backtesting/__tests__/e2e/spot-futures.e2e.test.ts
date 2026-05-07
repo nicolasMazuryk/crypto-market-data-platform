@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SpotFuturesStrategy } from '../../strategies/strategy-spot-futures.js'
+import { SpotFuturesStrategy, SPOT_FUTURES_EXIT_OFFSET_SECONDS } from '../../strategies/strategy-spot-futures.js'
 import { buildWindow, makeFundingEvent, BINANCE_FEES } from './fixtures.js'
 import type { FundingEvent } from '../../data/types.js'
 
@@ -129,9 +129,7 @@ describe('E2E: SpotFuturesStrategy', () => {
     const basePrice = 50000
 
     // All future events above convergence threshold — no funding floor exit fires
-    const allFundingEvents: FundingEvent[] = [
-      makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE }),
-    ]
+    const allFundingEvents: FundingEvent[] = [makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE })]
     for (let i = 1; i <= 5; i++) {
       allFundingEvents.push(
         makeFundingEvent({
@@ -291,6 +289,39 @@ describe('E2E: SpotFuturesStrategy', () => {
 
     expect(result).toBeNull()
     expect(strategy.openAtEndCount).toBe(0)
+  })
+
+  it('exit_time is populated with the logical exit time', () => {
+    const strategy = new SpotFuturesStrategy()
+    strategy.initialize(makeConfig(), BINANCE_FEES)
+
+    const triggerTime = new Date('2025-06-01T00:00:00Z')
+    const nextFundingTime = new Date(triggerTime.getTime() + 8 * 3600 * 1000)
+
+    const allFundingEvents = [
+      makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE }),
+      makeFundingEvent({ fundingTime: nextFundingTime, fundingRate: 0.00015 }),
+    ]
+
+    const perpWindow = buildWideWindow(triggerTime, 50000)
+    const spotWindow = buildWideWindow(triggerTime, 50000)
+    const perpEvent = makeFundingEvent({ fundingTime: triggerTime, fundingRate: TRIGGER_RATE })
+
+    const result = strategy.executeSpotFutures(
+      perpEvent,
+      perpWindow,
+      spotWindow,
+      allFundingEvents,
+      BINANCE_FEES,
+      SPOT_FEE
+    )
+
+    expect(result).not.toBeNull()
+    if (!result) throw new Error('expected result')
+
+    expect(result.exit_time).toBeInstanceOf(Date)
+    const expectedExitTime = new Date(nextFundingTime.getTime() - SPOT_FUTURES_EXIT_OFFSET_SECONDS * 1000)
+    expect(result.exit_time!.getTime()).toBe(expectedExitTime.getTime())
   })
 
   it('openAtEndCount resets on re-initialize', () => {
