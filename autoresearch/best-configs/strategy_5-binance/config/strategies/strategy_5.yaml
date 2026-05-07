@@ -1,0 +1,16 @@
+# Strategy 5: Main-Exchange-Driven Cross-Exchange Short
+# Short on a less-negative target exchange when the main (most-liquid) exchange
+# has a deeply negative funding event. Target follows main; short captures
+# directional drop while paying smaller funding cost.
+
+strategy_id: "strategy_5"
+direction: "short"
+main_exchange: "binance"                    # Most-liquid exchange (leader)
+exclude_exchanges: []                        # Additional exchanges to skip (main is auto-excluded)
+main_exchange_funding_threshold: 0.013       # Min |F| on main_exchange (e.g., 0.5%)
+min_funding_spread: 0.013                    # Min (F_target - F_main); main must be more negative by this much
+stop_loss: 0.004                             # 0.4% above entry (short stop)
+tp_multiplier: 0.6                           # TP_distance = |F_main| * tp_multiplier
+entry_offset_seconds: 3                      # Enter at T_funding - 3s
+deadline_seconds: 120                        # Force exit by T_funding + 120s
+funding_applied_on_same_second: true

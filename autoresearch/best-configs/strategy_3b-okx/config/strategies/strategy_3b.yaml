@@ -1,0 +1,13 @@
+# Strategy 3B: Negative Funding SHORT - Ride the Drop (TP = F + 0.6%)
+# Short to profit from the price drop, TP variant B
+
+strategy_id: "strategy_3b"
+direction: "short"
+funding_threshold: 0.016      # 1.60%
+entry_offset_seconds: 1       # Enter at T_funding - 1s
+stop_loss: 0.020              # 2.0%
+tp_mode: "B"
+tp_multiplier: 1.5            # Not used in mode B, but required
+tp_addend: 0.0060             # TP = F + 0.60%
+deadline_seconds: 60          # Max seconds after T_funding before forced exit
+funding_applied_on_same_second: true

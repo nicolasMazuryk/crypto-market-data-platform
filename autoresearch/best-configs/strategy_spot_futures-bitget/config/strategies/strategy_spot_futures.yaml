@@ -1,0 +1,7 @@
+strategy_id: strategy_spot_futures
+exchange: bitget
+perp_exchange: bitget
+spot_exchange: bitget
+F_threshold: 0.0015
+minTotalProfit: -0.003
+fundingConvergenceThreshold: 0

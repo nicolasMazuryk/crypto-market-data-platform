@@ -1,0 +1,7 @@
+strategy_id: strategy_spot_futures
+exchange: kucoin
+perp_exchange: kucoin
+spot_exchange: kucoin
+F_threshold: 0.0011
+minTotalProfit: -0.0024
+fundingConvergenceThreshold: 0.000001

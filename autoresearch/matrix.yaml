@@ -9,176 +9,176 @@
 #   agent: claude | claude   (default: claude) — which coding agent drives the propose step
 #
 # Settings applied to every row unless overridden by a per-row field.
-default_iterations: 40
-max_parallel: 2            # concurrent runs
-max_parallel_backtests: 1  # concurrent ClickHouse-hitting backtests (1 = serialized pre-fetches avoid SSH tunnel overload)
+default_iterations: 27
+max_parallel: 3            # concurrent runs
+max_parallel_backtests: 3  # concurrent ClickHouse-hitting backtests (1 = serialized pre-fetches avoid SSH tunnel overload)
 iteration_timeout_ms: 600000
 backtest_timeout_ms: 600000
 per_iteration_budget_usd: 0.75
 
 runs:
-  # # strategy_1
-  # - strategy: strategy_1
-  #   exchange: binance
-  #   agent: claude
-  # - strategy: strategy_1
-  #   exchange: bybit
-  #   agent: claude
-  # - strategy: strategy_1
-  #   exchange: okx
-  #   agent: claude
-  # - strategy: strategy_1
-  #   exchange: bitget
-  #   agent: claude
-  # - strategy: strategy_1
-  #   exchange: gateio
-  #   agent: claude
-  # - strategy: strategy_1
-  #   exchange: kucoin
-  #   agent: claude
-
-  # # strategy_2
-  # - strategy: strategy_2
-  #   exchange: binance
-  #   agent: claude
-  # - strategy: strategy_2
-  #   exchange: bybit
-  #   agent: claude
-  # - strategy: strategy_2
-  #   exchange: okx
-  #   agent: claude
-  # - strategy: strategy_2
-  #   exchange: bitget
-  #   agent: claude
-  # - strategy: strategy_2
-  #   exchange: gateio
-  #   agent: claude
-  # - strategy: strategy_2
-  #   exchange: kucoin
-  #   agent: claude
-
-  # # strategy_3a
-  # - strategy: strategy_3a
-  #   exchange: binance
-  #   agent: claude
-  # - strategy: strategy_3a
-  #   exchange: bybit
-  #   agent: claude
-  # - strategy: strategy_3a
-  #   exchange: okx
-  #   agent: claude
-  # - strategy: strategy_3a
-  #   exchange: bitget
-  #   agent: claude
-  # - strategy: strategy_3a
-  #   exchange: gateio
-  #   agent: claude
-  # - strategy: strategy_3a
-  #   exchange: kucoin
-  #   agent: claude
-
-  # # strategy_3b
-  # - strategy: strategy_3b
-  #   exchange: binance
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: bybit
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: okx
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: bitget
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: gateio
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: kucoin
-  #   agent: claude
-
-  # # strategy_4_1a
-  # - strategy: strategy_4_1a
-  #   exchange: binance
-  #   agent: claude
-  # - strategy: strategy_4_1a
-  #   exchange: bybit
-  #   agent: claude
-  # - strategy: strategy_4_1a
-  #   exchange: okx
-  #   agent: claude
-  # - strategy: strategy_4_1a
-  #   exchange: bitget
-  #   agent: claude
-  # - strategy: strategy_4_1a
-  #   exchange: gateio
-  #   agent: claude
-  # - strategy: strategy_4_1a
-  #   exchange: kucoin
-  #   agent: claude
-
-  # # strategy_4_2a
-  # - strategy: strategy_4_2a
-  #   exchange: binance
-  #   agent: claude
-  # - strategy: strategy_4_2a
-  #   exchange: bybit
-  #   agent: claude
-  # - strategy: strategy_4_2a
-  #   exchange: okx
-  #   agent: claude
-  # - strategy: strategy_4_2a
-  #   exchange: bitget
-  #   agent: claude
-  # - strategy: strategy_4_2a
-  #   exchange: gateio
-  #   agent: claude
-  # - strategy: strategy_4_2a
-  #   exchange: kucoin
-  #   agent: claude
-
-  # # strategy_4_3a
-  # - strategy: strategy_4_3a
-  #   exchange: binance
-  #   agent: claude
-  # - strategy: strategy_4_3a
-  #   exchange: bybit
-  #   agent: claude
-  # - strategy: strategy_4_3a
-  #   exchange: okx
-  #   agent: claude
-  # - strategy: strategy_4_3a
-  #   exchange: bitget
-  #   agent: claude
-  # - strategy: strategy_4_3a
-  #   exchange: gateio
-  #   agent: claude
-  # - strategy: strategy_4_3a
-  #   exchange: kucoin
-  #   agent: claude
-
-  # # strategy_5
-  # - strategy: strategy_5
-  #   main_exchange: binance
-  #   exclude_exchanges: []
-  #   agent: claude
-
-  # strategy_spot_futures
-  - strategy: strategy_spot_futures
+  # strategy_1
+  - strategy: strategy_1
     exchange: binance
     agent: claude
-  - strategy: strategy_spot_futures
+  - strategy: strategy_1
     exchange: bybit
     agent: claude
-  - strategy: strategy_spot_futures
+  - strategy: strategy_1
     exchange: okx
     agent: claude
-  - strategy: strategy_spot_futures
+  - strategy: strategy_1
     exchange: bitget
     agent: claude
-  - strategy: strategy_spot_futures
+  - strategy: strategy_1
     exchange: gateio
     agent: claude
-  - strategy: strategy_spot_futures
+  - strategy: strategy_1
     exchange: kucoin
     agent: claude
+
+  # strategy_2
+  - strategy: strategy_2
+    exchange: binance
+    agent: claude
+  - strategy: strategy_2
+    exchange: bybit
+    agent: claude
+  - strategy: strategy_2
+    exchange: okx
+    agent: claude
+  - strategy: strategy_2
+    exchange: bitget
+    agent: claude
+  - strategy: strategy_2
+    exchange: gateio
+    agent: claude
+  - strategy: strategy_2
+    exchange: kucoin
+    agent: claude
+
+  # strategy_3a
+  - strategy: strategy_3a
+    exchange: binance
+    agent: claude
+  - strategy: strategy_3a
+    exchange: bybit
+    agent: claude
+  - strategy: strategy_3a
+    exchange: okx
+    agent: claude
+  - strategy: strategy_3a
+    exchange: bitget
+    agent: claude
+  - strategy: strategy_3a
+    exchange: gateio
+    agent: claude
+  - strategy: strategy_3a
+    exchange: kucoin
+    agent: claude
+
+  # strategy_3b
+  - strategy: strategy_3b
+    exchange: binance
+    agent: claude
+  - strategy: strategy_3b
+    exchange: bybit
+    agent: claude
+  - strategy: strategy_3b
+    exchange: okx
+    agent: claude
+  - strategy: strategy_3b
+    exchange: bitget
+    agent: claude
+  - strategy: strategy_3b
+    exchange: gateio
+    agent: claude
+  - strategy: strategy_3b
+    exchange: kucoin
+    agent: claude
+
+  # strategy_4_1a
+  - strategy: strategy_4_1a
+    exchange: binance
+    agent: claude
+  - strategy: strategy_4_1a
+    exchange: bybit
+    agent: claude
+  - strategy: strategy_4_1a
+    exchange: okx
+    agent: claude
+  - strategy: strategy_4_1a
+    exchange: bitget
+    agent: claude
+  - strategy: strategy_4_1a
+    exchange: gateio
+    agent: claude
+  - strategy: strategy_4_1a
+    exchange: kucoin
+    agent: claude
+
+  # strategy_4_2a
+  - strategy: strategy_4_2a
+    exchange: binance
+    agent: claude
+  - strategy: strategy_4_2a
+    exchange: bybit
+    agent: claude
+  - strategy: strategy_4_2a
+    exchange: okx
+    agent: claude
+  - strategy: strategy_4_2a
+    exchange: bitget
+    agent: claude
+  - strategy: strategy_4_2a
+    exchange: gateio
+    agent: claude
+  - strategy: strategy_4_2a
+    exchange: kucoin
+    agent: claude
+
+  # strategy_4_3a
+  - strategy: strategy_4_3a
+    exchange: binance
+    agent: claude
+  - strategy: strategy_4_3a
+    exchange: bybit
+    agent: claude
+  - strategy: strategy_4_3a
+    exchange: okx
+    agent: claude
+  - strategy: strategy_4_3a
+    exchange: bitget
+    agent: claude
+  - strategy: strategy_4_3a
+    exchange: gateio
+    agent: claude
+  - strategy: strategy_4_3a
+    exchange: kucoin
+    agent: claude
+
+  # strategy_5
+  - strategy: strategy_5
+    main_exchange: binance
+    exclude_exchanges: []
+    agent: claude
+
+  # strategy_spot_futures
+  # - strategy: strategy_spot_futures
+  #   exchange: binance
+  #   agent: claude
+  # - strategy: strategy_spot_futures
+  #   exchange: bybit
+  #   agent: claude
+  # - strategy: strategy_spot_futures
+  #   exchange: okx
+  #   agent: claude
+  # - strategy: strategy_spot_futures
+  #   exchange: bitget
+  #   agent: claude
+  # - strategy: strategy_spot_futures
+  #   exchange: gateio
+  #   agent: claude
+  # - strategy: strategy_spot_futures
+  #   exchange: kucoin
+  #   agent: claude

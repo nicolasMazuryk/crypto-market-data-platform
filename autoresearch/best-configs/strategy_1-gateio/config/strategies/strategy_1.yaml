@@ -1,0 +1,9 @@
+# Strategy 1: Negative Funding LONG - Instant Exit
+# Collect funding fee, immediately exit to minimize delta exposure
+
+strategy_id: "strategy_1"
+direction: "long"
+funding_threshold: 0.0135      # 1.35%
+entry_offset_seconds: 5       # Enter at T_funding - 5s
+exit_offset_seconds: 2        # Exit at T_funding + 2s
+funding_applied_on_same_second: false
