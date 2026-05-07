@@ -34,7 +34,7 @@ Autonomous strategy parameter tuning. A Claude agent proposes YAML edits one par
 
 ```bash
 npm run autoresearch -- --baseline-only     # Iter 0 only (no agent), all rows
-npm run autoresearch                        # Run all matrix rows
+caffeinate npm run autoresearch                        # Run all matrix rows
 npm run autoresearch -- --run <tag>         # Run a single tag
 npm run autoresearch -- --reset             # Wipe all tags (worktrees + branches + state + dashboard)
 npm run autoresearch -- --reset --run strategy_1-binance  # Wipe a single tag only
