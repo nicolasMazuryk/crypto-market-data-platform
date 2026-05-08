@@ -28,8 +28,8 @@ strategies:
     enabled: true
     negativeFundingThresholdPercent: -0.4  # % — entry threshold
     entryOffsetSeconds: 2                   # s
-    stopLossPercent: 2.0                    # %
-    tpVariantAMultiplier: 1.5              # x
+    stopLossPercent: 1.0                    # %
+    tpVariantAMultiplier: 1.8              # x
     tpVariantBOffsetPercent: 0.4           # % — unused in 3a
     deadlineSeconds: 3300                   # s — max position lifetime (55 minutes)
     amountUsd: 20                           # USD

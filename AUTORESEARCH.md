@@ -40,6 +40,9 @@ npm run autoresearch -- --reset             # Wipe all tags (worktrees + branche
 npm run autoresearch -- --reset --run strategy_1-binance  # Wipe a single tag only
 npm run autoresearch:list                   # Print all tags and iteration counts
 npm run autoresearch:dashboard              # Rebuild dashboard.json and exit
+npm run autoresearch:collect-best
+npm run autoresearch:seed-from-best -- --strategy strategy_spot_futures
+npm run autoresearch:seed-from-best -- --tags strategy_spot_futures-binance 
 ```
 
 If an agent needs direct remote access to the remote server which hosts ClickHouse database:
