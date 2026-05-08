@@ -183,7 +183,7 @@ export class SpotFuturesStrategy implements BaseStrategy {
       return null
     }
 
-    const T_exit_first = new Date(nextEvents[0].funding_time.getTime() - SPOT_FUTURES_EXIT_OFFSET_SECONDS * 1000)
+    const T_exit_first = new Date(nextEvents[0]!.funding_time.getTime() - SPOT_FUTURES_EXIT_OFFSET_SECONDS * 1000)
 
     let funding_pnl = 0
     let funding_events_collected = 0
