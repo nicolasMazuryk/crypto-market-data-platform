@@ -84,6 +84,22 @@ async function branchExists(repoRoot: string, branch: string): Promise<boolean> 
   return result.code === 0
 }
 
+async function syncBranchToHead(
+  repoRoot: string,
+  branchName: string,
+  mainHead: string,
+  worktreeInfos: WorktreeInfo[],
+): Promise<void> {
+  const checkedOutElsewhere = worktreeInfos.some(w => w.branch === `refs/heads/${branchName}`)
+  if (checkedOutElsewhere) return
+
+  const branchTip = (await runGit(repoRoot, ['rev-parse', branchName], 'branch tip')).trim()
+  const result = await execGit(repoRoot, ['merge-base', '--is-ancestor', mainHead, branchTip])
+  if (result.code === 0) return
+
+  await runGit(repoRoot, ['branch', '-f', branchName, mainHead], `sync ${branchName} to HEAD`)
+}
+
 export interface CreateWorktreeOptions {
   repoRoot: string
   spec: RunSpec
@@ -110,7 +126,11 @@ export async function ensureWorktree(opts: CreateWorktreeOptions): Promise<Workt
 
   if (reset && fs.existsSync(worktreePath)) {
     await removeWorktree(repoRoot, spec.tag)
-    // Delete the workspace-unique branch so the new worktree starts from current HEAD.
+    // Delete the preferred branch so the new worktree starts fresh from HEAD.
+    if (await branchExists(repoRoot, preferredBranch)) {
+      await runGit(repoRoot, ['branch', '-D', preferredBranch], 'delete preferred branch for reset')
+    }
+    // Delete the workspace-unique branch too.
     const uniqueBranch = uniqueBranchName(repoRoot, spec.tag)
     if (await branchExists(repoRoot, uniqueBranch)) {
       await runGit(repoRoot, ['branch', '-D', uniqueBranch], 'delete unique branch for reset')
@@ -128,8 +148,10 @@ export async function ensureWorktree(opts: CreateWorktreeOptions): Promise<Workt
 
   if (!alreadyAttached) {
     fs.mkdirSync(path.dirname(worktreePath), { recursive: true })
+    const mainHead = (await runGit(repoRoot, ['rev-parse', 'HEAD'], 'main HEAD')).trim()
     const exists = await branchExists(repoRoot, preferredBranch)
     if (exists && !preferredBranchLocked) {
+      await syncBranchToHead(repoRoot, preferredBranch, mainHead, worktreeInfos)
       await runGit(repoRoot, ['worktree', 'add', worktreePath, preferredBranch], 'attach existing branch')
     } else if (exists && preferredBranchLocked) {
       // Preferred branch is checked out in another worktree (e.g. a different workspace).
@@ -137,6 +159,7 @@ export async function ensureWorktree(opts: CreateWorktreeOptions): Promise<Workt
       branch = uniqueBranchName(repoRoot, spec.tag)
       const uniqueExists = await branchExists(repoRoot, branch)
       if (uniqueExists) {
+        await syncBranchToHead(repoRoot, branch, mainHead, worktreeInfos)
         await runGit(repoRoot, ['worktree', 'add', worktreePath, branch], 'attach unique branch')
       } else {
         await runGit(repoRoot, ['worktree', 'add', '-b', branch, worktreePath, 'HEAD'], 'create unique branch')
