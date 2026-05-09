@@ -1,4 +1,5 @@
 import { getClickHouseClient } from '../client.js'
+import { withClickHouseRetry } from '../retry.js'
 import type { OrderbookRow } from '../types.js'
 
 const INSERT_BATCH_SIZE = 10_000
@@ -132,7 +133,6 @@ export async function queryOrderbooks(
   startTime?: string,
   endTime?: string
 ): Promise<OrderbookRow[]> {
-  const client = getClickHouseClient()
   const filters = ['exchange = {exchange: String}', 'symbol = {symbol: String}']
   const queryParams: Record<string, string> = { exchange, symbol }
 
@@ -146,13 +146,15 @@ export async function queryOrderbooks(
     queryParams.endTime = endTime
   }
 
-  const result = await client.query({
-    query: `SELECT ${ORDERBOOK_COLUMNS} FROM orderbooks WHERE ${filters.join(' AND ')} ORDER BY ts ASC`,
-    query_params: queryParams,
-    format: 'JSONEachRow',
+  return withClickHouseRetry(async () => {
+    const client = getClickHouseClient()
+    const result = await client.query({
+      query: `SELECT ${ORDERBOOK_COLUMNS} FROM orderbooks WHERE ${filters.join(' AND ')} ORDER BY ts ASC`,
+      query_params: queryParams,
+      format: 'JSONEachRow',
+    })
+    return result.json<OrderbookRow>()
   })
-
-  return result.json<OrderbookRow>()
 }
 
 export async function* streamOrderbookRows(

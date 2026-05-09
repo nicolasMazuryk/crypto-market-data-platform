@@ -23,7 +23,11 @@ export interface BacktestRunOptions {
   retryDelayMs?: number
 }
 
-const DEFAULT_MAX_ATTEMPTS = 3
+// High cap: inner withClickHouseRetry handles transient socket errors without
+// restarting the backtest. This outer retry is a last-resort safety net for
+// crashes that happen before a wrapped query (e.g. during startup). The real
+// deadline is the per-attempt timeoutMs (backtest_timeout_ms), not this count.
+const DEFAULT_MAX_ATTEMPTS = 100
 // 15 s gives the SSH tunnel supervisor (2 s backoff + SSH handshake + possible
 // first-reconnect failure + 4 s second backoff + handshake) enough time to
 // re-establish the port forward before we retry the backtest.
