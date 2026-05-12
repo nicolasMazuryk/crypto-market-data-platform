@@ -39,7 +39,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
 
   // Create and initialize strategy
   const strategy = createStrategy(strategyId)
-  strategy.initialize(strategyConfig, feeSchedule, base.slippage.stop_order_slippage)
+  strategy.initialize(strategyConfig, feeSchedule, base.slippage.stop_order_slippage, base.funding_settlement)
 
   const trades: TradeResult[] = []
   const allSkipReasons: SkipReason[] = []

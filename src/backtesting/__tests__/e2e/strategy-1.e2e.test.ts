@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Strategy1 } from '../../strategies/strategy-1.js'
 import { buildWindow, makeFundingEvent, BINANCE_FEES } from './fixtures.js'
+import type { FundingSettlementConfig } from '../../config/schema.js'
 
 const TOLERANCE = 1e-10
 
@@ -80,5 +81,95 @@ describe('E2E: Strategy 1 — Instant Exit', () => {
     const fundingTime = new Date('2025-06-01T00:00:00Z')
     const event = makeFundingEvent({ fundingTime, fundingRate: 0.01 })
     expect(strategy.shouldTrigger(event)).toBe(false)
+  })
+})
+
+describe('E2E: Strategy 1 — Settlement Detection', () => {
+  it('Scenario Settlement: exit anchored to detected settlement + exit_offset', () => {
+    // Settlement detected at T+3 (big drop). exit_offset=2.
+    // Expected exitTs = T+3+2 = T+5. Funding received since exitTs >= settlementTs.
+    const settlementConfig: FundingSettlementConfig = { detection_window_seconds: 10, tp_post_settlement_buffer_seconds: 1 }
+    const strat = new Strategy1()
+    strat.initialize(
+      {
+        strategy_id: 'strategy_1',
+        direction: 'long',
+        funding_threshold: 0.004,
+        entry_offset_seconds: 5,
+        exit_offset_seconds: 2,
+        funding_applied_on_same_second: false,
+      },
+      BINANCE_FEES,
+      0,
+      settlementConfig
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const basePrice = 50000
+    const exitBidOpen = 49950 // price at T+5
+
+    const overrides = new Map<number, Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number }>>()
+    overrides.set(-5, { askOpen: basePrice + 5 }) // entry candle
+    // T+3: big settlement drop
+    overrides.set(3, { bidOpen: basePrice, bidHigh: basePrice + 10, bidLow: basePrice - 200 }) // drop=200 → settlement here
+    overrides.set(5, { bidOpen: exitBidOpen }) // exit candle at T+3+2=T+5
+
+    const window = buildWindow({ fundingTime, basePrice, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.015 })
+
+    const result = strat.execute(event, window)
+    if (!result) throw new Error('expected result')
+
+    expect(result.real_settlement_detected).toBe(true)
+    expect(result.real_settlement_ts).toBe(
+      new Date(fundingTime.getTime() + 3000).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19)
+    )
+    // Exit at T+5 (settlementTs T+3 + exit_offset 2)
+    const entryMs = fundingTime.getTime() - 5000
+    const exitMs = entryMs + result.hold_duration * 1000
+    expect(exitMs).toBe(fundingTime.getTime() + 5000)
+    // Funding received: entry(T-5) <= settlement(T+3) <= exit(T+5)
+    expect(result.funding_received).toBe(true)
+  })
+
+  it('Scenario Settlement-Fallback: no drop detected → exit at T_funding + offset', () => {
+    // All candles flat (bid_open == bid_low), no red candle → fallback to T_funding.
+    const strat = new Strategy1()
+    strat.initialize(
+      {
+        strategy_id: 'strategy_1',
+        direction: 'long',
+        funding_threshold: 0.004,
+        entry_offset_seconds: 5,
+        exit_offset_seconds: 2,
+        funding_applied_on_same_second: false,
+      },
+      BINANCE_FEES,
+      0,
+      { detection_window_seconds: 10, tp_post_settlement_buffer_seconds: 1 }
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const basePrice = 50000
+
+    // Override all candles in [T, T+10] to have bid_open == bid_low (flat/green)
+    const overrides = new Map<number, Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number }>>()
+    overrides.set(-5, { askOpen: basePrice + 5 })
+    for (let i = 0; i <= 10; i++) {
+      overrides.set(i, { bidOpen: basePrice, bidHigh: basePrice + 5, bidLow: basePrice }) // flat
+    }
+
+    const window = buildWindow({ fundingTime, basePrice, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.015 })
+
+    const result = strat.execute(event, window)
+    if (!result) throw new Error('expected result')
+
+    expect(result.real_settlement_detected).toBe(false)
+    expect(result.real_settlement_drop).toBeNull()
+    // Falls back: exit at T+0+2 = T+2
+    const entryMs = fundingTime.getTime() - 5000
+    const exitMs = entryMs + result.hold_duration * 1000
+    expect(exitMs).toBe(fundingTime.getTime() + 2000)
   })
 })

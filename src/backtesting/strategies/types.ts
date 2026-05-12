@@ -1,4 +1,4 @@
-import type { ExitReason, StrategyConfig, FeeSchedule } from '../config/schema.js'
+import type { ExitReason, StrategyConfig, FeeSchedule, FundingSettlementConfig } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import type { PnlBreakdown } from '../pnl/types.js'
 
@@ -38,6 +38,12 @@ export interface TradeResult {
   exit_spread?: number
   /** Actual exit time of the trade; used by the runner to prevent re-entry while a position is open */
   exit_time?: Date
+  /** Detected real funding settlement timestamp (strategy_1, strategy_2 only) */
+  real_settlement_ts?: string
+  /** Whether the settlement was detected from a price drop (false = fallback to T_funding) */
+  real_settlement_detected?: boolean
+  /** bid_open - bid_low of the winning candle, null on fallback */
+  real_settlement_drop?: number | null
 }
 
 /** Base strategy interface that all strategies implement */
@@ -46,7 +52,7 @@ export interface BaseStrategy {
   readonly id: string
 
   /** Initialize with merged config */
-  initialize(config: StrategyConfig, feeSchedule: FeeSchedule, slippage: number): void
+  initialize(config: StrategyConfig, feeSchedule: FeeSchedule, slippage: number, fundingSettlement?: FundingSettlementConfig): void
 
   /** Check if this funding event meets selection criteria */
   shouldTrigger(event: FundingEvent): boolean

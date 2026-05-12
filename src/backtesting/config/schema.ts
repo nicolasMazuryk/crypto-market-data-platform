@@ -59,6 +59,14 @@ export interface ReportingConfig {
   output_dir: string
 }
 
+/** Funding settlement detection config */
+export interface FundingSettlementConfig {
+  /** Lookahead window after T_funding to search for the price-drop candle (1..60) */
+  detection_window_seconds: number
+  /** TP cannot become valid until real_settlement_ts + buffer (strategy_2 only; >= 0) */
+  tp_post_settlement_buffer_seconds: number
+}
+
 /** Base config shared by all strategies */
 export interface BaseConfig {
   /** Exchange to backtest (e.g., "binanceusdm") */
@@ -89,6 +97,8 @@ export interface BaseConfig {
    * Used by strategy_spot_futures; defaults to 0.001 if exchange not found.
    */
   spot_fees: Record<string, SpotFeeSchedule>
+  /** Funding settlement detection config */
+  funding_settlement: FundingSettlementConfig
 }
 
 /** Strategy 1: Negative Funding LONG - Instant Exit */

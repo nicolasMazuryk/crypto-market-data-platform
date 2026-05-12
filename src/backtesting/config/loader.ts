@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { parse } from 'yaml'
 
-import type { BaseConfig, ResolvedConfig, StrategyConfig, StrategyId, FeeSchedule, SpotFeeSchedule } from './schema.js'
+import type { BaseConfig, ResolvedConfig, StrategyConfig, StrategyId, FeeSchedule, SpotFeeSchedule, FundingSettlementConfig } from './schema.js'
 import { VALID_STRATEGY_IDS } from './schema.js'
 import { SUPPORTED_EXCHANGES } from './exchanges.js'
 
@@ -249,6 +249,21 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
     }
   }
 
+  // funding_settlement — optional with defaults
+  const fsRaw = merged.funding_settlement
+  let funding_settlement: FundingSettlementConfig
+  if (fsRaw === null || fsRaw === undefined) {
+    funding_settlement = { detection_window_seconds: 10, tp_post_settlement_buffer_seconds: 1 }
+  } else {
+    if (typeof fsRaw !== 'object' || Array.isArray(fsRaw)) {
+      throw new Error(`${ctx}: 'funding_settlement' must be an object`)
+    }
+    const fsObj = fsRaw as Record<string, unknown>
+    const dws = requireIntInRange(fsObj, 'detection_window_seconds', 1, 60, `${ctx}.funding_settlement`)
+    const tpBuf = requireNonNegativeNumber(fsObj, 'tp_post_settlement_buffer_seconds', `${ctx}.funding_settlement`)
+    funding_settlement = { detection_window_seconds: dws, tp_post_settlement_buffer_seconds: tpBuf }
+  }
+
   return {
     exchange,
     ...(symbol ? { symbol } : {}),
@@ -261,6 +276,7 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
     reporting,
     funding_time_tolerance_seconds,
     spot_fees,
+    funding_settlement,
   }
 }
 

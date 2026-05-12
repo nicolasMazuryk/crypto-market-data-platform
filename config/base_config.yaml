@@ -56,6 +56,10 @@ funding_time_tolerance_seconds: 60  # Max seconds between exchanges' funding tim
 
 # Spot exchange fee per order leg (market/taker rate).
 # Used by strategy_spot_futures; standard strategies use the 'fees' map above.
+funding_settlement:
+  detection_window_seconds: 10
+  tp_post_settlement_buffer_seconds: 1
+
 spot_fees:
   binance:       {fee: 0.001}   # 0.10%
   binanceusdm:   {fee: 0.001}
