@@ -1,0 +1,26 @@
+# ── Filtering ────────────────────────────────────────────────
+funding_rate_threshold: -0.003 # raw decimal; -0.003 means -0.3%
+threshold_mode: lte # lte | gte | abs_gte
+exchanges: [] # optional whitelist; [] = all
+symbols: [] # optional whitelist; [] = all
+date_range:
+  from: '2025-01-01T00:00:00Z' # optional, ISO-8601 UTC
+  to: # optional, leave empty for no upper bound
+
+# ── Window around funding event ──────────────────────────────
+pre_seconds: 30
+post_seconds: 180
+
+# ── Output ───────────────────────────────────────────────────
+output_dir: ./charts
+image_width: 1920
+image_height: 900
+overwrite: false # if false, skip when file exists
+
+# ── Performance ──────────────────────────────────────────────
+worker_count: null # null = os.cpus().length
+db_concurrency_per_worker: 4
+
+# ── Visual options ───────────────────────────────────────────
+show_fib_ladder: true
+show_spread_shade: false # faint band between bid/ask close (not yet implemented)
