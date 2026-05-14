@@ -1,0 +1,31 @@
+# live-configs/fleet.yaml — declarative fleet manifest
+#
+# Each enabled combination runs as execution-engine@<id>.service on the server.
+# One Docker container per combination, one strategy per container.
+#
+# id format:    <strategy>-<exchange>  (e.g. strategy_3a-bybit)
+# Metrics port: 9500–9599 (unique per combination)
+# Health port:  9600–9699 (unique per combination, no overlap with metrics)
+#
+# Operator workflow:
+#   1. Edit this file (and/or live-configs/strategies/<id>.yaml)
+#   2. Open PR, review, merge
+#   3. npm run fleet:generate-configs   # generate per-instance config files
+#   4. npm run fleet:reconcile          # diff vs server state and apply
+
+combinations: []
+
+# Example entry (uncomment and adjust when provisioning a combination):
+#
+#  - id: strategy_3a-bybit
+#    strategy: strategy_3a
+#    exchange: bybit
+#    enabled: true
+#    strategy_config: live-configs/strategies/strategy_3a-bybit.yaml
+#    runtime:
+#      metrics_port: 9501
+#      health_port: 9601
+#      log_level: info
+#    risk:
+#      maxConcurrentIntents: 200
+#      maxNotionalUsd: 50000

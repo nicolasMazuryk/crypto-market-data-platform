@@ -1,4 +1,5 @@
 import { parseArgs } from 'node:util'
+import { randomUUID } from 'node:crypto'
 
 import { loadEngineConfig } from './config/loader.js'
 import { createEventBus } from './core/bus.js'
@@ -13,6 +14,7 @@ import { createMarketMetadataProvider } from './markets/provider.js'
 import type { MarketMetadataProvider } from './markets/types.js'
 import {
   MetricsRegistry,
+  registerAccountConfigMetrics,
   registerBaseMetrics,
   registerExecutionMetrics,
   registerFundingMetrics,
@@ -48,10 +50,18 @@ import type { StrategyRegistry } from './strategies/registry.js'
 import { createStrategyEvaluator } from './strategies/evaluator.js'
 import type { StrategyEvaluator } from './strategies/types.js'
 import { createStrategy1Rule } from './strategies/strategy_1.js'
+import { createStrategy1WsRule } from './strategies/strategy_1_ws.js'
+import { createStrategy2Rule } from './strategies/strategy_2.js'
 import { createStrategy3Rule } from './strategies/strategy_3.js'
+import { createStrategy4_1aRule } from './strategies/strategy_4_1a.js'
+import { createStrategy4_2aRule } from './strategies/strategy_4_2a.js'
+import { createStrategy4_3aRule } from './strategies/strategy_4_3a.js'
+import { createStrategy6Rule } from './strategies/strategy_6.js'
 import { preflight } from './execution/preflight.js'
 import { createFundingEventScheduler } from './execution/scheduler.js'
 import type { FundingEventSchedulerHandle } from './execution/scheduler.js'
+import { createExchangeAccountConfigurer } from './execution/account-configurer.js'
+import type { ExchangeAccountConfigurer } from './execution/account-configurer.js'
 import type { StrategyConfig, StrategyId } from './strategies/types.js'
 import { openDb } from './persistence/db.js'
 import type { DbHandle } from './persistence/db.js'
@@ -60,7 +70,10 @@ import { createPersistenceWriter, drainWalEntriesToDb } from './persistence/writ
 import type { PersistenceWriterHandle } from './persistence/writer.js'
 import { runRecovery } from './recovery/index.js'
 import type { RecoveryOptions } from './recovery/index.js'
+import { insertRun } from './persistence/queries.js'
 
+import { createOrderWsAdapter } from './adapters/orderws/index.js'
+import type { ExchangeOrderWsAdapter } from './adapters/orderws/types.js'
 import type { EngineConfig } from './config/types.js'
 import type { Exchange } from './types/exchange.js'
 
@@ -75,6 +88,7 @@ export interface EngineHandle {
   rateLimiters?: Map<Exchange, RateLimiter>
   state?: StateStoreHandle
   wsAdapters?: Map<Exchange, ExchangePrivateWsAdapter>
+  orderWsAdapters?: Map<Exchange, ExchangeOrderWsAdapter>
   manager?: ExecutionManagerHandle
   monitor?: PositionMonitorHandle
   strategies?: StrategyRegistry
@@ -307,7 +321,15 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
           flushIntervalMs: config.persistence.flushIntervalMs,
         })
       } else {
-        runId = 'ephemeral'
+        runId = randomUUID()
+        await insertRun(dbHandle.db, {
+          id: runId,
+          startedAt: new Date(),
+          mode: config.mode,
+          configHash: config.configHash,
+          gitSha: config.gitSha,
+        })
+        logger.info({ runId }, 'skip-recovery: started fresh run')
         persistenceWriter = createPersistenceWriter({
           db: dbHandle.db,
           wal,
@@ -372,6 +394,23 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
       wsDisposers.push(() => ws.disconnect())
     } catch (err) {
       logger.warn({ err, exchange: cfg.exchange }, 'privatews.adapter.skipped')
+    }
+  }
+
+  // Build WS order adapters (used by strategy_1_ws, strategy_2, strategy_6 for low-latency order placement).
+  // connect() is awaited so a broken adapter aborts engine startup rather than silently disabling WS placement.
+  const orderWsAdapters = new Map<Exchange, ExchangeOrderWsAdapter>()
+  if (config.strategies.some(s => (s.id === 'strategy_1_ws' || s.id === 'strategy_2' || s.id === 'strategy_6') && s.enabled)) {
+    for (const cfg of config.exchanges.filter(e => e.enabled)) {
+      try {
+        const adapter = createOrderWsAdapter(cfg)
+        await adapter.connect()
+        logger.info({ exchange: cfg.exchange }, 'orderws.connect.ok')
+        orderWsAdapters.set(cfg.exchange, adapter)
+      } catch (err) {
+        logger.error({ err, exchange: cfg.exchange }, 'orderws.connect.failed')
+        throw err
+      }
     }
   }
 
@@ -455,12 +494,13 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
       }),
     refPrice: (exchange, symbol) => fundingSource?.latest(exchange).get(symbol)?.markPrice,
     risk: config.risk,
+    ...(orderWsAdapters.size > 0 ? { orderWsAdapters } : {}),
     ...(recoveredInitialState ? { initialState: recoveredInitialState } : {}),
     ...(persistenceWriter ? { beforeCreateOrder: params => persistenceWriter.writeOrderSync(params) } : {}),
   })
   execManager.start()
 
-  // Wire kill switch flattenAll to the manager (breaks the ks ↔ manager dependency cycle)
+  // Wire explicit kill-switch flattenAll to the manager (trip/halt itself does not flatten).
   killSwitch.wireFlattener(() => execManager.flattenAll())
 
   // Keep kill_switch_mode metric in sync with runtime mode changes, and page on trip
@@ -473,7 +513,12 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
   killSwitch.trip = async reason => {
     await origTrip(reason)
     killSwitchMetrics.update('halted')
-    void alertDispatcher.dispatch('page', 'risk.killSwitch.trip', { reason, mode: config.mode })
+    void alertDispatcher.dispatch('page', 'risk.killSwitch.trip', {
+      reason,
+      mode: config.mode,
+      positionsMayRemainOpen: true,
+      note: 'halt blocks new orders; flatten is a separate explicit action',
+    })
   }
 
   // Start persistence writer after manager is set up
@@ -501,12 +546,49 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
   if (configsByStrategy.has('strategy_1')) {
     strategyRegistry.register(createStrategy1Rule({ ids, refPrice }))
   }
+  if (configsByStrategy.has('strategy_1_ws')) {
+    strategyRegistry.register(createStrategy1WsRule({ ids, refPrice }))
+  }
+  if (configsByStrategy.has('strategy_2')) {
+    strategyRegistry.register(createStrategy2Rule({ ids, refPrice }))
+  }
   if (configsByStrategy.has('strategy_3a')) {
     strategyRegistry.register(createStrategy3Rule({ variant: 'A', ids, refPrice }))
   }
   if (configsByStrategy.has('strategy_3b')) {
     strategyRegistry.register(createStrategy3Rule({ variant: 'B', ids, refPrice }))
   }
+  if (configsByStrategy.has('strategy_4_1a')) {
+    strategyRegistry.register(createStrategy4_1aRule({ ids, refPrice }))
+  }
+  if (configsByStrategy.has('strategy_4_2a')) {
+    strategyRegistry.register(createStrategy4_2aRule({ ids, refPrice }))
+  }
+  if (configsByStrategy.has('strategy_4_3a')) {
+    strategyRegistry.register(createStrategy4_3aRule({ ids, refPrice }))
+  }
+  if (configsByStrategy.has('strategy_6')) {
+    strategyRegistry.register(createStrategy6Rule({ ids, refPrice }))
+  }
+
+  const accountConfigMetrics = registerAccountConfigMetrics(registry)
+  const accountConfigurer: ExchangeAccountConfigurer = createExchangeAccountConfigurer({
+    adapters: restAdapters,
+    marketsProvider: marketsHandle?.provider ?? {
+      list: () => [],
+      get: () => undefined,
+      resolve: () => undefined,
+      refresh: () => Promise.resolve(),
+      onUpdate: () => () => {
+        /* no-op */
+      },
+    },
+    exchanges: enabledExchanges,
+    configsByStrategy,
+    execManager,
+    logger: logger.childFor('account-configurer'),
+    metrics: accountConfigMetrics,
+  })
 
   let scheduler: FundingEventSchedulerHandle | undefined
   if (evaluator && fundingSource) {
@@ -518,7 +600,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
       configsByStrategy,
       config: config.scheduler,
       leveragePrewarmer: (ex, sym, lev) => {
-        execManager.prewarmLeverage(ex, sym, lev)
+        accountConfigurer.prewarmSymbol(ex, sym, lev)
       },
       ...(symbolFilter ? { symbolFilter } : {}),
       ...(config.testing?.fundingTimeOverride
@@ -542,6 +624,11 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
       await execManager.submit(intent)
     })()
   })
+
+  // Configure account-wide position mode on all relevant exchanges before accepting traffic.
+  // Throws if any exchange fails — engine refuses to start.
+  await accountConfigurer.configureAccountWide()
+  accountConfigurer.start()
 
   const marketCounts: Partial<Record<Exchange, number>> = {}
   if (marketsHandle) {
@@ -596,6 +683,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     }
 
     scheduler?.stop()
+    accountConfigurer.stop()
 
     // F6-1: Close all open positions before tearing down WS/REST adapters.
     // flattenAll() cancels non-terminal intents and places market-close orders for open positions.
@@ -708,6 +796,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     ...(restAdapters.size > 0 ? { restAdapters, rateLimiters } : {}),
     state: stateStore,
     ...(wsAdapters.size > 0 ? { wsAdapters } : {}),
+    ...(orderWsAdapters.size > 0 ? { orderWsAdapters } : {}),
     manager: execManager,
     monitor: positionMonitor,
     strategies: strategyRegistry,
@@ -725,6 +814,7 @@ async function main(): Promise<void> {
       symbol: { type: 'string', multiple: true },
       funding: { type: 'string' },
       'ack-live-funding-override': { type: 'boolean' },
+      'skip-recovery': { type: 'boolean' },
       'metrics-port': { type: 'string' },
       'health-port': { type: 'string' },
     },
@@ -746,6 +836,7 @@ async function main(): Promise<void> {
   }
   if (values.funding) opts.fundingTimeOverride = values.funding
   if (values['ack-live-funding-override']) opts.ackLiveFundingOverride = true
+  if (values['skip-recovery']) opts.skipRecovery = true
   if (values['metrics-port']) opts.metricsPort = parseInt(values['metrics-port'], 10)
   if (values['health-port']) opts.healthPort = parseInt(values['health-port'], 10)
 

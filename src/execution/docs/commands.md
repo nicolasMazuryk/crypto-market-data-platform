@@ -80,6 +80,70 @@ Exit 0 on pass; exit 1 with all errors printed on failure.
 
 ---
 
+## Sub-account provisioning
+
+### `npm run provision`
+
+Reuse or create a sub-account, ensure API keys, and reconcile it to the requested capital. See [provisioning.md](./provisioning.md) for the full operator guide.
+
+```bash
+npm run provision -- --strategy strategy_1 --exchange bybit --capital 200
+```
+
+| Flag | Required | Default | Effect |
+|------|----------|---------|--------|
+| `--strategy` | yes | — | Strategy ID |
+| `--exchange` | yes | — | Exchange name |
+| `--capital` | yes | — | Target USDT balance for the sub-account |
+| `--label` | no | `{strategy}-{exchange}` | Sub-account display name on the exchange |
+| `--registry` | no | `live-configs/registry.yaml` | Registry file path |
+
+Resolution order is assigned entry, LRU idle pool entry, then new sub-account creation. Re-running the same command is intended to be a no-op except for capital reconciliation and verification.
+
+**Prerequisites**: `MASTER_{EXCHANGE}_API_KEY` / `MASTER_{EXCHANGE}_API_SECRET` (and `_API_PASSPHRASE` where required) in `.env`.
+
+---
+
+### `npm run provision:release`
+
+Drain capital back to master and return the sub-account to the idle pool. API keys are kept for reuse.
+
+```bash
+npm run provision:release -- --strategy strategy_1 --exchange bybit
+```
+
+| Flag | Required | Default | Effect |
+|------|----------|---------|--------|
+| `--strategy` | yes | — | Strategy ID |
+| `--exchange` | yes | — | Exchange name |
+| `--registry` | no | `live-configs/registry.yaml` | Registry file path |
+
+---
+
+### `npm run provision:list`
+
+Print active and idle registry entries grouped by exchange.
+
+### `npm run provision:sync`
+
+Fetch exchange sub-account inventory and add unknown sub-accounts as idle registry entries without keys.
+
+```bash
+npm run provision:sync -- --exchange bybit
+```
+
+---
+
+### `npm run registry:validate`
+
+Validate `live-configs/registry.yaml` — checks uniqueness, IP allowlist, passphrase presence, strategy names, and sub-account limits.
+
+```bash
+npm run registry:validate
+```
+
+---
+
 ## Migrations
 
 ### `npm run execution:migrate`

@@ -1,0 +1,169 @@
+import { writeFileSync, unlinkSync, existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import { describe, it, expect, afterEach } from 'vitest'
+import YAML from 'yaml'
+
+import { loadEngineConfig } from './loader.js'
+import type { ExchangeConfig, ExchangeCredentials } from './types.js'
+import { REQUIRED_IP_ALLOW_LIST } from '../provisioning/registry/schema.js'
+
+type ExchangeWithCredentials = ExchangeConfig & { credentials?: ExchangeCredentials }
+
+const VALID_IP_LIST = [...REQUIRED_IP_ALLOW_LIST]
+
+const tmpFiles: string[] = []
+
+function tmp(suffix = '.yaml'): string {
+  const p = join(tmpdir(), `loader-test-${String(Date.now())}-${Math.random().toString(36).slice(2)}${suffix}`)
+  tmpFiles.push(p)
+  return p
+}
+
+afterEach(() => {
+  for (const f of tmpFiles) {
+    if (existsSync(f)) unlinkSync(f)
+    if (existsSync(`${f}.tmp`)) unlinkSync(`${f}.tmp`)
+  }
+  tmpFiles.length = 0
+})
+
+const BASE_CONFIG = {
+  mode: 'dry_run',
+  exchanges: [
+    {
+      exchange: 'bybit',
+      enabled: true,
+      credentialsEnvPrefix: 'BYBIT',
+    },
+  ],
+  strategies: [],
+}
+
+describe('loadEngineConfig — registry credential resolution', () => {
+  it('uses registry credentials over env vars when registry has an active entry', () => {
+    const configPath = tmp()
+    writeFileSync(configPath, YAML.stringify(BASE_CONFIG), 'utf8')
+
+    const registryPath = tmp()
+    const registry = {
+      combinations: [
+        {
+          exchange: 'bybit',
+          sub_account_id: '99999',
+          sub_account_label: 'strat3a-bybit',
+          assigned_strategy: 'strategy_3a',
+          api_key: 'registry-key',
+          api_secret: 'registry-secret',
+          api_passphrase: null,
+          ip_allow_list: VALID_IP_LIST,
+          allocated_capital_usdt: 200,
+          provisioning_mode: 'full_api',
+          status: 'active',
+          created_at: '2026-05-09T12:00:00Z',
+          last_assigned_at: '2026-05-09T12:00:00Z',
+          notes: '',
+        },
+      ],
+    }
+    writeFileSync(registryPath, YAML.stringify(registry), 'utf8')
+
+    const env = {
+      BYBIT_API_KEY: 'env-key',
+      BYBIT_API_SECRET: 'env-secret',
+    }
+
+    const config = loadEngineConfig({
+      configPath,
+      basePath: '',
+      env,
+      registryPath,
+    })
+
+    const bybit = config.exchanges.find(e => e.exchange === 'bybit') as ExchangeWithCredentials | undefined
+    expect(bybit?.credentials?.apiKey).toBe('registry-key')
+    expect(bybit?.credentials?.apiSecret).toBe('registry-secret')
+  })
+
+  it('falls back to env vars when registry has no active entry for the exchange', () => {
+    const configPath = tmp()
+    writeFileSync(configPath, YAML.stringify(BASE_CONFIG), 'utf8')
+
+    const registryPath = tmp()
+    writeFileSync(registryPath, YAML.stringify({ combinations: [] }), 'utf8')
+
+    const env = {
+      BYBIT_API_KEY: 'env-key',
+      BYBIT_API_SECRET: 'env-secret',
+    }
+
+    const config = loadEngineConfig({
+      configPath,
+      basePath: '',
+      env,
+      registryPath,
+    })
+
+    const bybit = config.exchanges.find(e => e.exchange === 'bybit') as ExchangeWithCredentials | undefined
+    expect(bybit?.credentials?.apiKey).toBe('env-key')
+    expect(bybit?.credentials?.apiSecret).toBe('env-secret')
+  })
+
+  it('falls back to env vars when registry entry is idle', () => {
+    const configPath = tmp()
+    writeFileSync(configPath, YAML.stringify(BASE_CONFIG), 'utf8')
+
+    const registryPath = tmp()
+    const registry = {
+      combinations: [
+        {
+          exchange: 'bybit',
+          sub_account_id: '99999',
+          sub_account_label: 'strat3a-bybit',
+          assigned_strategy: null,
+          api_key: 'registry-key',
+          api_secret: 'registry-secret',
+          api_passphrase: null,
+          ip_allow_list: VALID_IP_LIST,
+          allocated_capital_usdt: 0,
+          provisioning_mode: 'full_api',
+          status: 'idle',
+          created_at: '2026-05-09T12:00:00Z',
+          last_assigned_at: null,
+          notes: '',
+        },
+      ],
+    }
+    writeFileSync(registryPath, YAML.stringify(registry), 'utf8')
+
+    const env = {
+      BYBIT_API_KEY: 'env-key',
+      BYBIT_API_SECRET: 'env-secret',
+    }
+
+    const config = loadEngineConfig({
+      configPath,
+      basePath: '',
+      env,
+      registryPath,
+    })
+
+    const bybit = config.exchanges.find(e => e.exchange === 'bybit') as ExchangeWithCredentials | undefined
+    expect(bybit?.credentials?.apiKey).toBe('env-key')
+  })
+
+  it('works without registryPath (backward compat)', () => {
+    const configPath = tmp()
+    writeFileSync(configPath, YAML.stringify(BASE_CONFIG), 'utf8')
+
+    const env = {
+      BYBIT_API_KEY: 'env-key',
+      BYBIT_API_SECRET: 'env-secret',
+    }
+
+    const config = loadEngineConfig({ configPath, basePath: '', env })
+    const bybit = config.exchanges.find(e => e.exchange === 'bybit') as ExchangeWithCredentials | undefined
+    expect(bybit?.credentials?.apiKey).toBe('env-key')
+  })
+})

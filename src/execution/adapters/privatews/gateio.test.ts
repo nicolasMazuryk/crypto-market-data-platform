@@ -75,4 +75,17 @@ runWsAdapterConformance({
     event: 'update',
     result: [{ currency: 'USDT', balance: '1000', available: '950', order_margin: '50' }],
   },
+  sampleFundingFeeRaw: {
+    channel: 'futures.account_book',
+    event: 'update',
+    result: [
+      {
+        contract: 'BTC_USDT',
+        change: '-4.5',
+        change_type: 'fund',
+        time: 1700000.0,
+        currency: 'USDT',
+      },
+    ],
+  },
 })

@@ -1,0 +1,35 @@
+# Test config: strategy_6 LONG (post-funding directional, WS-gated entry)
+# ALL EXCHANGES — real $20 orders
+#
+# Run (natural 1h funding, no override):
+#   tsx src/execution/index.ts --config config/execution.test-s6-long.yaml
+#
+# Run (funding override — e.g. 9 min from now):
+#   tsx src/execution/index.ts --config config/execution.test-s6-long.yaml \
+#     --funding HH:MM:SS --ack-live-funding-override
+mode: live
+
+strategies:
+  - id: strategy_6
+    enabled: true
+    mainSide: long
+    funding_threshold: -0.02                  # fires when rate ≤ −0.02% (sign-strict; independent of mainSide)
+    entryOffsetSeconds: 10
+    fundingFeeTimeoutSeconds: 8
+    tpMultiplier: 0.5
+    slMultiplier: 1.0
+    deadlineSeconds: 3300                    # 55 min
+    mainAmountUsd: 20
+    leverage: 4
+
+risk:
+  globalMaxConcurrentIntents: 6             # 1 per exchange × 6 exchanges
+  globalMaxNotionalUsd: 200
+  perStrategy:
+    strategy_6:
+      maxConcurrentIntents: 6
+      maxNotionalUsd: 200
+
+testing:
+  fundingTimeOverride:
+    acknowledgeLiveOverride: true

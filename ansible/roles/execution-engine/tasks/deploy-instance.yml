@@ -1,0 +1,64 @@
+---
+# Deploy a single execution-engine instance.
+# Required variable: combo_entry (dict from fleet-reconcile manifest)
+#   combo_entry.id:            combination id (e.g. "strategy_3a-bybit")
+#   combo_entry.exchange:      exchange name
+#   combo_entry.runtime:       {metrics_port, health_port}
+#   combo_entry.config_content: generated YAML content
+#   combo_entry.config_hash:   content hash for drift detection
+#   combo_entry.api_key:       exchange API key from registry
+#   combo_entry.api_secret:    exchange API secret from registry
+#   combo_entry.api_passphrase: exchange API passphrase (nullable)
+
+- name: "Ensure execution state directory exists"
+  ansible.builtin.file:
+    path: /opt/arbinet/execution/state
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: "Write per-instance config for {{ combo_entry.id }}"
+  ansible.builtin.copy:
+    content: "{{ combo_entry.config_content }}"
+    dest: "{{ execution_config_dir }}/execution.{{ combo_entry.id }}.yaml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
+- name: "Write per-instance secrets env file for {{ combo_entry.id }}"
+  ansible.builtin.template:
+    src: instance.env.j2
+    dest: "{{ execution_secrets_dir }}/{{ combo_entry.id }}.env"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+
+- name: "Reload systemd daemon"
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: "Enable and start execution-engine@{{ combo_entry.id }}"
+  ansible.builtin.systemd:
+    name: "execution-engine@{{ combo_entry.id }}.service"
+    enabled: true
+    state: started
+    daemon_reload: false
+
+- name: "Wait for execution-engine@{{ combo_entry.id }} /ready"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ combo_entry.runtime.health_port }}/ready"
+    status_code: 200
+  register: _ready
+  until: _ready.status == 200
+  retries: 60
+  delay: 5
+
+- name: "Record config hash for {{ combo_entry.id }}"
+  ansible.builtin.copy:
+    content: "{{ combo_entry.config_hash }}"
+    dest: "/opt/arbinet/execution/state/{{ combo_entry.id }}.hash"
+    owner: root
+    group: root
+    mode: "0644"

@@ -12,6 +12,7 @@ import { normalizeSymbol } from '../../../utils/symbol-normalizer.js'
 import { mapCcxtError, sleepWithJitter, withRateLimit, withMetrics, type EndpointClass } from './base.js'
 import type {
   ExchangeRestAdapter,
+  MarginMode,
   OrderRequest,
   OrderAck,
   Order,
@@ -42,6 +43,8 @@ export interface CcxtAdapterSpec {
   buildFetchOrderParams(ref: OrderRef): Record<string, unknown>
   buildAmendOrderParams?(ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>): Record<string, unknown>
   setLeverage?(ccxtEx: CcxtExchange, unified: string, leverage: number): Promise<void>
+  setMarginMode?(ccxtEx: CcxtExchange, unified: string, mode: 'cross' | 'isolated'): Promise<void>
+  setPositionMode?(ccxtEx: CcxtExchange, hedged: boolean, unified?: string): Promise<void>
   /** Override the default fetchOrder-based lookup. Return undefined when the order is not found. */
   getOrder?(ccxtEx: CcxtExchange, ref: OrderRef, unified: string): Promise<CcxtOrder | undefined>
   defaultBalanceAsset?: string
@@ -227,6 +230,28 @@ export function createCcxtRestAdapter(
     })
   }
 
+  async function fetchOpenByClientId(unified: string, clientOrderId: string): Promise<CcxtOrder | undefined> {
+    return call('order_read', 'critical', 'fetchOpenByClientId', async () => {
+      try {
+        const raws = await requireCcxtMethod('fetchOpenOrders').call(ccxtExchange, unified)
+        return raws.find(o => o.clientOrderId === clientOrderId)
+      } catch {
+        return undefined
+      }
+    })
+  }
+
+  async function fetchClosedByClientId(unified: string, clientOrderId: string): Promise<CcxtOrder | undefined> {
+    return call('order_read', 'critical', 'fetchClosedByClientId', async () => {
+      try {
+        const raws = await requireCcxtMethod('fetchClosedOrders').call(ccxtExchange, unified, undefined, 50)
+        return raws.find(o => o.clientOrderId === clientOrderId)
+      } catch {
+        return undefined
+      }
+    })
+  }
+
   async function fetchPositionQty(unified: string): Promise<number> {
     try {
       const raws = await call('account_read', 'critical', 'fetchPositionForRetry', () =>
@@ -262,6 +287,30 @@ export function createCcxtRestAdapter(
       return call('order_write', 'normal', 'setLeverage', () => setLeverageInternal(resolve(symbol), leverage))
     },
 
+    async setMarginMode(symbol: string, mode: MarginMode): Promise<void> {
+      await ensureMarketsIfNeeded()
+      const unified = resolve(symbol)
+      return call('account_write', 'background', 'setMarginMode', async () => {
+        if (spec.setMarginMode) {
+          await spec.setMarginMode(ccxtExchange, unified, mode)
+        } else if (ccxtExchange.setMarginMode) {
+          await ccxtExchange.setMarginMode(mode, unified)
+        }
+      })
+    },
+
+    async setPositionMode(hedged: boolean, symbol?: string): Promise<void> {
+      if (symbol) await ensureMarketsIfNeeded()
+      const unified = symbol ? resolve(symbol) : undefined
+      return call('account_write', 'background', 'setPositionMode', async () => {
+        if (spec.setPositionMode) {
+          await spec.setPositionMode(ccxtExchange, hedged, unified)
+        } else if (ccxtExchange.setPositionMode) {
+          await ccxtExchange.setPositionMode(hedged, unified)
+        }
+      })
+    },
+
     async createOrder(req: OrderRequest): Promise<OrderAck> {
       const span = tracer?.startSpan('rest.createOrder', {
         exchange,
@@ -295,18 +344,18 @@ export function createCcxtRestAdapter(
       const doPost = (): Promise<CcxtOrder> =>
         createOrderFn.call(ccxtExchange, unified, ccxtOrderType, req.side, req.qty, req.price, params)
 
-      // Pre-flight position snapshot for non-reduceOnly market orders: lets the retry path
+      // Pre-flight position snapshot for market orders: lets the retry path
       // detect "the original POST actually landed but the response failed" by observing a
       // position delta. Critical on Binance Futures, where clientOrderId can be reused once
       // the prior order with the same id reaches a terminal state — naïve retry duplicates fills.
-      const positionCheckEligible = req.type === 'market' && req.reduceOnly !== true
+      const positionCheckEligible = req.type === 'market'
       const positionQtyBefore = positionCheckEligible ? await fetchPositionQty(unified) : Number.NaN
 
       const positionLandedAck = async (origin: string): Promise<OrderAck | undefined> => {
         if (!positionCheckEligible || Number.isNaN(positionQtyBefore)) return undefined
         const after = await fetchPositionQty(unified)
         if (Number.isNaN(after)) return undefined
-        const delta = after - positionQtyBefore
+        const delta = req.reduceOnly === true ? positionQtyBefore - after : after - positionQtyBefore
         // Half the requested qty is enough to confirm the order landed (covers partials).
         if (delta >= req.qty * 0.5) {
           metrics.idempotencyHits.inc(1, { exchange })
@@ -332,6 +381,28 @@ export function createCcxtRestAdapter(
           }
         }
         return undefined
+      }
+
+      const existingOrderAck = async (origin: string): Promise<OrderAck | undefined> => {
+        const existing =
+          (await fetchByClientId(unified, req.clientOrderId)) ??
+          (await fetchOpenByClientId(unified, req.clientOrderId)) ??
+          (await fetchClosedByClientId(unified, req.clientOrderId))
+        if (existing) {
+          metrics.idempotencyHits.inc(1, { exchange })
+          logger.warn(
+            { exchange, intentId: req.intentId, clientOrderId: req.clientOrderId, origin },
+            'createOrder: original POST found by clientOrderId/open/history lookup — skipping retry'
+          )
+          return {
+            clientOrderId: req.clientOrderId,
+            exchangeOrderId: existing.id,
+            status: 'accepted',
+            submittedAt,
+            ackedAt: clock.now(),
+          }
+        }
+        return positionLandedAck(origin)
       }
 
       const ack = await call('order_write', 'critical', 'createOrder', async (): Promise<OrderAck> => {
@@ -375,18 +446,7 @@ export function createCcxtRestAdapter(
             )
             if (isDuplicateOrderCode(mapped.code)) {
               await sleepWithJitter(BACKOFF_MS)
-              const existing = await fetchByClientId(unified, req.clientOrderId)
-              if (existing) {
-                metrics.idempotencyHits.inc(1, { exchange })
-                return {
-                  clientOrderId: req.clientOrderId,
-                  exchangeOrderId: existing.id,
-                  status: 'accepted',
-                  submittedAt,
-                  ackedAt: clock.now(),
-                }
-              }
-              const landed = await positionLandedAck('duplicate_code')
+              const landed = await existingOrderAck('duplicate_code')
               if (landed) return landed
             }
             metrics.ordersTotal.inc(1, { exchange, side: req.side, type: req.type, status: 'rejected' })
@@ -403,18 +463,7 @@ export function createCcxtRestAdapter(
 
           if (mapped.isRetryable) {
             await sleepWithJitter(BACKOFF_MS)
-            const existing = await fetchByClientId(unified, req.clientOrderId)
-            if (existing) {
-              metrics.idempotencyHits.inc(1, { exchange })
-              return {
-                clientOrderId: req.clientOrderId,
-                exchangeOrderId: existing.id,
-                status: 'accepted',
-                submittedAt,
-                ackedAt: clock.now(),
-              }
-            }
-            const landed = await positionLandedAck('retryable_error')
+            const landed = await existingOrderAck('retryable_error')
             if (landed) return landed
             try {
               const raw = await call('order_write', 'critical', 'createOrder.retry', () => doPost())
@@ -430,18 +479,7 @@ export function createCcxtRestAdapter(
               const retryMapped = mapCcxtError(retryErr)
               if (isDuplicateOrderCode(retryMapped.code)) {
                 await sleepWithJitter(BACKOFF_MS)
-                const existing2 = await fetchByClientId(unified, req.clientOrderId)
-                if (existing2) {
-                  metrics.idempotencyHits.inc(1, { exchange })
-                  return {
-                    clientOrderId: req.clientOrderId,
-                    exchangeOrderId: existing2.id,
-                    status: 'accepted',
-                    submittedAt,
-                    ackedAt: clock.now(),
-                  }
-                }
-                const landedAfterRetry = await positionLandedAck('duplicate_code_after_retry')
+                const landedAfterRetry = await existingOrderAck('duplicate_code_after_retry')
                 if (landedAfterRetry) return landedAfterRetry
               }
               throw retryErr

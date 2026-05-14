@@ -75,4 +75,22 @@ runWsAdapterConformance({
     arg: { channel: 'account' },
     data: [{ details: [{ ccy: 'USDT', availBal: '1000', frozenBal: '50' }] }],
   },
+  sampleFundingFeeRaw: {
+    arg: { channel: 'account' },
+    data: [
+      {
+        details: [{ ccy: 'USDT', availBal: '9995.5', frozenBal: '0' }],
+        bills: [
+          {
+            bizType: 'FUNDING_FEE',
+            instId: 'BTC-USDT-SWAP',
+            pnl: '-4.5',
+            sz: '0.01',
+            ccy: 'USDT',
+            ts: '1700000000000',
+          },
+        ],
+      },
+    ],
+  },
 })

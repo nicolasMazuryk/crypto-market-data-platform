@@ -1,6 +1,6 @@
 import type { Exchange } from '../../types/exchange.js'
 import type { OrderSide, OrderStatus, Position, Balance, Order } from '../rest/types.js'
-import type { OrderEvent, PositionEvent, BalanceEvent } from './types.js'
+import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent } from './types.js'
 import type { ParsedWsMessage } from './private-ws-base.js'
 
 interface BitgetOrderData {
@@ -35,6 +35,9 @@ interface BitgetBalanceData {
   available: string
   frozen: string
   uTime?: string
+  bizType?: string
+  instId?: string
+  amount?: string
 }
 
 interface BitgetUpdate {
@@ -131,6 +134,7 @@ export function parseBitgetMessage(
 
   if (channel === 'account') {
     const balances: BalanceEvent[] = []
+    const fundingFees: FundingFeeEvent[] = []
     for (const item of data) {
       const d = item as BitgetBalanceData
       const available = parseFloat(d.available)
@@ -143,7 +147,24 @@ export function parseBitgetMessage(
         updatedAt: d.uTime ? parseInt(d.uTime, 10) : receivedAt,
       }
       balances.push({ exchange, balance, seq, receivedAt })
+
+      // Bitget posts funding-fee entries in the account channel with a bizType containing 'fund'
+      if (d.bizType && d.bizType.toLowerCase().includes('fund') && d.instId) {
+        const fundingAmount = d.amount ? parseFloat(d.amount) : 0
+        const fundingTime = d.uTime ? parseInt(d.uTime, 10) : receivedAt
+        fundingFees.push({
+          exchange,
+          symbol: d.instId,
+          fundingTime,
+          fundingRate: 0,
+          fundingAmount,
+          asset: d.coinName,
+          positionQty: 0,
+          receivedAt,
+        })
+      }
     }
+    if (fundingFees.length > 0) return { balances, fundingFees, eventType: 'account' }
     return { balances, eventType: 'account' }
   }
 

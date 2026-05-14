@@ -7,6 +7,8 @@ import YAML from 'yaml'
 
 import type { EngineConfig, ExchangeConfig } from './types.js'
 import { parseEngineConfig } from './schema.js'
+import { loadRegistry } from '../provisioning/registry/loader.js'
+import type { Registry } from '../provisioning/registry/schema.js'
 
 export interface LoadEngineConfigOptions {
   configPath: string
@@ -21,6 +23,12 @@ export interface LoadEngineConfigOptions {
     fundingTime?: string
     ackLiveFundingOverride?: boolean
   }
+  /**
+   * Path to live-configs/registry.yaml. When provided, credentials for enabled exchanges
+   * are resolved from the registry first (any active entry for the exchange), then fall
+   * back to the env-var-prefix scheme.
+   */
+  registryPath?: string
 }
 
 /** Deep-merge two plain objects. `override` wins; arrays are replaced, not merged. */
@@ -65,9 +73,24 @@ function hashConfig(raw: unknown): string {
 function injectCredentials(
   exchanges: ExchangeConfig[],
   mode: 'live' | 'dry_run',
-  env: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv,
+  registry?: Registry
 ): (ExchangeConfig & { credentials?: { apiKey: string; apiSecret: string; apiPassphrase?: string } })[] {
   return exchanges.map(ec => {
+    // Registry takes priority. TODO: filter by assigned_strategy once the engine carries strategy identity here.
+    if (registry) {
+      const registryEntry = registry.combinations.find(c => c.exchange === ec.exchange && c.status === 'active')
+      if (registryEntry) {
+        const creds: { apiKey: string; apiSecret: string; apiPassphrase?: string } = {
+          apiKey: registryEntry.api_key,
+          apiSecret: registryEntry.api_secret,
+        }
+        if (registryEntry.api_passphrase) creds.apiPassphrase = registryEntry.api_passphrase
+        return Object.assign({}, ec, { credentials: creds })
+      }
+    }
+
+    // Fall back to env-var-prefix scheme.
     const prefix = ec.credentialsEnvPrefix
     const apiKey = env[`${prefix}_API_KEY`]
     const apiSecret = env[`${prefix}_API_SECRET`]
@@ -136,7 +159,8 @@ export function loadEngineConfig(options: LoadEngineConfigOptions): EngineConfig
   }
 
   const parsed = parseEngineConfig(merged)
-  const exchanges = injectCredentials(parsed.exchanges, parsed.mode, env)
+  const registry = options.registryPath ? loadRegistry(options.registryPath) : undefined
+  const exchanges = injectCredentials(parsed.exchanges, parsed.mode, env, registry)
 
   const postgresUrlOverride = env.EXECUTION_POSTGRES_URL
   const persistence = postgresUrlOverride

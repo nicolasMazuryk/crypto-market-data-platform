@@ -17,9 +17,8 @@ const { invokeAgent } = await import('../agent/invoke.js')
 const { runBacktest } = await import('../backtest/runner.js')
 const { enforceScope } = await import('../git/diff-gate.js')
 const { commitAll, diffNameOnlyHead, resetHard, revParseHead } = await import('../git/ratchet.js')
-const { renderEquityCurveChart, renderTimeBasedEquityCurveChart } = await import(
-  '../../backtesting/reporting/equity-curve-chart.js'
-)
+const { renderEquityCurveChart, renderTimeBasedEquityCurveChart } =
+  await import('../../backtesting/reporting/equity-curve-chart.js')
 
 const FAKE_COMMIT = 'aabbccdd00112233aabbccdd00112233aabbccdd'
 const TAG = 'strategy_1-binance'
@@ -30,16 +29,54 @@ const YAML_V2 = 'strategy_id: strategy_1\nfunding_threshold: 0.006\nentry_offset
 
 const FAKE_REPORT = {
   strategy_id: STRATEGY,
-  trade_stats: { total_funding_events: 10, events_skipped: 0, skip_reasons: {}, events_triggered: 5, trades_executed: 5, unfilled_events: 0 },
-  return_metrics: { total_net_pnl: 0.05, mean_net_pnl: 0.01, median_net_pnl: 0.01, std_dev: 0.002, skewness: 0, kurtosis: 0, best_trade: 0.02, worst_trade: -0.005 },
+  trade_stats: {
+    total_funding_events: 10,
+    events_skipped: 0,
+    skip_reasons: {},
+    events_triggered: 5,
+    trades_executed: 5,
+    unfilled_events: 0,
+  },
+  return_metrics: {
+    total_net_pnl: 0.05,
+    mean_net_pnl: 0.01,
+    median_net_pnl: 0.01,
+    std_dev: 0.002,
+    skewness: 0,
+    kurtosis: 0,
+    best_trade: 0.02,
+    worst_trade: -0.005,
+  },
   win_loss: { win_rate: 0.8, avg_win: 0.012, avg_loss: -0.005, profit_factor: 2.0, expectancy: 0.009 },
-  pnl_decomposition: { aggregate_delta_pnl: 0.04, aggregate_funding_pnl: 0.015, aggregate_fees: -0.005, funding_ratio: 0.3 },
-  risk_metrics: { max_drawdown_pct: 0.01, max_drawdown_duration_seconds: 3600, sharpe_ratio: 1.5, sortino_ratio: 2.0, calmar_ratio: 5.0 },
+  pnl_decomposition: {
+    aggregate_delta_pnl: 0.04,
+    aggregate_funding_pnl: 0.015,
+    aggregate_fees: -0.005,
+    funding_ratio: 0.3,
+  },
+  risk_metrics: {
+    max_drawdown_pct: 0.01,
+    max_drawdown_duration_seconds: 3600,
+    sharpe_ratio: 1.5,
+    sortino_ratio: 2.0,
+    calmar_ratio: 5.0,
+  },
   exit_reason_distribution: {},
-  data_quality: { total_events_scanned: 10, events_skipped_by_reason: {}, data_coverage_pct: 1.0, actual_date_range: { start: '2025-01-01', end: '2025-03-01' }, configured_date_range: { start: '2025-01-01', end: '2025-03-01' } },
+  data_quality: {
+    total_events_scanned: 10,
+    events_skipped_by_reason: {},
+    data_coverage_pct: 1.0,
+    actual_date_range: { start: '2025-01-01', end: '2025-03-01' },
+    configured_date_range: { start: '2025-01-01', end: '2025-03-01' },
+  },
   reproducibility: { config_hash: 'abc', data_row_count: 10, run_timestamp: '2025-01-01T00:00:00Z', git_commit: null },
   equity_curve: [0, 0.01, 0.02, 0.05],
-  equity_curve_timestamps: ['2025-01-01T00:00:00Z', '2025-01-02T00:00:00Z', '2025-01-03T00:00:00Z', '2025-01-04T00:00:00Z'],
+  equity_curve_timestamps: [
+    '2025-01-01T00:00:00Z',
+    '2025-01-02T00:00:00Z',
+    '2025-01-03T00:00:00Z',
+    '2025-01-04T00:00:00Z',
+  ],
   equity_curve_metrics: null,
 }
 
@@ -136,7 +173,13 @@ describe('runIteration — summary validation', () => {
         fs.writeFileSync(proposalPath, JSON.stringify({ rationale: 'test', summary: '' }))
       } else {
         // Summary retry: valid summary (YAML already changed)
-        fs.writeFileSync(proposalPath, JSON.stringify({ rationale: 'test', summary: 'funding_threshold 0.004 → 0.006 (widen filter to reduce noise)' }))
+        fs.writeFileSync(
+          proposalPath,
+          JSON.stringify({
+            rationale: 'test',
+            summary: 'funding_threshold 0.004 → 0.006 (widen filter to reduce noise)',
+          })
+        )
       }
       return okAgentResult()
     })
@@ -227,7 +270,10 @@ describe('runIteration — summary validation', () => {
     vi.mocked(invokeAgent).mockImplementation(async () => {
       callCount++
       fs.writeFileSync(yamlPath, YAML_V2)
-      fs.writeFileSync(proposalPath, JSON.stringify({ rationale: 'test', summary: 'funding_threshold 0.004 → 0.006 (widen filter to reduce noise)' }))
+      fs.writeFileSync(
+        proposalPath,
+        JSON.stringify({ rationale: 'test', summary: 'funding_threshold 0.004 → 0.006 (widen filter to reduce noise)' })
+      )
       return okAgentResult()
     })
     setupBacktest()

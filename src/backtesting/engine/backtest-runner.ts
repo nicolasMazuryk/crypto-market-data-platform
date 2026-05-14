@@ -24,6 +24,15 @@ export interface BacktestRunResult {
   trades: TradeResult[]
 }
 
+function compareTrades(a: TradeResult, b: TradeResult): number {
+  return (
+    a.funding_time.getTime() - b.funding_time.getTime() ||
+    a.exchange.localeCompare(b.exchange) ||
+    a.symbol.localeCompare(b.symbol) ||
+    a.strategy_id.localeCompare(b.strategy_id)
+  )
+}
+
 export async function runBacktestEngine(config: ResolvedConfig): Promise<BacktestRunResult> {
   const { base, strategy: strategyConfig } = config
   const strategyId = strategyConfig.strategy_id
@@ -173,9 +182,6 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
         logger.info({ processed: s, total: symbols.length }, 'Spot-futures backtest progress')
       }
     }
-
-    // Sort trades by funding_time so the equity curve advances monotonically in time.
-    trades.sort((a, b) => a.funding_time.getTime() - b.funding_time.getTime())
 
     logger.info(
       { perp_exchange: sfConfig.perp_exchange, durationMs: Date.now() - sfStartMs, trades: trades.length },
@@ -329,6 +335,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   )
 
   const gitCommit = getGitCommit()
+  trades.sort(compareTrades)
 
   const report = buildReport({
     config,

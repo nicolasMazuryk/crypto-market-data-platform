@@ -2,7 +2,7 @@ import type { RateLimiter, RateLimiterAcquireOptions, RateLimitPriority } from '
 import type { Exchange } from '../../types/exchange.js'
 import type { RestMetrics } from '../../observability/metrics.js'
 
-export type EndpointClass = 'order_write' | 'order_read' | 'account_read' | 'time'
+export type EndpointClass = 'order_write' | 'order_read' | 'account_read' | 'account_write' | 'time'
 
 export interface MappedError {
   code: string

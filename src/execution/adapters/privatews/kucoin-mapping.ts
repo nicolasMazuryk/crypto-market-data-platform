@@ -1,6 +1,6 @@
 import type { Exchange } from '../../types/exchange.js'
 import type { OrderStatus, Position, Balance, Order } from '../rest/types.js'
-import type { OrderEvent, PositionEvent, BalanceEvent } from './types.js'
+import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent } from './types.js'
 import type { ParsedWsMessage } from './private-ws-base.js'
 
 interface KucoinOrderData {
@@ -35,6 +35,9 @@ interface KucoinWalletData {
   currency: string
   availableBalance?: number | string
   holdBalance?: number | string
+  symbol?: string
+  fundingFee?: number | string
+  timestamp?: number
 }
 
 interface KucoinWsMessage {
@@ -126,6 +129,26 @@ export function parseKucoinMessage(
       updatedAt: receivedAt,
     }
     const balances: BalanceEvent[] = [{ exchange, balance, seq, receivedAt }]
+
+    // KuCoin emits wallet.funding subject for funding-fee credits
+    if (subject === 'wallet.funding' && d.symbol && d.fundingFee !== undefined) {
+      const fundingAmount = typeof d.fundingFee === 'string' ? parseFloat(d.fundingFee) : d.fundingFee
+      const fundingTime = d.timestamp ?? receivedAt
+      const fundingFees: FundingFeeEvent[] = [
+        {
+          exchange,
+          symbol: d.symbol,
+          fundingTime,
+          fundingRate: 0,
+          fundingAmount,
+          asset: d.currency,
+          positionQty: 0,
+          receivedAt,
+        },
+      ]
+      return { balances, fundingFees, eventType: 'wallet.funding' }
+    }
+
     return { balances, eventType: 'wallet' }
   }
 

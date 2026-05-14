@@ -1,0 +1,74 @@
+---
+# fleet-reconcile.yml — apply fleet diff computed by `npm run fleet:reconcile`
+#
+# Variables injected by the reconcile CLI via -e @manifest.json:
+#   toStop:     list of combination ids to stop and disable
+#   toStart:    list of combo objects to deploy (new instances)
+#   toRedeploy: list of combo objects to redeploy (stop + redeploy)
+#
+# Additional variables:
+#   reconcile_concurrency: max parallel operations (default: 5, passed via -e)
+#   config_dir: local path to generated config files (default: config)
+#
+# Each combo object in toStart/toRedeploy:
+#   id, exchange, runtime.{metrics_port, health_port}, config_content,
+#   config_hash, api_key, api_secret, api_passphrase (nullable)
+
+- name: Fleet reconcile — stop removed/disabled combinations
+  hosts: servers
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  vars:
+    reconcile_concurrency: 5
+
+  tasks:
+    - name: Stop and disable removed combinations
+      ansible.builtin.include_tasks: ../roles/execution-engine/tasks/stop-instance.yml
+      loop: "{{ toStop | default([]) }}"
+      loop_control:
+        loop_var: combo_id
+        label: "{{ combo_id }}"
+
+- name: Fleet reconcile — redeploy changed combinations
+  hosts: servers
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  vars:
+    reconcile_concurrency: 5
+
+  tasks:
+    - name: Stop combinations before redeploy
+      ansible.builtin.include_tasks: ../roles/execution-engine/tasks/stop-instance.yml
+      loop: "{{ toRedeploy | default([]) }}"
+      loop_control:
+        loop_var: combo_id
+        label: "{{ combo_id.id }}"
+      vars:
+        combo_id: "{{ item.id }}"
+
+    - name: Deploy redeployed combinations
+      ansible.builtin.include_tasks: ../roles/execution-engine/tasks/deploy-instance.yml
+      loop: "{{ toRedeploy | default([]) }}"
+      loop_control:
+        loop_var: combo_entry
+        label: "{{ combo_entry.id }}"
+      throttle: "{{ reconcile_concurrency }}"
+
+- name: Fleet reconcile — start new combinations
+  hosts: servers
+  become: true
+  vars_files:
+    - ../group_vars/all.yml
+  vars:
+    reconcile_concurrency: 5
+
+  tasks:
+    - name: Deploy new combinations
+      ansible.builtin.include_tasks: ../roles/execution-engine/tasks/deploy-instance.yml
+      loop: "{{ toStart | default([]) }}"
+      loop_control:
+        loop_var: combo_entry
+        label: "{{ combo_entry.id }}"
+      throttle: "{{ reconcile_concurrency }}"

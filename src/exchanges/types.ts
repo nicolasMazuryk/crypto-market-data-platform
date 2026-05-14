@@ -131,6 +131,8 @@ export interface CcxtExchange {
   fetchPositions?(symbols?: string[], params?: Record<string, unknown>): Promise<CcxtPosition[]>
   fetchBalance?(params?: Record<string, unknown>): Promise<CcxtBalanceResponse>
   setLeverage?(leverage: number, symbol?: string, params?: Record<string, unknown>): Promise<unknown>
+  setMarginMode?(marginMode: string, symbol?: string, params?: Record<string, unknown>): Promise<unknown>
+  setPositionMode?(hedged: boolean, symbol?: string, params?: Record<string, unknown>): Promise<unknown>
   fetchTime?(): Promise<number>
   close?(): Promise<void>
 }

@@ -11,6 +11,11 @@ import { SpotFuturesStrategy } from './strategy-spot-futures.js'
 
 /** Create a strategy instance by ID */
 export function createStrategy(id: StrategyId): BaseStrategy {
+  // strategy_6 is live-only: MAIN entry depends on receiving ws.funding_fee in real-time.
+  if ((id as string) === 'strategy_6') {
+    throw new Error('strategy_6 is live-only; backtest mode cannot emulate WS funding-fee events')
+  }
+
   switch (id) {
     case 'strategy_1':
       return new Strategy1()

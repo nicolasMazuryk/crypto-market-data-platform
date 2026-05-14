@@ -7,6 +7,16 @@ const bitgetSpec: CcxtAdapterSpec = {
   ccxtId: ccxtIdMap.bitget,
   ccxtOptions: { defaultType: 'swap', productType: 'USDT-FUTURES' },
   duplicateOrderCodes: new Set(['40762']),
+  setPositionMode: async (ccxtEx, hedged) => {
+    if (!ccxtEx.setPositionMode) return
+    try {
+      await ccxtEx.setPositionMode(hedged)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not modified') || msg.includes('no change')) return
+      throw err
+    }
+  },
   buildCreateOrderParams: (req: OrderRequest) => {
     const p: Record<string, unknown> = {
       clientOid: req.clientOrderId,

@@ -41,7 +41,7 @@ export function createWal(walPath: string, logger: Logger, maxBytes = 50 * 1024 
         const content = readFileSync(walPath, 'utf8')
         const lines = content.split('\n').filter(l => l.trim() !== '')
         const entries: WalEntry[] = []
-        const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
+        const ISO_RE = /^[+-]?\d{4,}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
         for (const line of lines) {
           try {
             entries.push(

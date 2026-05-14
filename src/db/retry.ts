@@ -27,10 +27,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-export async function withClickHouseRetry<T>(
-  fn: () => Promise<T>,
-  opts?: { logPrefix?: string }
-): Promise<T> {
+export async function withClickHouseRetry<T>(fn: () => Promise<T>, opts?: { logPrefix?: string }): Promise<T> {
   const prefix = opts?.logPrefix ?? '[clickhouse-retry]'
   let attempt = 0
 
@@ -44,7 +41,9 @@ export async function withClickHouseRetry<T>(
       }
       const delay = backoffMs(attempt)
       const msg = err instanceof Error ? err.message : String(err)
-      process.stderr.write(`${prefix} retryable error (attempt ${String(attempt)}): ${msg}; retrying in ${String(delay)}ms\n`)
+      process.stderr.write(
+        `${prefix} retryable error (attempt ${String(attempt)}): ${msg}; retrying in ${String(delay)}ms\n`
+      )
       await closeClickHouseClient()
       await sleep(delay)
     }

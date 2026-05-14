@@ -354,4 +354,14 @@ runWsAdapterConformance({
   sampleOrderRaw,
   samplePositionRaw: sampleAccountRaw,
   sampleBalanceRaw: sampleAccountRaw,
+  sampleFundingFeeRaw: {
+    e: 'ACCOUNT_UPDATE',
+    E: 1700000002000,
+    T: 1700000002000,
+    a: {
+      m: 'FUNDING_FEE',
+      B: [{ a: 'USDT', wb: '9995.5', cw: '9495.5', bc: '-4.5' }],
+      P: [{ s: 'BTCUSDT', pa: '0.01', ep: '30000', up: '0', ps: 'BOTH' }],
+    },
+  },
 })

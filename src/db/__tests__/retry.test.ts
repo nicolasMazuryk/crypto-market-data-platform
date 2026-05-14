@@ -51,10 +51,7 @@ describe('withClickHouseRetry', () => {
   })
 
   it('retries on ECONNRESET', async () => {
-    const fn = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('ECONNRESET'))
-      .mockResolvedValue('ok')
+    const fn = vi.fn().mockRejectedValueOnce(new Error('ECONNRESET')).mockResolvedValue('ok')
 
     const promise = withClickHouseRetry(fn)
     await vi.runAllTimersAsync()

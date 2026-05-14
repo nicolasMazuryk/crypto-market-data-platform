@@ -15,6 +15,15 @@ const kucoinSpec: CcxtAdapterSpec = {
     if (!ccxtEx.setLeverage) return
     await ccxtEx.setLeverage(leverage, unified, { marginMode: 'cross' })
   },
+  setPositionMode: async (ccxtEx, hedged, unified) => {
+    // KuCoin Futures may not expose setPositionMode (defaults to one-way); skip if unavailable.
+    if (!ccxtEx.has?.setPositionMode || !ccxtEx.setPositionMode || !unified) return
+    await ccxtEx.setPositionMode(hedged, unified)
+  },
+  setMarginMode: async (ccxtEx, unified, mode) => {
+    if (!ccxtEx.setMarginMode) return
+    await ccxtEx.setMarginMode(mode, unified)
+  },
   buildCreateOrderParams: (req: OrderRequest) => {
     const p: Record<string, unknown> = {
       clientOid: req.clientOrderId,

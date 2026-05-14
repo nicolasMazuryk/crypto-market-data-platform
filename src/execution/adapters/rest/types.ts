@@ -3,6 +3,8 @@ import type { Exchange } from '../../types/exchange.js'
 export type OrderSide = 'buy' | 'sell'
 export type OrderType = 'market' | 'limit' | 'stop_market'
 export type TimeInForce = 'GTC' | 'IOC' | 'FOK'
+export type MarginMode = 'cross' | 'isolated'
+export type PositionMode = 'one_way' | 'hedge'
 
 export type OrderStatus = 'new' | 'partially_filled' | 'filled' | 'cancelled' | 'rejected' | 'expired'
 
@@ -88,6 +90,8 @@ export interface ExchangeRestAdapter {
   canonicalizeClientOrderId?(id: string): string
   warm?(): Promise<void>
   setLeverage(symbol: string, leverage: number): Promise<void>
+  setMarginMode(symbol: string, mode: MarginMode): Promise<void>
+  setPositionMode(hedged: boolean, symbol?: string): Promise<void>
   createOrder(req: OrderRequest): Promise<OrderAck>
   cancelOrder(ref: OrderRef): Promise<void>
   amendOrder(ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>, patch: OrderAmendPatch): Promise<OrderAck>

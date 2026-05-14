@@ -1,7 +1,8 @@
 import type { Exchange } from '../../types/exchange.js'
 import type { OrderStatus, Position, Balance, Order } from '../rest/types.js'
-import type { OrderEvent, PositionEvent, BalanceEvent } from './types.js'
+import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent } from './types.js'
 import type { ParsedWsMessage } from './private-ws-base.js'
+import { normalizeSymbol } from '../../../utils/symbol-normalizer.js'
 
 interface GateioOrderData {
   id: string | number
@@ -34,6 +35,14 @@ interface GateioBalanceData {
   balance?: string
   available?: string
   order_margin?: string
+}
+
+interface GateioAccountBookEntry {
+  contract?: string
+  change?: string
+  change_type?: string
+  time?: number
+  currency?: string
 }
 
 interface GateioUpdate {
@@ -78,6 +87,10 @@ export function parseGateioMessage(
   const channel = upd.channel ?? 'unknown'
   const result = upd.result
 
+  if (process.env.GATEIO_ACCTBOOK_DEBUG === '1') {
+    process.stdout.write(JSON.stringify({ _debug: 'gateio.channel', channel, event: upd.event }) + '\n')
+  }
+
   if (channel === 'futures.orders') {
     const items = Array.isArray(result) ? result : result !== undefined ? [result] : []
     const orders: OrderEvent[] = []
@@ -96,8 +109,16 @@ export function parseGateioMessage(
         filledQty: absSize - Math.abs(d.left ?? d.size),
         reduceOnly: d.is_reduce_only ?? false,
         status: mapGateioOrderStatus(d),
-        submittedAt: d.create_time ? Math.floor(d.create_time * 1000) : receivedAt,
-        updatedAt: d.update_time ? Math.floor(d.update_time * 1000) : receivedAt,
+        submittedAt: d.create_time
+          ? d.create_time > 1e10
+            ? Math.floor(d.create_time)
+            : Math.floor(d.create_time * 1000)
+          : receivedAt,
+        updatedAt: d.update_time
+          ? d.update_time > 1e10
+            ? Math.floor(d.update_time)
+            : Math.floor(d.update_time * 1000)
+          : receivedAt,
       }
       const px = parseFloat(d.price ?? '0')
       if (px > 0) order.price = px
@@ -152,6 +173,33 @@ export function parseGateioMessage(
       balances.push({ exchange, balance, seq, receivedAt })
     }
     return { balances, eventType: 'futures.balances' }
+  }
+
+  if (channel === 'futures.account_book') {
+    const fundingFees: FundingFeeEvent[] = []
+    const items = Array.isArray(result) ? result : result !== undefined ? [result] : []
+    for (const item of items) {
+      const d = item as GateioAccountBookEntry
+      if (process.env.GATEIO_ACCTBOOK_DEBUG === '1') {
+        process.stdout.write(JSON.stringify({ _debug: 'gateio.account_book', change_type: d.change_type, contract: d.contract, change: d.change, time: d.time }) + '\n')
+      }
+      if (d.change_type !== 'fund') continue
+      if (!d.contract) continue
+      const fundingAmount = d.change ? parseFloat(d.change) : 0
+      const fundingTime = d.time ? Math.floor(d.time * 1000) : receivedAt
+      fundingFees.push({
+        exchange,
+        symbol: normalizeSymbol(d.contract),
+        fundingTime,
+        fundingRate: 0,
+        fundingAmount,
+        asset: d.currency ?? 'USDT',
+        positionQty: 0,
+        receivedAt,
+      })
+    }
+    if (fundingFees.length > 0) return { fundingFees, eventType: 'futures.account_book' }
+    return { eventType: 'futures.account_book' }
   }
 
   return { eventType: channel }

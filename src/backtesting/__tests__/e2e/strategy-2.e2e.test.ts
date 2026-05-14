@@ -93,9 +93,15 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     // Price keeps declining throughout the window: each second lower than the last.
     // Retracement target = P_low + (50000 - P_low) * 0.5
     // But P_low moves down each second, so target also drops and is never hit.
+    const overrides = new Map<number, Partial<{ bidHigh: number; bidLow: number }>>()
+    for (let offset = 0; offset <= 60; offset++) {
+      const price = 50000 - offset * 5
+      overrides.set(offset, { bidHigh: price, bidLow: price })
+    }
     const window = buildWindow({
       fundingTime,
       basePrice: 50000,
+      overrides,
       priceFn: offset => {
         if (offset < 0) return 50000
         // Continuous decline: 50000 - offset * 5 per second

@@ -1,6 +1,6 @@
 import type { Exchange } from '../../types/exchange.js'
 import type { OrderSide, OrderStatus, Position, Balance, Order } from '../rest/types.js'
-import type { OrderEvent, PositionEvent, BalanceEvent } from './types.js'
+import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent } from './types.js'
 import type { ParsedWsMessage } from './private-ws-base.js'
 
 interface OkxOrderData {
@@ -36,8 +36,18 @@ interface OkxBalanceDetail {
   frozenBal?: string
 }
 
+interface OkxAccountBill {
+  instId?: string
+  bizType?: string
+  pnl?: string
+  ts?: string
+  sz?: string
+  ccy?: string
+}
+
 interface OkxAccountData {
   details?: OkxBalanceDetail[]
+  bills?: OkxAccountBill[]
 }
 
 interface OkxUpdate {
@@ -128,6 +138,7 @@ export function parseOkxMessage(
 
   if (channel === 'account') {
     const balances: BalanceEvent[] = []
+    const fundingFees: FundingFeeEvent[] = []
     for (const item of data) {
       const d = item as OkxAccountData
       for (const detail of d.details ?? []) {
@@ -142,7 +153,26 @@ export function parseOkxMessage(
         }
         balances.push({ exchange, balance, seq, receivedAt })
       }
+      // OKX posts funding-fee notifications via account channel bills array
+      for (const bill of d.bills ?? []) {
+        if (!bill.bizType?.toUpperCase().includes('FUND')) continue
+        if (!bill.instId) continue
+        const fundingTime = bill.ts ? parseInt(bill.ts, 10) : receivedAt
+        const fundingAmount = bill.pnl ? parseFloat(bill.pnl) : 0
+        const positionQty = bill.sz ? Math.abs(parseFloat(bill.sz)) : 0
+        fundingFees.push({
+          exchange,
+          symbol: bill.instId,
+          fundingTime,
+          fundingRate: 0,
+          fundingAmount,
+          asset: bill.ccy ?? 'USDT',
+          positionQty,
+          receivedAt,
+        })
+      }
     }
+    if (fundingFees.length > 0) return { balances, fundingFees, eventType: 'account' }
     return { balances, eventType: 'account' }
   }
 

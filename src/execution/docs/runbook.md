@@ -492,7 +492,7 @@ Fix the root cause, then redeploy or rollback. Do not restart manually until you
 
 ### `risk.killSwitch.trip`
 
-**What it means:** The risk engine tripped the kill switch (notional cap or concurrent-intent cap exceeded). No new intents are being created; existing positions are running to their natural exit.
+**What it means:** The risk engine tripped the kill switch (notional cap or concurrent-intent cap exceeded). Halt mode blocks new orders; it does not flatten existing positions. Existing positions may remain open until their normal exits unless an operator explicitly runs a flatten action.
 
 **Immediate steps:**
 ```bash
@@ -505,7 +505,8 @@ cat config/execution.live.yaml | grep -A 5 'risk:'
 
 **If it looks like a legitimate risk breach:**
 - Do not reset the kill switch without understanding what caused the breach.
-- Let all open positions close naturally.
+- Check open positions before deciding next action. Halt and flatten are separate actions.
+- Either let positions close naturally or explicitly flatten them if exposure must be removed immediately.
 - Once flat, stop the engine: `sudo systemctl stop execution-engine@live`
 - Investigate before restarting.
 

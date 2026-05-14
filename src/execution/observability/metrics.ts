@@ -533,6 +533,25 @@ export function registerKillSwitchMetrics(registry: MetricsRegistry, initialMode
   }
 }
 
+export interface AccountConfigMetrics {
+  calls: Counter
+  skipped: Counter
+}
+
+export function registerAccountConfigMetrics(registry: MetricsRegistry): AccountConfigMetrics {
+  return {
+    calls: registry.counter('account_config_calls_total', 'Account configuration API calls', [
+      'exchange',
+      'setting',
+      'status',
+    ]),
+    skipped: registry.counter('account_config_skipped_total', 'Account configuration calls skipped', [
+      'exchange',
+      'reason',
+    ]),
+  }
+}
+
 export function registerBaseMetrics(
   registry: MetricsRegistry,
   params: {

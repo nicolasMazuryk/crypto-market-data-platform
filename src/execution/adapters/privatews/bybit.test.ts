@@ -85,4 +85,18 @@ runWsAdapterConformance({
       },
     ],
   },
+  sampleFundingFeeRaw: {
+    topic: 'execution',
+    data: [
+      {
+        symbol: 'BTCUSDT',
+        execType: 'Funding',
+        execFee: '-4.5',
+        execTime: '1700000000000',
+        execQty: '0.01',
+        feeRate: '-0.0001',
+        feeCurrency: 'USDT',
+      },
+    ],
+  },
 })

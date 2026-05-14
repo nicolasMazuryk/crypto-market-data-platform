@@ -14,12 +14,21 @@ import type {
 import type { ExecutionIds } from '../core/ids.js'
 import type { ExecutionMetrics } from '../observability/metrics.js'
 import type { ExchangeRestAdapter, Order, OrderSide } from '../adapters/rest/types.js'
+import type { ExchangeOrderWsAdapter } from '../adapters/orderws/types.js'
 import type { StateStore } from '../state/types.js'
 import type { MarketMetadataProvider } from '../markets/types.js'
 import type { KillSwitch } from '../risk/types.js'
 import type { Exchange, Unsubscribe } from '../types/exchange.js'
 import type { TradeIntent } from '../strategies/types.js'
-import type { ExecutionManager, ExitOrderRef, ExitReason, IntentState, IntentStatus, PositionMonitor } from './types.js'
+import type {
+  ExecutionManager,
+  ExitOrderRef,
+  ExitReason,
+  IntentState,
+  IntentStatus,
+  LadderRung,
+  PositionMonitor,
+} from './types.js'
 import type { PreflightResult } from './preflight.js'
 import type { RiskConfig } from '../config/types.js'
 
@@ -40,7 +49,7 @@ export interface BeforeCreateOrderParams {
   symbol: string
   side: 'buy' | 'sell'
   orderType: 'market' | 'limit' | 'stop_market'
-  kind: 'entry' | 'sl' | 'tp' | 'close' | 'timed'
+  kind: 'entry' | 'pre_funding' | 'sl' | 'tp' | 'close' | 'timed'
   qty: number
   price?: number
   stopPrice?: number
@@ -65,6 +74,8 @@ export interface ExecutionManagerOptions {
   initialState?: ExecutionManagerInitialState
   /** Called with full order params before createOrder — use for durability writes. */
   beforeCreateOrder?: (params: BeforeCreateOrderParams) => Promise<void>
+  /** WS order adapters keyed by exchange — used for strategy_1_ws instead of REST. */
+  orderWsAdapters?: Map<Exchange, ExchangeOrderWsAdapter>
 }
 
 export interface ExecutionManagerHandle extends ExecutionManager {
@@ -75,6 +86,23 @@ export interface ExecutionManagerHandle extends ExecutionManager {
 
 export function createExecutionManager(opts: ExecutionManagerOptions): ExecutionManagerHandle {
   const { bus, clock, ids, logger, metrics, restAdapters, monitor, preflight, refPrice } = opts
+
+  function requiresWsOrderAdapter(strategy: string): boolean {
+    return strategy === 'strategy_1_ws' || strategy === 'strategy_2' || strategy === 'strategy_6'
+  }
+
+  // Returns the WS order adapter for strategies that require low-latency WS order placement.
+  // Throws if the adapter is missing so failures surface immediately rather than silently degrading to REST.
+  function orderClient(exchange: Exchange, strategy: string): Pick<ExchangeRestAdapter, 'createOrder'> {
+    if (requiresWsOrderAdapter(strategy)) {
+      const ws = opts.orderWsAdapters?.get(exchange)
+      if (ws) return ws
+      throw new Error(`no WS order adapter for exchange: ${exchange} (strategy ${strategy} requires WS placement)`)
+    }
+    const rest = restAdapters.get(exchange)
+    if (!rest) throw new Error(`no adapter for exchange: ${exchange}`)
+    return rest
+  }
 
   const intentStates: Map<string, IntentState> = opts.initialState?.intentStates ?? new Map<string, IntentState>()
   // clientOrderId → intentId for entry orders
@@ -160,11 +188,218 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     transition(s, 'error')
   }
 
+  function ackRejectReason(
+    result: PromiseSettledResult<{ status: 'accepted' | 'rejected'; rejectReason?: string }>
+  ): string | undefined {
+    if (result.status === 'rejected') return String(result.reason)
+    if (result.value.status === 'rejected') return result.value.rejectReason ?? 'order rejected'
+    return undefined
+  }
+
+  async function confirmedCloseQty(s: IntentState, rest: ExchangeRestAdapter): Promise<number> {
+    if (s.intent.strategy !== 'strategy_6') return s.filledQty
+    try {
+      const positions = await rest.getPositions(s.intent.exchangeSymbol)
+      const pos = positions.find(p => p.symbol === s.intent.symbol || p.symbol === s.intent.exchangeSymbol)
+      if (pos && pos.qty > 0) return pos.qty
+      logger.warn(
+        { event: 'strategy6.close_position_not_found', intentId: s.intent.id, fallbackQty: s.filledQty },
+        'strategy6: close position not found, falling back to tracked fills'
+      )
+    } catch (err) {
+      logger.warn(
+        { event: 'strategy6.close_position_fetch_failed', intentId: s.intent.id, err },
+        'strategy6: close position fetch failed, falling back to tracked fills'
+      )
+    }
+    const preFundingQty =
+      s.preFundingFilledQty ??
+      (s.intent.entryPolicy?.kind === 'pre_funding_then_main' ? s.intent.entryPolicy.preFundingVolume : 0)
+    return Math.max(0, s.filledQty - preFundingQty) || s.filledQty
+  }
+
+  async function closeAfterProtectionFailure(
+    s: IntentState,
+    code: string,
+    message: string,
+    placedRefs: ExitOrderRef[]
+  ): Promise<void> {
+    const rest = restAdapters.get(s.intent.exchange)
+    if (!rest) {
+      setError(s, 'no_adapter', 'no rest adapter for protective close')
+      return
+    }
+
+    for (const ref of placedRefs) {
+      await rest
+        .cancelOrder({
+          symbol: s.intent.exchangeSymbol,
+          clientOrderId: ref.clientOrderId,
+          ...(ref.exchangeOrderId ? { exchangeOrderId: ref.exchangeOrderId } : {}),
+        })
+        .catch((err: unknown) => {
+          logger.warn({ intentId: s.intent.id, clientOrderId: ref.clientOrderId, err }, 'protective failure cancel failed')
+        })
+    }
+
+    const closeId = ids.forExit(s.intent.id, 'close')
+    const exitSide: OrderSide = s.intent.side === 'long' ? 'sell' : 'buy'
+    const closeQty = await confirmedCloseQty(s, rest)
+    try {
+      const ack = await rest.createOrder({
+        intentId: s.intent.id,
+        clientOrderId: closeId,
+        exchange: s.intent.exchange,
+        symbol: s.intent.exchangeSymbol,
+        side: exitSide,
+        type: 'market',
+        qty: closeQty,
+        reduceOnly: true,
+      })
+      if (ack.status === 'accepted') {
+        const closePlaced: OrderPlacedEvent = {
+          intentId: s.intent.id,
+          exchange: s.intent.exchange,
+          symbol: s.intent.symbol,
+          clientOrderId: closeId,
+          kind: 'close',
+          side: exitSide,
+          orderType: 'market',
+          qty: closeQty,
+          reduceOnly: true,
+          ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+        }
+        bus.emit('order.placed', closePlaced)
+        logger.error({ event: 'protective.close_placed', code, ...closePlaced }, 'protective.close_placed')
+      } else {
+        logger.error({ intentId: s.intent.id, code, rejectReason: ack.rejectReason }, 'protective market close rejected')
+      }
+    } catch (err) {
+      logger.error({ intentId: s.intent.id, code, err }, 'protective market close failed')
+    }
+
+    metrics.intentRejectedTotal.inc(1, { exchange: s.intent.exchange, strategy: s.intent.strategy, code })
+    bus.emit('ops.event', {
+      ts: clock.now(),
+      level: 'error',
+      exchange: s.intent.exchange,
+      eventType: 'protective_order_failure_close',
+      payload: { intentId: s.intent.id, code, message },
+    })
+    setError(s, code, message)
+  }
+
   async function handleEntryFilled(s: IntentState): Promise<void> {
     const { intent } = s
     const rest = restAdapters.get(intent.exchange)
     if (!rest) {
       setError(s, 'no_adapter', 'no rest adapter for entry fills')
+      return
+    }
+
+    if (
+      intent.exitPolicy.kind === 'sl_tp_deadline_retracement' ||
+      intent.exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event'
+    ) {
+      // Place SL immediately; TP is placed dynamically by the retracement tracker after T_funding.
+      const slId = ids.forExit(intent.id, 'sl')
+      const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
+      const { slPct } = intent.exitPolicy
+      const price = s.avgEntryPrice ?? refPrice(intent.exchange, intent.symbol) ?? 0
+
+      if (price > 0) {
+        const slPrice = intent.side === 'long' ? price * (1 - slPct / 100) : price * (1 + slPct / 100)
+        const exitQty = s.filledQty
+
+        if (opts.beforeCreateOrder) {
+          await opts
+            .beforeCreateOrder({
+              intentId: intent.id,
+              clientOrderId: slId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              side: exitSide,
+              kind: 'sl',
+              orderType: 'stop_market',
+              qty: exitQty,
+              stopPrice: slPrice,
+              reduceOnly: true,
+            })
+            .catch((err: unknown) => {
+              logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for sl order (retracement)')
+            })
+        }
+
+        try {
+          const slResult = await rest.createOrder({
+            intentId: intent.id,
+            clientOrderId: slId,
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
+            side: exitSide,
+            type: 'stop_market',
+            qty: exitQty,
+            stopPrice: slPrice,
+            reduceOnly: true,
+          })
+          if (slResult.status === 'rejected') {
+            await closeAfterProtectionFailure(
+              s,
+              'retracement_sl_rejected',
+              slResult.rejectReason ?? 'retracement SL rejected',
+              []
+            )
+            return
+          }
+          const slPlaced: OrderPlacedEvent = {
+            intentId: intent.id,
+            exchange: intent.exchange,
+            symbol: intent.symbol,
+            clientOrderId: slId,
+            kind: 'sl',
+            side: exitSide,
+            orderType: 'stop_market',
+            qty: exitQty,
+            stopPrice: slPrice,
+            reduceOnly: true,
+            ...(slResult.exchangeOrderId ? { exchangeOrderId: slResult.exchangeOrderId } : {}),
+          }
+          bus.emit('order.placed', slPlaced)
+          logger.info({ event: 'order.placed', ...slPlaced }, 'order.placed')
+          s.exitOrderRefs = {
+            sl: {
+              clientOrderId: canonicalize(intent.exchange, slId),
+              ...(slResult.exchangeOrderId ? { exchangeOrderId: slResult.exchangeOrderId } : {}),
+            },
+          }
+        } catch (err) {
+          logger.warn({ intentId: intent.id, err }, 'manager: sl order placement failed (retracement)')
+          await closeAfterProtectionFailure(s, 'retracement_sl_failed', String(err), [])
+          return
+        }
+      } else {
+        logger.warn(
+          { event: 'handleEntryFilled.no_price', intentId: intent.id },
+          'handleEntryFilled: zero ref price — SL not placed for retracement intent'
+        )
+        await closeAfterProtectionFailure(s, 'retracement_sl_no_price', 'zero ref price for retracement SL', [])
+        return
+      }
+
+      const posOpened: PositionOpenedEvent = {
+        intentId: intent.id,
+        exchange: intent.exchange,
+        symbol: intent.symbol,
+        side: intent.side,
+        filledQty: s.filledQty,
+        ...(s.avgEntryPrice !== undefined ? { avgEntryPrice: s.avgEntryPrice } : {}),
+      }
+      bus.emit('position.opened', posOpened)
+      logger.info({ event: 'position.opened', ...posOpened }, 'position.opened')
+      transition(s, 'monitoring')
+      monitor.arm(s)
+      // Spawn the retracement TP tracker — runs concurrently alongside the SL/deadline monitor.
+      spawnRetracementTracker(s)
       return
     }
 
@@ -185,6 +420,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           },
           'handleEntryFilled: zero ref price — SL/TP not placed, deadline-only exit'
         )
+        await closeAfterProtectionFailure(s, 'protective_no_price', 'zero ref price for SL/TP placement', [])
+        return
       }
       if (price > 0) {
         const slPrice = intent.side === 'long' ? price * (1 - slPct / 100) : price * (1 + slPct / 100)
@@ -281,59 +518,253 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           }),
         ])
 
-        if (slResult.status === 'fulfilled') {
-          const slPlaced: OrderPlacedEvent = {
+        const slReject = ackRejectReason(slResult)
+        const tpReject = ackRejectReason(tpResult)
+        const placedRefs: ExitOrderRef[] = []
+        if (!slReject && slResult.status === 'fulfilled') {
+          placedRefs.push({
+            clientOrderId: canonicalize(intent.exchange, slId),
+            ...(slResult.value.exchangeOrderId ? { exchangeOrderId: slResult.value.exchangeOrderId } : {}),
+          })
+        }
+        if (!tpReject && tpResult.status === 'fulfilled') {
+          placedRefs.push({
+            clientOrderId: canonicalize(intent.exchange, tpId),
+            ...(tpResult.value.exchangeOrderId ? { exchangeOrderId: tpResult.value.exchangeOrderId } : {}),
+          })
+        }
+        if (slReject || tpReject) {
+          logger.error({ intentId: intent.id, slReject, tpReject }, 'manager: protective order placement failed')
+          await closeAfterProtectionFailure(
+            s,
+            'protective_order_failed',
+            `SL/TP placement failed: sl=${slReject ?? 'accepted'} tp=${tpReject ?? 'accepted'}`,
+            placedRefs
+          )
+          return
+        }
+
+        const slExchangeOrderId = slResult.status === 'fulfilled' ? slResult.value.exchangeOrderId : undefined
+        const tpExchangeOrderId = tpResult.status === 'fulfilled' ? tpResult.value.exchangeOrderId : undefined
+        const slPlaced: OrderPlacedEvent = {
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId: slId,
+          kind: 'sl',
+          side: exitSide,
+          orderType: 'stop_market',
+          qty: exitQty,
+          stopPrice: slPrice,
+          reduceOnly: true,
+          ...(slExchangeOrderId ? { exchangeOrderId: slExchangeOrderId } : {}),
+        }
+        const tpPlaced: OrderPlacedEvent = {
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId: tpId,
+          kind: 'tp',
+          side: exitSide,
+          orderType: 'limit',
+          qty: exitQty,
+          price: tpPrice,
+          reduceOnly: true,
+          ...(tpExchangeOrderId ? { exchangeOrderId: tpExchangeOrderId } : {}),
+        }
+        bus.emit('order.placed', slPlaced)
+        bus.emit('order.placed', tpPlaced)
+        logger.info({ event: 'order.placed', ...slPlaced }, 'order.placed')
+        logger.info({ event: 'order.placed', ...tpPlaced }, 'order.placed')
+        s.exitOrderRefs = {
+          ...s.exitOrderRefs,
+          sl: {
+            clientOrderId: canonicalize(intent.exchange, slId),
+            ...(slExchangeOrderId ? { exchangeOrderId: slExchangeOrderId } : {}),
+          },
+          tp: {
+            clientOrderId: canonicalize(intent.exchange, tpId),
+            ...(tpExchangeOrderId ? { exchangeOrderId: tpExchangeOrderId } : {}),
+          },
+        }
+      }
+    }
+
+    if (intent.exitPolicy.kind === 'sl_tp_deadline_post_funding_event') {
+      // Place SL + TP immediately after MAIN fill. Net exit qty = mainVolume − preFundingVolume.
+      const slId = ids.forExit(intent.id, 'sl')
+      const tpId = ids.forExit(intent.id, 'tp')
+      const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
+      const { tpMultiplier, slMultiplier } = intent.exitPolicy
+      const price = s.avgEntryPrice ?? refPrice(intent.exchange, intent.symbol) ?? 0
+      const absF = Math.abs(intent.fundingRatePercent)
+
+      const preFundingVolume =
+        s.preFundingFilledQty ??
+        (intent.entryPolicy?.kind === 'pre_funding_then_main' ? intent.entryPolicy.preFundingVolume : 0)
+      let exitQty = Math.max(0, s.filledQty - preFundingVolume)
+      try {
+        const positions = await rest.getPositions(intent.exchangeSymbol)
+        const pos = positions.find(p => p.symbol === intent.symbol || p.symbol === intent.exchangeSymbol)
+        if (pos && pos.qty > 0) {
+          exitQty = pos.qty
+        } else {
+          logger.warn(
+            { event: 'strategy6.position_not_found', intentId: intent.id, fallbackQty: exitQty },
+            'strategy6: confirmed position not found, falling back to tracked fills'
+          )
+        }
+      } catch (err) {
+        logger.warn(
+          { event: 'strategy6.position_fetch_failed', intentId: intent.id, err, fallbackQty: exitQty },
+          'strategy6: position fetch failed, falling back to tracked fills'
+        )
+      }
+
+      if (price > 0 && exitQty > 0) {
+        const tpPct = absF * tpMultiplier
+        const slPct = absF * slMultiplier
+        const tpPrice = intent.side === 'long' ? price * (1 + tpPct / 100) : price * (1 - tpPct / 100)
+        const slPrice = intent.side === 'long' ? price * (1 - slPct / 100) : price * (1 + slPct / 100)
+
+        if (opts.beforeCreateOrder) {
+          await Promise.all([
+            opts
+              .beforeCreateOrder({
+                intentId: intent.id,
+                clientOrderId: slId,
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                side: exitSide,
+                kind: 'sl',
+                orderType: 'stop_market',
+                qty: exitQty,
+                stopPrice: slPrice,
+                reduceOnly: true,
+              })
+              .catch((err: unknown) => {
+                logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for sl (post_funding)')
+              }),
+            opts
+              .beforeCreateOrder({
+                intentId: intent.id,
+                clientOrderId: tpId,
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                side: exitSide,
+                kind: 'tp',
+                orderType: 'limit',
+                qty: exitQty,
+                price: tpPrice,
+                reduceOnly: true,
+              })
+              .catch((err: unknown) => {
+                logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for tp (post_funding)')
+              }),
+          ])
+        }
+
+        const [slResult, tpResult] = await Promise.allSettled([
+          rest.createOrder({
             intentId: intent.id,
-            exchange: intent.exchange,
-            symbol: intent.symbol,
             clientOrderId: slId,
-            kind: 'sl',
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
             side: exitSide,
-            orderType: 'stop_market',
+            type: 'stop_market',
             qty: exitQty,
             stopPrice: slPrice,
             reduceOnly: true,
-            ...(slResult.value.exchangeOrderId ? { exchangeOrderId: slResult.value.exchangeOrderId } : {}),
-          }
-          bus.emit('order.placed', slPlaced)
-          logger.info({ event: 'order.placed', ...slPlaced }, 'order.placed')
-          s.exitOrderRefs = {
-            ...s.exitOrderRefs,
-            sl: {
-              clientOrderId: canonicalize(intent.exchange, slId),
-              ...(slResult.value.exchangeOrderId ? { exchangeOrderId: slResult.value.exchangeOrderId } : {}),
-            },
-          }
-        } else {
-          logger.warn({ intentId: intent.id, err: slResult.reason }, 'manager: sl order placement failed')
-        }
-
-        if (tpResult.status === 'fulfilled') {
-          const tpPlaced: OrderPlacedEvent = {
+          }),
+          rest.createOrder({
             intentId: intent.id,
-            exchange: intent.exchange,
-            symbol: intent.symbol,
             clientOrderId: tpId,
-            kind: 'tp',
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
             side: exitSide,
-            orderType: 'limit',
+            type: 'limit',
             qty: exitQty,
             price: tpPrice,
             reduceOnly: true,
-            ...(tpResult.value.exchangeOrderId ? { exchangeOrderId: tpResult.value.exchangeOrderId } : {}),
-          }
-          bus.emit('order.placed', tpPlaced)
-          logger.info({ event: 'order.placed', ...tpPlaced }, 'order.placed')
-          s.exitOrderRefs = {
-            ...s.exitOrderRefs,
-            tp: {
-              clientOrderId: canonicalize(intent.exchange, tpId),
-              ...(tpResult.value.exchangeOrderId ? { exchangeOrderId: tpResult.value.exchangeOrderId } : {}),
-            },
-          }
-        } else {
-          logger.warn({ intentId: intent.id, err: tpResult.reason }, 'manager: tp order placement failed')
+          }),
+        ])
+
+        const slReject = ackRejectReason(slResult)
+        const tpReject = ackRejectReason(tpResult)
+        const placedRefs: ExitOrderRef[] = []
+        if (!slReject && slResult.status === 'fulfilled') {
+          placedRefs.push({
+            clientOrderId: canonicalize(intent.exchange, slId),
+            ...(slResult.value.exchangeOrderId ? { exchangeOrderId: slResult.value.exchangeOrderId } : {}),
+          })
         }
+        if (!tpReject && tpResult.status === 'fulfilled') {
+          placedRefs.push({
+            clientOrderId: canonicalize(intent.exchange, tpId),
+            ...(tpResult.value.exchangeOrderId ? { exchangeOrderId: tpResult.value.exchangeOrderId } : {}),
+          })
+        }
+        if (slReject || tpReject) {
+          logger.error({ intentId: intent.id, slReject, tpReject }, 'manager: post-funding protective order placement failed')
+          await closeAfterProtectionFailure(
+            s,
+            'post_funding_protective_order_failed',
+            `post-funding SL/TP placement failed: sl=${slReject ?? 'accepted'} tp=${tpReject ?? 'accepted'}`,
+            placedRefs
+          )
+          return
+        }
+
+        const slExchangeOrderId = slResult.status === 'fulfilled' ? slResult.value.exchangeOrderId : undefined
+        const tpExchangeOrderId = tpResult.status === 'fulfilled' ? tpResult.value.exchangeOrderId : undefined
+        const slPlaced: OrderPlacedEvent = {
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId: slId,
+          kind: 'sl',
+          side: exitSide,
+          orderType: 'stop_market',
+          qty: exitQty,
+          stopPrice: slPrice,
+          reduceOnly: true,
+          ...(slExchangeOrderId ? { exchangeOrderId: slExchangeOrderId } : {}),
+        }
+        const tpPlaced: OrderPlacedEvent = {
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId: tpId,
+          kind: 'tp',
+          side: exitSide,
+          orderType: 'limit',
+          qty: exitQty,
+          price: tpPrice,
+          reduceOnly: true,
+          ...(tpExchangeOrderId ? { exchangeOrderId: tpExchangeOrderId } : {}),
+        }
+        bus.emit('order.placed', slPlaced)
+        bus.emit('order.placed', tpPlaced)
+        logger.info({ event: 'order.placed', ...slPlaced }, 'order.placed')
+        logger.info({ event: 'order.placed', ...tpPlaced }, 'order.placed')
+        s.exitOrderRefs = {
+          ...s.exitOrderRefs,
+          sl: {
+            clientOrderId: canonicalize(intent.exchange, slId),
+            ...(slExchangeOrderId ? { exchangeOrderId: slExchangeOrderId } : {}),
+          },
+          tp: {
+            clientOrderId: canonicalize(intent.exchange, tpId),
+            ...(tpExchangeOrderId ? { exchangeOrderId: tpExchangeOrderId } : {}),
+          },
+        }
+      } else {
+        logger.warn(
+          { event: 'handleEntryFilled.no_price_or_qty', intentId: intent.id, price, exitQty },
+          'handleEntryFilled: zero price or qty — SL/TP not placed for post_funding intent'
+        )
+        await closeAfterProtectionFailure(s, 'post_funding_protective_no_price_or_qty', 'zero price or qty for post-funding SL/TP', [])
+        return
       }
     }
 
@@ -350,17 +781,338 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
     transition(s, 'monitoring')
     monitor.arm(s)
-    // REST fallback: poll for SL/TP fills in case a WS reconnect gap causes the monitor to miss them
-    if (intent.exitPolicy.kind === 'sl_tp_deadline' && s.exitOrderRefs && (s.exitOrderRefs.sl || s.exitOrderRefs.tp)) {
+    // REST fallback: poll for SL/TP fills in case WS events are missed (e.g. reconnect gap,
+    // or Bybit conditional stop orders whose triggered market order doesn't carry the clientOrderId).
+    if (s.exitOrderRefs && (s.exitOrderRefs.sl || s.exitOrderRefs.tp)) {
       void pollForSlTpFill(s)
     }
   }
 
+  /**
+   * Retracement TP tracker for `sl_tp_deadline_retracement` and
+   * `sl_tp_deadline_retracement_funding_event` (strategy_2).
+   *
+   * Runs concurrently after entry fill. Polls `refPrice` every second, tracks P_low, and
+   * places/replaces a TP limit order whenever P_low decreases (throttled to ≤1/s).
+   * For the funding_event variant, tracking only begins after ws.funding_fee is received
+   * (or the hard timeout fires). On TP fill, cancels SL and drives exit.
+   */
+  function spawnRetracementTracker(s: IntentState): void {
+    const { intent } = s
+    if (
+      intent.exitPolicy.kind !== 'sl_tp_deadline_retracement' &&
+      intent.exitPolicy.kind !== 'sl_tp_deadline_retracement_funding_event'
+    )
+      return
+    const rest = restAdapters.get(intent.exchange)
+    if (!rest) return
+
+    const { fundingTs, deadlineAt, retracementPct, anchorPrice } = intent.exitPolicy
+    const isFundingEventKind = intent.exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event'
+    const timeoutAt =
+      intent.exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event'
+        ? intent.exitPolicy.timeoutAt
+        : fundingTs
+    const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
+
+    // For the funding_event variant, P_low tracking begins only when the WS event fires (or
+    // the timeout fallback). For the legacy variant it begins at fundingTs (wall-clock).
+    let fundingGateOpen = !isFundingEventKind
+
+    let pLow = Infinity
+    let tpVersion = 0
+    let currentTpCanonId: string | null = null
+    let currentTpUnsub: Unsubscribe | null = null
+    let lastReplaceAt = 0
+    let settled = false
+    let tpPlacementFailures = 0
+    const maxTpPlacementFailures = 3
+
+    const cleanup = () => {
+      currentTpUnsub?.()
+      currentTpUnsub = null
+    }
+
+    const settleTp = async (avgFillPrice?: number) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      if (avgFillPrice !== undefined) s.avgExitPrice = avgFillPrice
+      monitor.disarm(intent.id)
+      await handleMonitorExit(s, 'tp')
+    }
+
+    const recordTpPlacementFailure = async (reason: string) => {
+      tpPlacementFailures++
+      if (tpPlacementFailures < maxTpPlacementFailures) return
+      if (settled) return
+      settled = true
+      cleanup()
+      bus.emit('ops.event', {
+        ts: clock.now(),
+        level: 'error',
+        exchange: intent.exchange,
+        eventType: 'retracement_tp_exhausted',
+        payload: { intentId: intent.id, failures: tpPlacementFailures, reason },
+      })
+      logger.error(
+        { event: 'retracement.tp_exhausted', intentId: intent.id, failures: tpPlacementFailures, reason },
+        'retracement.tp_exhausted'
+      )
+      monitor.disarm(intent.id)
+      await handleMonitorExit(s, 'error')
+    }
+
+    // Wire up the WS funding-fee gate for the new variant.
+    if (isFundingEventKind) {
+      const toleranceMs = 5_000
+      const feeUnsub = bus.on('ws.funding_fee', event => {
+        if (event.exchange !== intent.exchange) return
+        if (event.symbol !== intent.symbol) return
+        if (event.fundingTime < fundingTs - toleranceMs) return
+        fundingGateOpen = true
+        feeUnsub()
+      })
+
+      const timeoutDelay = Math.max(0, timeoutAt - clock.now())
+      setTimeout(() => {
+        fundingGateOpen = true
+      }, timeoutDelay)
+    }
+
+    const replaceTp = async (tpPrice: number) => {
+      const now = clock.now()
+      if (now - lastReplaceAt < 1000) return
+      lastReplaceAt = now
+
+      // Cancel the previous TP limit.
+      if (currentTpCanonId) {
+        cleanup()
+        try {
+          await rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId: currentTpCanonId })
+        } catch {
+          // best effort — open-orders sweep at exit handles stragglers
+        }
+      }
+
+      // Cancel the SL order before placing TP. Bybit enforces that the sum of all reduce-only
+      // orders cannot exceed the position size. Use cancelSiblingExit to verify the cancel was
+      // actually processed before placing TP — a bare REST cancel returns "acknowledged" before
+      // the exchange updates the reduce-only quota, causing 110017 on immediate TP placement.
+      const slRef = s.exitOrderRefs?.sl
+      if (slRef) {
+        const cancelResult = await cancelSiblingExit(rest, intent, slRef)
+        if (cancelResult !== 'failed') {
+          const { sl: _removedSl, ...restRefs } = s.exitOrderRefs ?? {}
+          s.exitOrderRefs = restRefs
+        } else {
+          logger.warn(
+            { event: 'retracement.sl_cancel_failed', intentId: intent.id },
+            'retracement tracker: SL cancel failed, skipping TP this cycle'
+          )
+          return
+        }
+      }
+
+      const tpId = ids.forIntent(intent.id, 100 + tpVersion++)
+      const canonTpId = canonicalize(intent.exchange, tpId)
+      currentTpCanonId = canonTpId
+      s.exitOrderRefs = { ...s.exitOrderRefs, tp: { clientOrderId: canonTpId } }
+
+      // Subscribe to WS fill for this specific TP order.
+      currentTpUnsub = bus.on('ws.order', event => {
+        if (event.exchange !== intent.exchange) return
+        if (event.order.clientOrderId !== canonTpId) return
+        if (event.order.status !== 'filled') return
+        void settleTp(event.order.avgFillPrice)
+      })
+
+      try {
+        const exitQty = s.filledQty
+        const ack = await rest.createOrder({
+          intentId: intent.id,
+          clientOrderId: tpId,
+          exchange: intent.exchange,
+          symbol: intent.exchangeSymbol,
+          side: exitSide,
+          type: 'limit',
+          qty: exitQty,
+          price: tpPrice,
+          reduceOnly: true,
+        })
+        if (ack.status !== 'accepted') {
+          cleanup()
+          logger.warn(
+            { event: 'retracement.tp_rejected', intentId: intent.id, tpVersion, rejectReason: ack.rejectReason },
+            'retracement tracker: TP rejected'
+          )
+          // "position is zero / empty" means the SL triggered before the retracement window.
+          // Settle immediately as an SL exit rather than waiting for the deadline.
+          // Bybit: 110017; Gate.io: INCREASE_POSITION "empty position"; Binance: -2022 ReduceOnly rejected
+          const emptyPosition =
+            ack.rejectReason?.includes('110017') ||
+            (ack.rejectReason?.includes('INCREASE_POSITION') && ack.rejectReason?.includes('empty position')) ||
+            ack.rejectReason?.includes('-2022')
+          if (emptyPosition) {
+            settled = true
+            monitor.disarm(intent.id)
+            await handleMonitorExit(s, 'sl')
+            return
+          }
+          await recordTpPlacementFailure(ack.rejectReason ?? 'TP rejected')
+          return
+        }
+        tpPlacementFailures = 0
+        const tpPlaced: OrderPlacedEvent = {
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId: tpId,
+          kind: 'tp',
+          side: exitSide,
+          orderType: 'limit',
+          qty: exitQty,
+          price: tpPrice,
+          reduceOnly: true,
+          ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+        }
+        bus.emit('order.placed', tpPlaced)
+        logger.info({ event: 'retracement.tp_placed', ...tpPlaced, tpVersion }, 'retracement.tp_placed')
+        if (ack.exchangeOrderId) {
+          s.exitOrderRefs = {
+            ...s.exitOrderRefs,
+            tp: { clientOrderId: canonTpId, exchangeOrderId: ack.exchangeOrderId },
+          }
+        }
+      } catch (err) {
+        logger.warn({ intentId: intent.id, tpVersion, err }, 'retracement tracker: TP placement failed')
+        await recordTpPlacementFailure(String(err))
+      }
+    }
+
+    const tick = async () => {
+      if (settled || TERMINAL.has(s.status) || s.status !== 'monitoring') {
+        cleanup()
+        return
+      }
+      const now = clock.now()
+      if (now >= deadlineAt) {
+        cleanup()
+        return
+      }
+
+      // Legacy kind: gate on wall-clock ≥ fundingTs.
+      // Funding-event kind: gate on WS event received OR timeout fallback (fundingGateOpen flag).
+      const gateOpen = isFundingEventKind ? fundingGateOpen : now >= fundingTs
+
+      if (gateOpen) {
+        const currentPrice = refPrice(intent.exchange, intent.symbol)
+        if (currentPrice !== undefined && currentPrice < pLow) {
+          pLow = currentPrice
+          // Only place TP when price has actually dropped below the anchor.
+          if (anchorPrice > pLow) {
+            const tpPrice = pLow + (anchorPrice - pLow) * retracementPct
+            await replaceTp(tpPrice)
+          }
+        }
+      }
+
+      setTimeout(() => void tick(), 1_000)
+    }
+
+    // Begin polling from fundingTs; wait until then if entry fill was early.
+    const delayMs = Math.max(0, fundingTs - clock.now())
+    setTimeout(() => void tick(), delayMs)
+  }
+
   function handleEntryOrderEvent(
     s: IntentState,
-    order: { clientOrderId: string; status: string; filledQty: number; avgFillPrice?: number }
+    order: { clientOrderId: string; exchangeOrderId?: string; status: string; filledQty: number; avgFillPrice?: number }
   ): void {
     if (TERMINAL.has(s.status)) return
+
+    // Ladder intents track per-rung fills separately; the T_funding timer drives handleEntryFilled.
+    if (s.intent.entryPolicy?.kind === 'ladder_limit' && s.ladderRungs) {
+      const canonId = canonicalize(s.intent.exchange, order.clientOrderId)
+      const rung = s.ladderRungs.find(r => r.canonicalId === canonId)
+      if (!rung || rung.filled) return
+
+      if (order.status === 'filled' || order.status === 'partially_filled') {
+        if (order.status === 'filled') {
+          rung.filled = true
+          rung.filledQty = order.filledQty > 0 ? order.filledQty : rung.filledQty
+          rung.avgFillPrice = order.avgFillPrice ?? rung.avgFillPrice
+        } else {
+          rung.filledQty = Math.max(rung.filledQty, order.filledQty)
+          if (order.avgFillPrice !== undefined) rung.avgFillPrice = order.avgFillPrice
+        }
+
+        // Recompute aggregate fill state from all rungs.
+        let totalQty = 0
+        let totalQtyPrice = 0
+        for (const r of s.ladderRungs) {
+          if (r.filledQty > 0) {
+            totalQty += r.filledQty
+            totalQtyPrice += r.filledQty * r.avgFillPrice
+          }
+        }
+        s.filledQty = totalQty
+        if (totalQty > 0) s.avgEntryPrice = totalQtyPrice / totalQty
+
+        transition(s, 'partially_filled')
+
+        // Emit deviation metric if a rung fills before T_funding (scenario A invariant).
+        if (order.status === 'filled' && clock.now() < s.intent.nextFundingTimestamp) {
+          logger.warn(
+            {
+              event: 'ladder.pre_funding_fill',
+              intentId: s.intent.id,
+              clientOrderId: order.clientOrderId,
+              fundingTs: s.intent.nextFundingTimestamp,
+            },
+            'ladder rung filled before T_funding — funding accrual deviation (keeping position)'
+          )
+          metrics.intentRejectedTotal.inc(1, {
+            exchange: s.intent.exchange,
+            strategy: s.intent.strategy,
+            code: 'ladder_pre_funding_fill',
+          })
+        }
+      }
+      return
+    }
+
+    if (s.intent.entryPolicy?.kind === 'pre_funding_then_main' && s.preFundingOrderId) {
+      const canonId = order.clientOrderId ? canonicalize(s.intent.exchange, order.clientOrderId) : ''
+      const preCanonId = canonicalize(s.intent.exchange, s.preFundingOrderId)
+      const isPreFunding =
+        canonId === preCanonId ||
+        (order.exchangeOrderId !== undefined && order.exchangeOrderId === s.preFundingExchangeOrderId)
+      if (isPreFunding) {
+        if (order.filledQty > (s.preFundingFilledQty ?? 0)) {
+          s.preFundingFilledQty = order.filledQty
+          if (order.avgFillPrice !== undefined) s.preFundingAvgFillPrice = order.avgFillPrice
+        }
+        if (order.status === 'filled') {
+          const filled: OrderFilledEvent = {
+            intentId: s.intent.id,
+            exchange: s.intent.exchange,
+            symbol: s.intent.symbol,
+            clientOrderId: s.preFundingOrderId,
+            filledQty: order.filledQty,
+            ...(order.avgFillPrice !== undefined ? { avgFillPrice: order.avgFillPrice } : {}),
+          }
+          bus.emit('order.filled', filled)
+          logger.info({ event: 'strategy6.pre_funding_filled', ...filled }, 'strategy6.pre_funding_filled')
+          if (s.status === 'working' || s.status === 'acked') emitState(s)
+        } else if (order.status === 'partially_filled') {
+          emitState(s)
+        } else if (order.status === 'cancelled' || order.status === 'rejected') {
+          setError(s, `pre_funding_${order.status}`, `pre-funding order ${order.status}`)
+        }
+        return
+      }
+    }
 
     if (order.filledQty > s.filledQty) {
       s.filledQty = order.filledQty
@@ -399,7 +1151,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     }
   }
 
-  const POLL_GET_ORDER_TIMEOUT_MS = 3_000
+  const POLL_GET_ORDER_TIMEOUT_MS = 10_000
 
   function withGetOrderTimeout(promise: Promise<Order | undefined>): Promise<Order | undefined> {
     return Promise.race([
@@ -432,6 +1184,40 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         logger.warn({ intentId: s.intent.id, attempt: i + 1, err }, 'manager: entry poll failed')
       }
     }
+    // ORDER_NOT_FOUND (e.g. Gate.io purges archived orders) causes getOrder to return undefined,
+    // leaving the intent stuck in 'working'. Confirm via all positions (no symbol filter —
+    // exchange-specific fetchPositions([sym]) can return empty even when position exists).
+    if (TERMINAL.has(s.status) || s.status !== 'working') return
+    try {
+      const allPositions = await rest.getPositions()
+      const pos = allPositions.find(
+        p => p.symbol === s.intent.symbol || p.symbol === s.intent.exchangeSymbol || p.symbol.includes(s.intent.symbol)
+      )
+      if (!pos || pos.qty === 0) {
+        logger.warn(
+          { intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol },
+          'manager: entry poll exhausted with no fill; position flat — treating as cancelled entry'
+        )
+        setError(s, 'cancelled', 'entry order not found after poll exhausted (likely cancelled)')
+      }
+      // Position exists with qty > 0: the fill was real but getOrder failed (e.g. ORDER_NOT_FOUND
+      // after rapid archival). Synthesise a filled order event so the intent can proceed.
+      else {
+        logger.warn(
+          { intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, qty: pos.qty },
+          'manager: entry poll exhausted but position open — synthesising fill'
+        )
+        handleEntryOrderEvent(s, {
+          clientOrderId,
+          ...(exchangeOrderId ? { exchangeOrderId } : {}),
+          status: 'filled',
+          filledQty: pos.qty,
+          ...(pos.entryPrice !== undefined ? { avgFillPrice: pos.entryPrice } : {}),
+        })
+      }
+    } catch (err) {
+      logger.warn({ intentId: s.intent.id, err }, 'manager: entry poll exhausted — position check failed')
+    }
   }
 
   async function pollForCloseFill(
@@ -448,24 +1234,35 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         const ref = closeExchangeOrderId
           ? { symbol: s.intent.exchangeSymbol, clientOrderId: closeId, exchangeOrderId: closeExchangeOrderId }
           : { symbol: s.intent.exchangeSymbol, clientOrderId: closeId }
-        const order = await rest.getOrder(ref)
+        const order = await withGetOrderTimeout(rest.getOrder(ref))
         if (order?.status === 'filled') {
           if (order.avgFillPrice !== undefined) s.avgExitPrice = order.avgFillPrice
           recordExitMetrics(s, s.exitReason ?? 'error')
           emitIntentExited(s)
           transition(s, 'exited')
+          logger.info(
+            { event: 'intent.exited.complete', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, exitReason: s.exitReason },
+            'intent.exited.complete'
+          )
           void sweepReduceOnlyOrders(rest, s.intent.exchangeSymbol, s.intent.id)
           return
         }
-        // Fallback: if order not found (e.g. Bitget archives filled market orders quickly),
-        // confirm close via position size — if the symbol has no open position the close filled.
-        if (order === undefined) {
+        // 'cancelled' close order means position was already flat (e.g. SL triggered before
+        // the deadline market close arrived). Treat same as position-size fallback below.
+        const isCancelled = order?.status === 'cancelled'
+        // Fallback: if order not found or cancelled (e.g. Bitget archives filled orders quickly,
+        // Gate.io cancels reduce-only on empty position), confirm via position size.
+        if (order === undefined || isCancelled) {
           const positions = await rest.getPositions(s.intent.exchangeSymbol)
           const pos = positions.find(p => p.symbol === s.intent.symbol || p.symbol.includes(s.intent.symbol))
           if (!pos || pos.qty === 0) {
             recordExitMetrics(s, s.exitReason ?? 'error')
             emitIntentExited(s)
             transition(s, 'exited')
+            logger.info(
+              { event: 'intent.exited.complete', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, exitReason: s.exitReason },
+              'intent.exited.complete'
+            )
             void sweepReduceOnlyOrders(rest, s.intent.exchangeSymbol, s.intent.id)
             return
           }
@@ -724,6 +1521,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const closeKind = reason === 'timed' ? 'timed' : 'close'
       const closeId = ids.forExit(intent.id, closeKind)
       const canonCloseId = canonicalize(intent.exchange, closeId)
+      const closeQty = await confirmedCloseQty(s, rest)
       // Register BEFORE placing so racing WS fill events are not missed.
       s.exitOrderRefs = { close: { clientOrderId: closeId } }
       byCloseOrderId.set(canonCloseId, intent.id)
@@ -737,7 +1535,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             side: exitSide,
             kind: closeKind,
             orderType: 'market',
-            qty: s.filledQty,
+            qty: closeQty,
             reduceOnly: true,
           })
         } catch (err) {
@@ -745,16 +1543,39 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         }
       }
       try {
-        const closeAck = await rest.createOrder({
+        let closeAck = await orderClient(intent.exchange, intent.strategy).createOrder({
           intentId: intent.id,
           clientOrderId: closeId,
           exchange: intent.exchange,
           symbol: intent.exchangeSymbol,
           side: exitSide,
           type: 'market',
-          qty: s.filledQty,
+          qty: closeQty,
           reduceOnly: true,
         })
+        if (closeAck.status === 'rejected' && requiresWsOrderAdapter(intent.strategy)) {
+          logger.error(
+            { event: 'close.ws_rejected', intentId: intent.id, rejectReason: closeAck.rejectReason },
+            'close.ws_rejected: falling back to REST reduce-only market close'
+          )
+          closeAck = await rest.createOrder({
+            intentId: intent.id,
+            clientOrderId: closeId,
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
+            side: exitSide,
+            type: 'market',
+            qty: closeQty,
+            reduceOnly: true,
+          })
+        }
+        if (closeAck.status === 'rejected') {
+          byCloseOrderId.delete(canonCloseId)
+          delete s.exitOrderRefs
+          logger.error({ intentId: intent.id, rejectReason: closeAck.rejectReason }, 'manager: market close rejected')
+          setError(s, 'close_rejected', closeAck.rejectReason ?? 'market close rejected')
+          return
+        }
         if (closeAck.exchangeOrderId) {
           byCloseExchangeOrderId.set(closeAck.exchangeOrderId, intent.id)
           s.exitOrderRefs = { close: { clientOrderId: closeId, exchangeOrderId: closeAck.exchangeOrderId } }
@@ -767,7 +1588,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           kind: closeKind,
           side: exitSide,
           orderType: 'market',
-          qty: s.filledQty,
+          qty: closeQty,
           reduceOnly: true,
           ...(closeAck.exchangeOrderId ? { exchangeOrderId: closeAck.exchangeOrderId } : {}),
         }
@@ -1182,16 +2003,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         return s
       }
 
-      const clientOrderId = ids.forIntent(intent.id, 0)
-      s.entryOrderId = clientOrderId
-      const canonEntryId = canonicalize(intent.exchange, clientOrderId)
-
-      // Register BEFORE placing so that any WS fill events that arrive during the REST
-      // call (e.g. immediate market-order fill) are routed correctly. Use canonical form
-      // so the incoming WS clientOrderId matches on exchanges that transform it (OKX).
-      byEntryOrderId.set(canonEntryId, intent.id)
+      const entryPolicy = intent.entryPolicy ?? { kind: 'market' }
+      const entrySide: 'buy' | 'sell' = intent.side === 'long' ? 'buy' : 'sell'
 
       transition(s, 'submitted')
+      // If the intent was preempted while ensureLeverage was in-flight, transition()
+      // was a no-op (TERMINAL guard) and s.status is still 'cancelled' — bail early.
+      if (TERMINAL.has(s.status)) return s
       bus.emit('intent.submitted', s)
       logger.info(
         {
@@ -1200,11 +2018,528 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           exchange: intent.exchange,
           symbol: intent.symbol,
           strategy: intent.strategy,
+          entryKind: entryPolicy.kind,
         },
         'intent.submitted'
       )
 
-      const entrySide: 'buy' | 'sell' = intent.side === 'long' ? 'buy' : 'sell'
+      // ── Pre-funding then main entry (strategy_6) ────────────────────────────────
+      if (entryPolicy.kind === 'pre_funding_then_main') {
+        const { exitPolicy } = intent
+        if (exitPolicy.kind !== 'sl_tp_deadline_post_funding_event') {
+          setError(s, 'invalid_config', 'pre_funding_then_main requires sl_tp_deadline_post_funding_event exit policy')
+          return s
+        }
+
+        const { fundingTs, timeoutAt } = exitPolicy
+        const preFundingSide: OrderSide = entryPolicy.preFundingSide === 'long' ? 'buy' : 'sell'
+        const mainSide: OrderSide = entryPolicy.mainSide === 'long' ? 'buy' : 'sell'
+        const toleranceMs = 5_000
+
+        const preFundingId = ids.forIntent(intent.id, 90)
+        const canonPreFundingId = canonicalize(intent.exchange, preFundingId)
+        s.preFundingOrderId = preFundingId
+        byEntryOrderId.set(canonPreFundingId, intent.id)
+
+        let mainEventFired = false
+        let fundingFeeUnsub: Unsubscribe | null = null
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null
+
+        const closePreFunding = async () => {
+          const closeId = ids.forIntent(intent.id, 91)
+          const closeQty = s.preFundingFilledQty && s.preFundingFilledQty > 0 ? s.preFundingFilledQty : entryPolicy.preFundingVolume
+          try {
+            await rest.createOrder({
+              intentId: intent.id,
+              clientOrderId: closeId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              // entrySide = mainSide = opposite of preFundingSide = closing direction for PRE_FUNDING
+              side: entrySide,
+              type: 'market',
+              qty: closeQty,
+              reduceOnly: true,
+            })
+          } catch {
+            logger.warn({ intentId: intent.id }, 'strategy6: failed to close pre-funding position')
+          }
+        }
+
+        const confirmPreFundingFilled = async (): Promise<boolean> => {
+          if ((s.preFundingFilledQty ?? 0) > 0) return true
+          try {
+            const order = await withGetOrderTimeout(
+              rest.getOrder({
+                symbol: intent.exchangeSymbol,
+                clientOrderId: preFundingId,
+                ...(s.preFundingExchangeOrderId ? { exchangeOrderId: s.preFundingExchangeOrderId } : {}),
+              })
+            )
+            if (order) handleEntryOrderEvent(s, order)
+          } catch (err) {
+            logger.warn({ intentId: intent.id, err }, 'strategy6: pre-funding fill confirmation failed')
+          }
+          return (s.preFundingFilledQty ?? 0) > 0
+        }
+
+        const placeMain = async () => {
+          if (mainEventFired || TERMINAL.has(s.status)) return
+          mainEventFired = true
+          fundingFeeUnsub?.()
+          if (timeoutHandle !== null) clearTimeout(timeoutHandle)
+
+          const preFundingFilled = await confirmPreFundingFilled()
+          if (!preFundingFilled) {
+            setError(s, 'pre_funding_not_filled', 'pre-funding order was not confirmed filled before MAIN')
+            void closePreFunding()
+            return
+          }
+
+          const mainOrderId = ids.forIntent(intent.id, 0)
+          const canonMainId = canonicalize(intent.exchange, mainOrderId)
+          byEntryOrderId.set(canonMainId, intent.id)
+          s.entryOrderId = mainOrderId
+
+          if (opts.beforeCreateOrder) {
+            await opts
+              .beforeCreateOrder({
+                intentId: intent.id,
+                clientOrderId: mainOrderId,
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                side: mainSide,
+                kind: 'entry',
+                orderType: 'market',
+                qty: entryPolicy.mainVolume,
+                reduceOnly: false,
+              })
+              .catch((err: unknown) => {
+                logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for strategy6 main')
+              })
+          }
+
+          let ack
+          try {
+            ack = await orderClient(intent.exchange, intent.strategy).createOrder({
+              intentId: intent.id,
+              clientOrderId: mainOrderId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              side: mainSide,
+              type: 'market',
+              qty: entryPolicy.mainVolume,
+              leverage: intent.leverage,
+            })
+          } catch (err) {
+            byEntryOrderId.delete(canonMainId)
+            setError(s, 'main_order_failed', String(err))
+            void closePreFunding()
+            return
+          }
+
+          if (ack.status === 'rejected') {
+            byEntryOrderId.delete(canonMainId)
+            setError(s, 'main_order_rejected', ack.rejectReason ?? 'main order rejected')
+            void closePreFunding()
+            return
+          }
+
+          if (ack.exchangeOrderId) {
+            s.entryExchangeOrderId = ack.exchangeOrderId
+            byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
+          }
+
+          bus.emit('order.placed', {
+            intentId: intent.id,
+            exchange: intent.exchange,
+            symbol: intent.symbol,
+            clientOrderId: mainOrderId,
+            kind: 'entry',
+            side: mainSide,
+            orderType: 'market',
+            qty: entryPolicy.mainVolume,
+            reduceOnly: false,
+            ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+          })
+          logger.info(
+            { event: 'strategy6.main_placed', intentId: intent.id, qty: entryPolicy.mainVolume },
+            'strategy6.main_placed'
+          )
+
+          if (!TERMINAL.has(s.status) && s.status === 'working') {
+            void pollForEntryFill(s, mainOrderId, ack.exchangeOrderId, rest)
+          }
+        }
+
+        // Subscribe to ws.funding_fee for this (exchange, symbol)
+        fundingFeeUnsub = bus.on('ws.funding_fee', event => {
+          if (event.exchange !== intent.exchange) return
+          if (event.symbol !== intent.symbol) return
+          if (event.fundingTime < fundingTs - toleranceMs) return
+          void placeMain()
+        })
+
+        // Hard timeout: close PRE_FUNDING and abort if no event arrives
+        const timeoutDelay = Math.max(0, timeoutAt - clock.now())
+        timeoutHandle = setTimeout(() => {
+          if (mainEventFired || TERMINAL.has(s.status)) return
+          mainEventFired = true
+          fundingFeeUnsub()
+          logger.warn({ intentId: intent.id }, 'strategy6: funding fee timeout — closing pre-funding')
+          void closePreFunding().then(() => {
+            setError(s, 'funding_event_timeout', 'no ws.funding_fee event received within timeout')
+          })
+        }, timeoutDelay)
+
+        // Place PRE_FUNDING order now
+        if (opts.beforeCreateOrder) {
+          await opts
+            .beforeCreateOrder({
+              intentId: intent.id,
+              clientOrderId: preFundingId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              side: preFundingSide,
+              kind: 'pre_funding',
+              orderType: 'market',
+              qty: entryPolicy.preFundingVolume,
+              reduceOnly: false,
+            })
+            .catch((err: unknown) => {
+              logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for strategy6 pre-funding')
+            })
+        }
+
+        let preFundingAck
+        try {
+          preFundingAck = await orderClient(intent.exchange, intent.strategy).createOrder({
+            intentId: intent.id,
+            clientOrderId: preFundingId,
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
+            side: preFundingSide,
+            type: 'market',
+            qty: entryPolicy.preFundingVolume,
+            leverage: intent.leverage,
+          })
+        } catch (err) {
+          fundingFeeUnsub()
+          clearTimeout(timeoutHandle)
+          byEntryOrderId.delete(canonPreFundingId)
+          setError(s, 'pre_funding_order_failed', String(err))
+          return s
+        }
+
+        if (preFundingAck.status === 'rejected') {
+          fundingFeeUnsub()
+          clearTimeout(timeoutHandle)
+          byEntryOrderId.delete(canonPreFundingId)
+          setError(s, 'pre_funding_order_rejected', preFundingAck.rejectReason ?? 'pre-funding order rejected')
+          return s
+        }
+
+        if (preFundingAck.exchangeOrderId) {
+          s.preFundingExchangeOrderId = preFundingAck.exchangeOrderId
+          byEntryExchangeOrderId.set(preFundingAck.exchangeOrderId, intent.id)
+        }
+
+        bus.emit('order.placed', {
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId: preFundingId,
+          kind: 'pre_funding',
+          side: preFundingSide,
+          orderType: 'market',
+          qty: entryPolicy.preFundingVolume,
+          reduceOnly: false,
+          ...(preFundingAck.exchangeOrderId ? { exchangeOrderId: preFundingAck.exchangeOrderId } : {}),
+        })
+        logger.info(
+          { event: 'strategy6.pre_funding_placed', intentId: intent.id, qty: entryPolicy.preFundingVolume },
+          'strategy6.pre_funding_placed'
+        )
+
+        if (s.status === 'submitted') transition(s, 'acked')
+        if (s.status === 'acked') transition(s, 'working')
+
+        if (!TERMINAL.has(s.status) && s.status === 'working') {
+          void pollForEntryFill(s, preFundingId, preFundingAck.exchangeOrderId, rest)
+        }
+
+        return s
+      }
+
+      // ── Ladder limit entry ──────────────────────────────────────────────────────
+      if (entryPolicy.kind === 'ladder_limit') {
+        const rungs = entryPolicy.rungs
+        const ladderRungState: LadderRung[] = rungs.map((rung, i) => {
+          const clientOrderId = ids.forIntent(intent.id, i)
+          const canonicalId = canonicalize(intent.exchange, clientOrderId)
+          byEntryOrderId.set(canonicalId, intent.id)
+          return {
+            clientOrderId,
+            canonicalId,
+            qtyFraction: rung.qtyFraction,
+            filled: false,
+            filledQty: 0,
+            avgFillPrice: 0,
+          }
+        })
+        s.ladderRungs = ladderRungState
+        if (ladderRungState[0]) s.entryOrderId = ladderRungState[0].clientOrderId
+
+        // Place all rungs in parallel; record each via durability hook first.
+        if (opts.beforeCreateOrder) {
+          const beforeCreate = opts.beforeCreateOrder
+          await Promise.allSettled(
+            rungs.map((rung, i) => {
+              const rungState = ladderRungState[i]
+              if (!rungState) return Promise.resolve()
+              const rungQty = Math.round(check.qty * rung.qtyFraction * 1e8) / 1e8
+              const limitPrice =
+                intent.side === 'long'
+                  ? price * (1 - rung.priceOffsetPct / 100)
+                  : price * (1 + rung.priceOffsetPct / 100)
+              return beforeCreate({
+                intentId: intent.id,
+                clientOrderId: rungState.clientOrderId,
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                side: entrySide,
+                kind: 'entry',
+                orderType: 'limit',
+                qty: rungQty,
+                price: limitPrice,
+                reduceOnly: false,
+              }).catch((err: unknown) => {
+                logger.warn(
+                  { intentId: intent.id, rungIdx: i, err },
+                  'manager: durability write failed for ladder rung'
+                )
+              })
+            })
+          )
+        }
+
+        if (s.status === 'submitted') transition(s, 'acked')
+        if (s.status === 'acked') transition(s, 'working')
+
+        // Place all limit orders in parallel.
+        await Promise.allSettled(
+          rungs.map(async (rung, i) => {
+            const rungState = ladderRungState[i]
+            if (!rungState) return
+            const rungQty = Math.round(check.qty * rung.qtyFraction * 1e8) / 1e8
+            const limitPrice =
+              intent.side === 'long' ? price * (1 - rung.priceOffsetPct / 100) : price * (1 + rung.priceOffsetPct / 100)
+            try {
+              const ack = await rest.createOrder({
+                intentId: intent.id,
+                clientOrderId: rungState.clientOrderId,
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                side: entrySide,
+                type: 'limit',
+                qty: rungQty,
+                price: limitPrice,
+                leverage: intent.leverage,
+              })
+              if (ack.exchangeOrderId) {
+                byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
+              }
+              if (ack.status === 'rejected') {
+                logger.warn({ intentId: intent.id, rungIdx: i, reason: ack.rejectReason }, 'ladder rung rejected')
+                return
+              }
+              bus.emit('order.placed', {
+                intentId: intent.id,
+                exchange: intent.exchange,
+                symbol: intent.symbol,
+                clientOrderId: rungState.clientOrderId,
+                kind: 'entry',
+                side: entrySide,
+                orderType: 'limit',
+                qty: rungQty,
+                price: limitPrice,
+                reduceOnly: false,
+                ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+              })
+              logger.info(
+                { event: 'ladder.rung_placed', intentId: intent.id, rungIdx: i, limitPrice, rungQty },
+                'ladder.rung_placed'
+              )
+            } catch (err) {
+              byEntryOrderId.delete(rungState.canonicalId)
+              logger.warn({ intentId: intent.id, rungIdx: i, err }, 'ladder rung placement failed')
+            }
+          })
+        )
+
+        // Set a timer at T_funding: cancel unfilled rungs, arm SL/TP from weighted avg fills.
+        const delayToFunding = Math.max(0, intent.nextFundingTimestamp - clock.now())
+        setTimeout(() => {
+          void (async () => {
+            if (TERMINAL.has(s.status)) return
+
+            // Cancel all unfilled rungs.
+            await Promise.allSettled(
+              (s.ladderRungs ?? [])
+                .filter(r => !r.filled)
+                .map(r =>
+                  rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId: r.clientOrderId }).catch(() => {
+                    /* best effort */
+                  })
+                )
+            )
+
+            if (s.filledQty <= 0) {
+              setError(s, 'ladder_no_fills', 'no ladder rungs filled before T_funding')
+              return
+            }
+
+            const now = clock.now()
+            metrics.intentEntryLatencyMs.observe(now - s.intent.decidedAt, {
+              exchange: s.intent.exchange,
+              strategy: s.intent.strategy,
+            })
+            entryFilledAt.set(s.intent.id, now)
+            metrics.intentFilledTotal.inc(1, { exchange: s.intent.exchange, strategy: s.intent.strategy })
+            bus.emit('order.filled', {
+              intentId: s.intent.id,
+              exchange: s.intent.exchange,
+              symbol: s.intent.symbol,
+              clientOrderId: s.entryOrderId ?? '',
+              filledQty: s.filledQty,
+              ...(s.avgEntryPrice !== undefined ? { avgFillPrice: s.avgEntryPrice } : {}),
+            })
+            transition(s, 'filled')
+            await handleEntryFilled(s)
+          })()
+        }, delayToFunding)
+
+        return s
+      }
+
+      // ── Single limit entry ──────────────────────────────────────────────────────
+      if (entryPolicy.kind === 'limit') {
+        const clientOrderId = ids.forIntent(intent.id, 0)
+        s.entryOrderId = clientOrderId
+        const canonEntryId = canonicalize(intent.exchange, clientOrderId)
+        byEntryOrderId.set(canonEntryId, intent.id)
+
+        const limitPrice =
+          intent.side === 'long'
+            ? price * (1 - entryPolicy.priceOffsetPct / 100)
+            : price * (1 + entryPolicy.priceOffsetPct / 100)
+
+        if (opts.beforeCreateOrder) {
+          try {
+            await opts.beforeCreateOrder({
+              intentId: intent.id,
+              clientOrderId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              side: entrySide,
+              kind: 'entry',
+              orderType: 'limit',
+              qty: check.qty,
+              price: limitPrice,
+              reduceOnly: false,
+            })
+          } catch (err) {
+            logger.warn({ intentId: intent.id, err }, 'manager: durability write failed (limit entry)')
+          }
+        }
+
+        let ack
+        try {
+          ack = await rest.createOrder({
+            intentId: intent.id,
+            clientOrderId,
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
+            side: entrySide,
+            type: 'limit',
+            qty: check.qty,
+            price: limitPrice,
+            leverage: intent.leverage,
+          })
+        } catch (err) {
+          byEntryOrderId.delete(canonEntryId)
+          setError(s, 'create_order_failed', String(err))
+          return s
+        }
+
+        if (ack.status === 'rejected') {
+          byEntryOrderId.delete(canonEntryId)
+          setError(s, 'order_rejected', ack.rejectReason ?? 'limit order rejected')
+          return s
+        }
+
+        if (ack.exchangeOrderId) {
+          s.entryExchangeOrderId = ack.exchangeOrderId
+          byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
+        }
+
+        bus.emit('order.placed', {
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId,
+          kind: 'entry',
+          side: entrySide,
+          orderType: 'limit',
+          qty: check.qty,
+          price: limitPrice,
+          reduceOnly: false,
+          ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+        })
+        logger.info({ event: 'order.placed', intentId: intent.id, limitPrice, qty: check.qty }, 'order.placed (limit)')
+
+        if (s.status === 'submitted') transition(s, 'acked')
+        if (s.status === 'acked') transition(s, 'working')
+
+        // Expiry timer: if limit never fills, cancel it and emit error.
+        const delayToExpiry = Math.max(0, entryPolicy.expireAt - clock.now())
+        setTimeout(() => {
+          void (async () => {
+            if (TERMINAL.has(s.status) || s.status === 'filled' || s.status === 'monitoring') return
+            logger.info({ intentId: intent.id }, 'limit entry expired — cancelling unfilled limit')
+            byEntryOrderId.delete(canonEntryId)
+            if (ack.exchangeOrderId) byEntryExchangeOrderId.delete(ack.exchangeOrderId)
+            try {
+              await rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId })
+            } catch {
+              /* best effort */
+            }
+            if (s.filledQty > 0) {
+              // Partially filled — proceed with what we got.
+              transition(s, 'filled')
+              await handleEntryFilled(s)
+            } else {
+              setError(s, 'limit_expired', 'limit order expired without any fill')
+            }
+          })()
+        }, delayToExpiry)
+
+        // REST poll fallback for limit fill detection.
+        if (!TERMINAL.has(s.status) && s.status === 'working') {
+          void pollForEntryFill(s, clientOrderId, ack.exchangeOrderId, rest)
+        }
+
+        return s
+      }
+
+      // ── Market entry (default) ───────────────────────────────────────────────────
+      const clientOrderId = ids.forIntent(intent.id, 0)
+      s.entryOrderId = clientOrderId
+      const canonEntryId = canonicalize(intent.exchange, clientOrderId)
+
+      // Register BEFORE placing so that any WS fill events that arrive during the REST
+      // call (e.g. immediate market-order fill) are routed correctly. Use canonical form
+      // so the incoming WS clientOrderId matches on exchanges that transform it (OKX).
+      byEntryOrderId.set(canonEntryId, intent.id)
 
       // Durability point: write the order row to DB before calling createOrder so that
       // on crash-restart the order is recognized and not cancelled as an orphan.
@@ -1231,7 +2566,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       let ack
       try {
-        ack = await rest.createOrder({
+        ack = await orderClient(intent.exchange, intent.strategy).createOrder({
           intentId: intent.id,
           clientOrderId,
           exchange: intent.exchange,
@@ -1250,6 +2585,23 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (ack.status === 'rejected') {
         byEntryOrderId.delete(canonEntryId)
         setError(s, 'order_rejected', ack.rejectReason ?? 'order rejected')
+        return s
+      }
+
+      // Guard: intent may have been preempted while createOrder was in-flight (async await
+      // yields allow concurrent submit() calls to call preemptSynchronously on this intent).
+      // If status is no longer 'submitted', the intent is cancelled — cancel the placed order
+      // best-effort and return without advancing state.
+      if (s.status !== 'submitted') {
+        logger.warn(
+          { event: 'market_entry.preempted_in_flight', intentId: intent.id, exchange: intent.exchange, status: s.status },
+          'market order placed but intent preempted in-flight — cancelling orphan order'
+        )
+        byEntryOrderId.delete(canonEntryId)
+        if (rest && ack.exchangeOrderId) {
+          void rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId, exchangeOrderId: ack.exchangeOrderId })
+            .catch((err: unknown) => { logger.warn({ intentId: intent.id, err }, 'market_entry: orphan cancel failed') })
+        }
         return s
       }
 
@@ -1274,16 +2626,20 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       bus.emit('order.placed', entryPlaced)
       logger.info({ event: 'order.placed', ...entryPlaced }, 'order.placed')
 
+      // TS narrows s.status to 'submitted' after the preemption guard above; alias through
+      // the full union so status checks after each transition() mutation compile correctly.
+      const ss = s as typeof s & { status: IntentStatus }
+
       // Only advance to acked/working if the WS handler hasn't already advanced
       // the state further (e.g. a market order that fills during the REST call).
-      if (s.status === 'submitted') transition(s, 'acked')
-      if (s.status === 'acked') transition(s, 'working')
+      if (ss.status === 'submitted') transition(s, 'acked')
+      if (ss.status === 'acked') transition(s, 'working')
 
       // Catch-up: in case a WS event arrived while the REST call was in flight
       // (market orders on OKX/Bitget/KuCoin fill immediately and emit WS with empty
       // clientOrderId before byEntryExchangeOrderId is registered).
       // Search by clientOrderId first, then exchangeOrderId from the ACK.
-      if (!TERMINAL.has(s.status) && s.status === 'working') {
+      if (!TERMINAL.has(ss.status) && ss.status === 'working') {
         const existing = opts.state
           .orders(intent.exchange)
           .find(
@@ -1298,7 +2654,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       // REST polling fallback: if WS fill event doesn't arrive (e.g. Bitget/KuCoin WS
       // unreliable for market-order fills), poll REST until confirmed or intent exits working.
-      if (!TERMINAL.has(s.status) && s.status === 'working') {
+      if (!TERMINAL.has(ss.status) && ss.status === 'working') {
         void pollForEntryFill(s, clientOrderId, ack.exchangeOrderId, rest)
       }
 
@@ -1319,14 +2675,32 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         return
       }
 
-      if (s.entryOrderId && ['submitted', 'acked', 'working', 'partially_filled'].includes(s.status)) {
-        try {
-          await rest.cancelOrder({
-            symbol: s.intent.exchangeSymbol,
-            clientOrderId: s.entryOrderId,
-          })
-        } catch (err) {
-          logger.warn({ intentId: id, err }, 'manager: cancelOrder failed')
+      if (['submitted', 'acked', 'working', 'partially_filled'].includes(s.status)) {
+        if (s.ladderRungs && s.ladderRungs.length > 0) {
+          // Cancel all unfilled ladder rungs.
+          await Promise.allSettled(
+            s.ladderRungs
+              .filter(r => !r.filled)
+              .map(r =>
+                rest
+                  .cancelOrder({ symbol: s.intent.exchangeSymbol, clientOrderId: r.clientOrderId })
+                  .catch((err: unknown) => {
+                    logger.warn(
+                      { intentId: id, clientOrderId: r.clientOrderId, err },
+                      'manager: cancelOrder failed (ladder rung)'
+                    )
+                  })
+              )
+          )
+        } else if (s.entryOrderId) {
+          try {
+            await rest.cancelOrder({
+              symbol: s.intent.exchangeSymbol,
+              clientOrderId: s.entryOrderId,
+            })
+          } catch (err) {
+            logger.warn({ intentId: id, err }, 'manager: cancelOrder failed')
+          }
         }
       }
 

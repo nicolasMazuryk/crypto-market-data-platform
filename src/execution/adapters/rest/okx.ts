@@ -8,14 +8,19 @@ const okxSpec: CcxtAdapterSpec = {
   ccxtOptions: { defaultType: 'swap' },
   duplicateOrderCodes: new Set(['51016']),
   canonicalizeClientOrderId: (id: string) => id.replace(/-/g, '').slice(0, 32),
+  setPositionMode: async (ccxtEx, hedged) => {
+    if (!ccxtEx.setPositionMode) return
+    await ccxtEx.setPositionMode(hedged)
+  },
+  // In OKX net_mode (one-way), cross margin is the account default.
+  // setMarginMode requires a lever param that varies per-strategy and is unnecessary here.
+  setMarginMode: async () => {
+    /* no-op */
+  },
   buildCreateOrderParams: (req: OrderRequest) => {
     const p: Record<string, unknown> = {
       // OKX clOrdId: alphanumeric only, max 32 chars (no dashes or underscores)
       clOrdId: req.clientOrderId.replace(/-/g, '').slice(0, 32),
-      // OKX accounts in long_short_mode require posSide; passing hedged:true makes
-      // CCXT derive posSide from side+reduceOnly automatically (buy→long, sell→short,
-      // buy+reduceOnly→short, sell+reduceOnly→long).
-      hedged: true,
     }
     if (req.reduceOnly) p.reduceOnly = true
     if (req.timeInForce) p.timeInForce = req.timeInForce

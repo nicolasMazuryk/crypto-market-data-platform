@@ -43,6 +43,8 @@ export interface WsConformanceFixtures {
   sampleOrderRaw: unknown
   samplePositionRaw: unknown
   sampleBalanceRaw: unknown
+  /** Raw WS message that should trigger a fundingFee adapter event. Optional — skipped if absent. */
+  sampleFundingFeeRaw?: unknown
 }
 
 export function runWsAdapterConformance(fixtures: WsConformanceFixtures): void {
@@ -126,5 +128,31 @@ export function runWsAdapterConformance(fixtures: WsConformanceFixtures): void {
       const connectCalls = (fakeClient.connect as ReturnType<typeof vi.fn>).mock.calls.length
       expect(connectCalls).toBe(1)
     })
+
+    if (fixtures.sampleFundingFeeRaw !== undefined) {
+      it('emits fundingFee event with valid fields when funding-fee message received', async () => {
+        const fees: unknown[] = []
+        adapter.events.on('fundingFee', e => fees.push(e))
+        await adapter.connect()
+        fakeClient.triggerMessage(fixtures.sampleFundingFeeRaw)
+        expect(fees).toHaveLength(1)
+        const fee = fees[0] as {
+          exchange: unknown
+          symbol: string
+          fundingTime: number
+          fundingAmount: number
+          receivedAt: unknown
+        }
+        // Required fields must be present and non-NaN
+        expect(typeof fee.exchange).toBe('string')
+        expect(typeof fee.symbol).toBe('string')
+        expect(fee.symbol.length).toBeGreaterThan(0)
+        expect(typeof fee.fundingTime).toBe('number')
+        expect(isNaN(fee.fundingTime)).toBe(false)
+        expect(typeof fee.fundingAmount).toBe('number')
+        expect(isNaN(fee.fundingAmount)).toBe(false)
+        expect(typeof fee.receivedAt).toBe('number')
+      })
+    }
   })
 }

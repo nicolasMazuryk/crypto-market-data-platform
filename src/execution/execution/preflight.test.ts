@@ -39,7 +39,7 @@ function makeMarket(overrides: Partial<MarketMetadata> = {}): MarketMetadata {
     exchangeSymbol: 'BTCUSDT',
     contractSize: 1,
     pricePrecision: 2,
-    amountPrecision: 4,
+    amountPrecision: 0.0001,
     makerFee: 0.0002,
     takerFee: 0.0004,
     status: 'trading',

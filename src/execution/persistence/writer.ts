@@ -39,7 +39,7 @@ export interface WriteOrderSyncParams {
   symbol: string
   side: 'buy' | 'sell'
   orderType: 'market' | 'limit' | 'stop_market'
-  kind: 'entry' | 'sl' | 'tp' | 'close' | 'timed'
+  kind: 'entry' | 'pre_funding' | 'sl' | 'tp' | 'close' | 'timed'
   qty: number
   price?: number
   stopPrice?: number
@@ -78,6 +78,8 @@ const PERMANENT_PG_ERROR_CODES = new Set([
   '23505', // unique_violation (row already inserted)
   '23514', // check_violation
   '22001', // string_data_right_truncation
+  '22007', // invalid_datetime_format (e.g. out-of-range extended-year timestamp)
+  '22008', // datetime_field_overflow
   '42703', // undefined_column
   '42P01', // undefined_table
 ])
@@ -86,6 +88,15 @@ const PERMANENT_PG_ERROR_CODES = new Set([
 function toFiniteStr(v: number | undefined | null): string | null {
   if (v == null || !isFinite(v)) return null
   return String(v)
+}
+
+/** Coerce a WAL-replayed timestamp (ISO string or number) back to a Date. */
+function toDate(v: unknown): Date {
+  if (v instanceof Date) return v
+  const n = typeof v === 'number' ? v : Number(v)
+  // Bybit WS sends microsecond timestamps (16 digits); convert to ms
+  const ms = !isNaN(n) && n > 9_999_999_999_999 ? Math.floor(n / 1000) : n
+  return isNaN(ms) ? new Date(v as string) : new Date(ms)
 }
 
 /** Write a single row to the appropriate DB table. Exported for pre-recovery WAL drain. */
@@ -98,19 +109,25 @@ export async function writeRowToDb(
   switch (table) {
     case 'trade_intents':
       if (onConflict === 'ignore') {
+        const tiRow = {
+          ...row,
+          ...(row.nextFundingTs ? { nextFundingTs: toDate(row.nextFundingTs) } : {}),
+          ...(row.decidedAt ? { decidedAt: toDate(row.decidedAt) } : {}),
+          ...(row.entryAt ? { entryAt: toDate(row.entryAt) } : {}),
+        }
         await db
           .insert(tradeIntents)
-          .values(row as typeof tradeIntents.$inferInsert)
+          .values(tiRow as typeof tradeIntents.$inferInsert)
           .onConflictDoNothing()
       } else {
         const updateSet: Record<string, unknown> = {}
         if (row.status) updateSet.status = sql`${row.status}::intent_status`
-        if (row.exitAt) updateSet.exitAt = row.exitAt
+        if (row.exitAt) updateSet.exitAt = toDate(row.exitAt)
         if (row.exitReason) updateSet.exitReason = row.exitReason
         if (row.avgEntryPrice) updateSet.avgEntryPrice = row.avgEntryPrice
         if (row.avgExitPrice) updateSet.avgExitPrice = row.avgExitPrice
-        if (row.entryFilledAt) updateSet.entryFilledAt = row.entryFilledAt
-        if (row.exitFilledAt) updateSet.exitFilledAt = row.exitFilledAt
+        if (row.entryFilledAt) updateSet.entryFilledAt = toDate(row.entryFilledAt)
+        if (row.exitFilledAt) updateSet.exitFilledAt = toDate(row.exitFilledAt)
         await db
           .update(tradeIntents)
           .set(updateSet as Parameters<ReturnType<typeof db.update>['set']>[0])
@@ -118,23 +135,25 @@ export async function writeRowToDb(
       }
       break
 
-    case 'orders':
+    case 'orders': {
+      const ordersRow = { ...row, ...(row.submittedAt ? { submittedAt: toDate(row.submittedAt) } : {}) }
       if (onConflict === 'ignore') {
         await db
           .insert(orders)
-          .values(row as typeof orders.$inferInsert)
+          .values(ordersRow as typeof orders.$inferInsert)
           .onConflictDoNothing()
       } else {
         // UPSERT: insert or update exchangeOrderId on conflict (from order.placed event)
         await db
           .insert(orders)
-          .values(row as typeof orders.$inferInsert)
+          .values(ordersRow as typeof orders.$inferInsert)
           .onConflictDoUpdate({
             target: [orders.exchange, orders.clientOrderId],
             set: { exchangeOrderId: sql`EXCLUDED.exchange_order_id` },
           })
       }
       break
+    }
 
     case 'orders_status': {
       // UPDATE status + filledQty for an existing order (from ws.order events)
@@ -143,8 +162,8 @@ export async function writeRowToDb(
         filledQty: (row as { filledQty: string }).filledQty,
       }
       if (row.exchangeOrderId) updateSet.exchangeOrderId = row.exchangeOrderId
-      if (row.ackedAt) updateSet.ackedAt = row.ackedAt
-      if (row.terminalAt) updateSet.terminalAt = row.terminalAt
+      if (row.ackedAt) updateSet.ackedAt = toDate(row.ackedAt)
+      if (row.terminalAt) updateSet.terminalAt = toDate(row.terminalAt)
       await db
         .update(orders)
         .set(updateSet as Parameters<ReturnType<typeof db.update>['set']>[0])
@@ -160,21 +179,21 @@ export async function writeRowToDb(
     case 'balances_history':
       await db
         .insert(balancesHistory)
-        .values(row as typeof balancesHistory.$inferInsert)
+        .values({ ...row, ts: toDate(row.ts) } as typeof balancesHistory.$inferInsert)
         .onConflictDoNothing()
       break
 
     case 'funding_attributions':
       await db
         .insert(fundingAttributions)
-        .values(row as typeof fundingAttributions.$inferInsert)
+        .values({ ...row, fundingTime: toDate(row.fundingTime), ts: toDate(row.ts) } as typeof fundingAttributions.$inferInsert)
         .onConflictDoNothing()
       break
 
     case 'ops_events':
       await db
         .insert(opsEvents)
-        .values(row as typeof opsEvents.$inferInsert)
+        .values({ ...row, ts: toDate(row.ts) } as typeof opsEvents.$inferInsert)
         .onConflictDoNothing()
       break
 
@@ -188,21 +207,21 @@ export async function writeRowToDb(
     case 'intent_lifecycle_events':
       await db
         .insert(intentLifecycleEvents)
-        .values(row as typeof intentLifecycleEvents.$inferInsert)
+        .values({ ...row, ts: toDate(row.ts) } as typeof intentLifecycleEvents.$inferInsert)
         .onConflictDoNothing()
       break
 
     case 'exit_triggers':
       await db
         .insert(exitTriggers)
-        .values(row as typeof exitTriggers.$inferInsert)
+        .values({ ...row, triggerTs: toDate(row.triggerTs) } as typeof exitTriggers.$inferInsert)
         .onConflictDoNothing()
       break
 
     case 'realized_pnl':
       await db
         .insert(realizedPnl)
-        .values(row as typeof realizedPnl.$inferInsert)
+        .values({ ...row, computedAt: toDate(row.computedAt) } as typeof realizedPnl.$inferInsert)
         .onConflictDoNothing()
       break
 
@@ -492,7 +511,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             for (const f of fillRows) {
               const fee = parseFloat(f.feeAmount)
               if (!isNaN(fee)) {
-                if (f.orderKind === 'entry') entryFees += fee
+                if (f.orderKind === 'entry' || f.orderKind === 'pre_funding') entryFees += fee
                 else exitFees += fee
               }
             }

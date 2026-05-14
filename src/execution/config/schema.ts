@@ -11,7 +11,18 @@ import type {
   SchedulerConfig,
   TestingConfig,
 } from './types.js'
-import type { StrategyConfig, Strategy1Config, Strategy3aConfig, Strategy3bConfig } from '../strategies/types.js'
+import type {
+  StrategyConfig,
+  Strategy1Config,
+  Strategy1WsConfig,
+  Strategy2Config,
+  Strategy3aConfig,
+  Strategy3bConfig,
+  Strategy4_1aConfig,
+  Strategy4_2aConfig,
+  Strategy4_3aConfig,
+  Strategy6Config,
+} from '../strategies/types.js'
 
 export class ConfigError extends Error {
   constructor(
@@ -75,8 +86,88 @@ const StrategyRawSchema = z.discriminatedUnion('id', [
     amountUsd: z.number().default(20),
     leverage: z.number().default(4),
   }),
+  z.object({
+    id: z.literal('strategy_1_ws'),
+    enabled: z.boolean().default(false),
+    negativeFundingThresholdPercent: z.number().default(-0.5),
+    entryOffsetSeconds: z.number().default(10),
+    fundingFeeTimeoutSeconds: z.number().default(8),
+    amountUsd: z.number().default(20),
+    leverage: z.number().default(4),
+  }),
+  z.object({
+    id: z.literal('strategy_2'),
+    enabled: z.boolean().default(false),
+    negativeFundingThresholdPercent: z.number().default(-0.4),
+    entryOffsetSeconds: z.number().default(5),
+    retracementPct: z.number().min(0).max(1).default(0.5),
+    deadlineSeconds: z.number().default(60),
+    slMultiplier: z.number().default(1.0),
+    fundingFeeTimeoutSeconds: z.number().positive().default(8),
+    amountUsd: z.number().default(20),
+    leverage: z.number().default(4),
+  }),
   z.object({ id: z.literal('strategy_3a'), ...Strategy3SharedFields }),
   z.object({ id: z.literal('strategy_3b'), ...Strategy3SharedFields }),
+  z
+    .object({
+      id: z.literal('strategy_4_1a'),
+      enabled: z.boolean().default(false),
+      negativeFundingThresholdPercent: z.number().default(-0.4),
+      entryOffsetSeconds: z.number().default(5),
+      ladderCount: z.number().int().min(2).default(5),
+      ladderTopMult: z.number().default(0.5),
+      ladderBottomMult: z.number().default(1.5),
+      takeProfitPct: z.number().default(0.2),
+      deadlineSeconds: z.number().default(60),
+      slMultiplier: z.number().default(1.0),
+      amountUsd: z.number().default(20),
+      leverage: z.number().default(4),
+    })
+    .refine(c => c.ladderBottomMult > c.ladderTopMult, {
+      message: 'ladderBottomMult must be greater than ladderTopMult',
+    }),
+  z
+    .object({
+      id: z.literal('strategy_4_2a'),
+      enabled: z.boolean().default(false),
+      negativeFundingThresholdPercent: z.number().default(-0.4),
+      entryOffsetSeconds: z.number().default(5),
+      limitOffsetMult: z.number().default(0.75),
+      takeProfitPct: z.number().default(0.2),
+      deadlineSeconds: z.number().default(60),
+      slMultiplier: z.number().default(1.5),
+      amountUsd: z.number().default(20),
+      leverage: z.number().default(4),
+    })
+    .refine(c => c.slMultiplier > c.limitOffsetMult, {
+      message: 'slMultiplier must be greater than limitOffsetMult',
+    }),
+  z.object({
+    id: z.literal('strategy_4_3a'),
+    enabled: z.boolean().default(false),
+    negativeFundingThresholdPercent: z.number().default(-0.4),
+    entryOffsetSeconds: z.number().default(2),
+    entryMult: z.number().default(0.75),
+    slMultiplier: z.number().default(1.5),
+    takeProfitPct: z.number().default(0.3),
+    deadlineSeconds: z.number().default(60),
+    amountUsd: z.number().default(20),
+    leverage: z.number().default(4),
+  }),
+  z.object({
+    id: z.literal('strategy_6'),
+    enabled: z.boolean().default(false),
+    mainSide: z.enum(['long', 'short']),
+    funding_threshold: z.number().default(0),
+    entryOffsetSeconds: z.number().positive().default(10),
+    fundingFeeTimeoutSeconds: z.number().positive().default(8),
+    tpMultiplier: z.number().positive().default(0.5),
+    slMultiplier: z.number().positive().default(1.0),
+    deadlineSeconds: z.number().positive().default(3300),
+    mainAmountUsd: z.number().positive(),
+    leverage: z.number().positive(),
+  }),
 ])
 
 const PersistenceRawSchema = z.object({
@@ -123,8 +214,14 @@ const RiskRawSchema = z.object({
   perStrategy: z
     .object({
       strategy_1: PerStrategyRiskRawSchema.optional(),
+      strategy_1_ws: PerStrategyRiskRawSchema.optional(),
+      strategy_2: PerStrategyRiskRawSchema.optional(),
       strategy_3a: PerStrategyRiskRawSchema.optional(),
       strategy_3b: PerStrategyRiskRawSchema.optional(),
+      strategy_4_1a: PerStrategyRiskRawSchema.optional(),
+      strategy_4_2a: PerStrategyRiskRawSchema.optional(),
+      strategy_4_3a: PerStrategyRiskRawSchema.optional(),
+      strategy_6: PerStrategyRiskRawSchema.optional(),
     })
     .default({}),
 })
@@ -251,6 +348,21 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
   const has3b = parsed.strategies.some(s => s.id === 'strategy_3b' && s.enabled)
   if (has3a && has3b) throw new ConfigError('strategies', 'strategy_3a and strategy_3b are mutually exclusive')
 
+  // Prevent simultaneous LONG (S1/S2/S4_*a) and SHORT (S3a/S3b) on the same exchange+symbol
+  // (they would offset each other within the same funding window).
+  const hasShort = has3a || has3b
+  const hasLong = parsed.strategies.some(
+    s =>
+      ['strategy_1', 'strategy_1_ws', 'strategy_2', 'strategy_4_1a', 'strategy_4_2a', 'strategy_4_3a'].includes(s.id) &&
+      s.enabled
+  )
+  if (hasShort && hasLong) {
+    throw new ConfigError(
+      'strategies',
+      'LONG strategies (strategy_1, strategy_2, strategy_4_*a) and SHORT strategies (strategy_3a/3b) cannot both be enabled — they offset each other within the same funding window'
+    )
+  }
+
   // Live safety ceiling
   const LIVE_SAFETY_CEILING = 100_000
   if (
@@ -284,7 +396,14 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
   const strategies: StrategyConfig[] = parsed.strategies.map(s => {
     if (s.id === 'strategy_3a') return { ...s, tpVariant: 'A' as const } as Strategy3aConfig
     if (s.id === 'strategy_3b') return { ...s, tpVariant: 'B' as const } as Strategy3bConfig
-    return s as Strategy1Config
+    return s as
+      | Strategy1Config
+      | Strategy1WsConfig
+      | Strategy2Config
+      | Strategy4_1aConfig
+      | Strategy4_2aConfig
+      | Strategy4_3aConfig
+      | Strategy6Config
   })
 
   const result: EngineConfig = {

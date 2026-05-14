@@ -1,14 +1,14 @@
 import type { FeeSchedule, Strategy2Config, FundingSettlementConfig } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
-import { simulateOrders } from '../orders/simulator.js'
+import { checkLimitFill } from '../orders/limit-order.js'
+import { checkStopFill } from '../orders/stop-order.js'
 import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { detectRealFundingSettlement } from '../data/funding-settlement.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
 import type { ExitReason } from '../config/schema.js'
-import type { Order } from '../orders/types.js'
 
 /**
  * Strategy 2: Negative Funding LONG - Retracement Exit
@@ -64,77 +64,44 @@ export class Strategy2 implements BaseStrategy {
     if (fundingCandle?.bid_open == null) return null
     const pFunding = fundingCandle.bid_open
 
-    const postFundingRows = data.getRowsInRange(fundingTs, deadlineTs)
-    if (postFundingRows.length === 0) return null
-
-    let pLow = Infinity
-    let tLowIdx = 0
-    for (let i = 0; i < postFundingRows.length; i++) {
-      const row = postFundingRows[i]
-      if (row && row.bid_low !== null && row.bid_low < pLow) {
-        pLow = row.bid_low
-        tLowIdx = i
-      }
-    }
-
-    if (pLow === Infinity) return null
-
-    const pTarget = pLow + (pFunding - pLow) * this.config.retracement_pct
-
-    const tLowRow = postFundingRows[tLowIdx]
-    if (!tLowRow) return null
-    const tLowPlus1Ms = new Date(tLowRow.ts.replace(' ', 'T') + 'Z').getTime() + 1000
-
-    // Detect real settlement and gate TP validFrom by max(T_low+1s, settlement+buffer)
-    const settlement = detectRealFundingSettlement(
-      data,
-      event.funding_time,
-      this.fundingSettlement.detection_window_seconds
-    )
-    const settlementMs = new Date(settlement.settlementTs.replace(' ', 'T') + 'Z').getTime()
-    const tpEarliestMs = settlementMs + this.fundingSettlement.tp_post_settlement_buffer_seconds * 1000
-    const tpValidFromMs = Math.max(tLowPlus1Ms, tpEarliestMs)
-    const tpValidFromTs = toClickHouseDateTime(new Date(tpValidFromMs))
-
+    // Simulate SL + dynamic TP online. P_low is learned only from candles already seen
+    // after funding; the repriced TP becomes active on the following timestamp.
     const entryPlus1Ts = toClickHouseDateTime(new Date(entryTime.getTime() + 1000))
     const allPostEntryRows = data.getRowsInRange(entryPlus1Ts, deadlineTs)
     if (allPostEntryRows.length === 0) return null
 
-    const orders: Order[] = [
-      {
-        side: 'sell',
-        type: 'stop',
-        price: slPrice,
-        quantity: 1,
-        validFrom: entryPlus1Ts,
-        validUntil: deadlineTs,
-        reduceOnly: true,
-        label: 'sl',
-      },
-      {
-        side: 'sell',
-        type: 'limit',
-        price: pTarget,
-        quantity: 1,
-        validFrom: tpValidFromTs,
-        validUntil: deadlineTs,
-        reduceOnly: true,
-        label: 'tp',
-      },
-    ]
+    let exit: { price: number; reason: ExitReason; feeType: 'maker' | 'taker'; ts: string } | undefined
+    let pLow = Infinity
+    let activeTpPrice: number | undefined
+    let activeTpFrom: string | undefined
 
-    const { fills } = simulateOrders(orders, allPostEntryRows, this.slippage, 'long')
+    for (const row of allPostEntryRows) {
+      const slFill = checkStopFill('sell', slPrice, row, 1, this.slippage, 'sl')
+      const tpFill =
+        activeTpPrice !== undefined && activeTpFrom !== undefined && row.ts >= activeTpFrom
+          ? checkLimitFill('sell', activeTpPrice, row, 1, 'tp')
+          : null
 
-    let exit: { price: number; reason: ExitReason; feeType: 'maker' | 'taker'; ts: string }
+      // Same-candle ambiguity is intentionally conservative: SL wins.
+      if (slFill) {
+        exit = { price: slFill.price, reason: 'SL_HIT', feeType: 'taker', ts: slFill.timestamp }
+        break
+      }
+      if (tpFill) {
+        exit = { price: tpFill.price, reason: 'TP_HIT', feeType: 'maker', ts: tpFill.timestamp }
+        break
+      }
 
-    const slFill = fills.find(f => f.label === 'sl')
-    const tpFill = fills.find(f => f.label === 'tp')
+      if (row.ts >= fundingTs && row.ts <= deadlineTs && row.bid_low !== null && row.bid_low < pLow) {
+        pLow = row.bid_low
+        if (pFunding > pLow) {
+          activeTpPrice = pLow + (pFunding - pLow) * this.config.retracement_pct
+          activeTpFrom = toClickHouseDateTime(new Date(new Date(row.ts.replace(' ', 'T') + 'Z').getTime() + 1000))
+        }
+      }
+    }
 
-    if (slFill) {
-      exit = { price: slFill.price, reason: 'SL_HIT', feeType: 'taker', ts: slFill.timestamp }
-    } else if (tpFill) {
-      exit = { price: tpFill.price, reason: 'TP_HIT', feeType: 'maker', ts: tpFill.timestamp }
-    } else {
+    if (exit === undefined) {
       const deadlineCandle = data.getRowAt(deadlineTs)
       if (deadlineCandle) {
         const deadlineFill = fillMarketOrder('sell', deadlineCandle, 1, 'deadline')
@@ -148,6 +115,12 @@ export class Strategy2 implements BaseStrategy {
         exit = { price: lastFill.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
       }
     }
+
+    const settlement = detectRealFundingSettlement(
+      data,
+      event.funding_time,
+      this.fundingSettlement.detection_window_seconds
+    )
 
     const applyFunding = shouldApplyFunding({
       entryTs,

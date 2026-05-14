@@ -75,4 +75,16 @@ runWsAdapterConformance({
     arg: { channel: 'account', instType: 'USDT-FUTURES' },
     data: [{ coinName: 'USDT', available: '1000', frozen: '50', uTime: '1000' }],
   },
+  sampleFundingFeeRaw: {
+    action: 'snapshot',
+    arg: { channel: 'account', instType: 'USDT-FUTURES' },
+    data: [
+      {
+        instId: 'BTCUSDT',
+        bizType: 'fund',
+        amount: '-4.5',
+        uTime: '1700000000000',
+      },
+    ],
+  },
 })

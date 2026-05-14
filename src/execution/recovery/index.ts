@@ -6,7 +6,7 @@ import type { EventBus } from '../core/types.js'
 import type { ExchangeRestAdapter, OrderSide } from '../adapters/rest/types.js'
 import type { Exchange } from '../types/exchange.js'
 import { normalizeSymbol } from '../../utils/symbol-normalizer.js'
-import type { ExitOrderRef, IntentState, IntentStatus } from '../execution/types.js'
+import type { ExitOrderRef, IntentState, IntentStatus, LadderRung } from '../execution/types.js'
 import type { TradeIntent, ExitPolicy } from '../strategies/types.js'
 import type { ExecutionManagerInitialState } from '../execution/manager.js'
 import type { PersistenceMetrics } from '../observability/metrics.js'
@@ -129,6 +129,9 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
   const byCloseOrderId = new Map<string, string>()
   const byCloseExchangeOrderId = new Map<string, string>()
 
+  const canonicalize = (exchange: Exchange, id: string): string =>
+    restAdapters.get(exchange)?.canonicalizeClientOrderId?.(id) ?? id
+
   let rehydratedCount = 0
   let orphansCancelled = 0
   let orphansFlattened = 0
@@ -152,13 +155,21 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
       const intent = rowToTradeIntent(intentRow)
       const intentOrders = ordersByIntent.get(intentRow.id) ?? []
 
-      const entryOrder = intentOrders.find(o => !o.reduceOnly)
+      const nonReduceOrders = intentOrders.filter(o => !o.reduceOnly)
+      const preFundingOrder = nonReduceOrders.find(o => o.kind === 'pre_funding')
+      const entryOrders = nonReduceOrders.filter(o => o.kind !== 'pre_funding')
+      const entryOrder = entryOrders[0]
       const exitOrders = intentOrders.filter(o => o.reduceOnly)
 
       // Reconstruct filledQty from the entry order row. If the engine was killed while
       // the entry was partially or fully filled, the ws.order handler will have updated
       // filled_qty in the DB via the periodic flush.
-      const filledQty = entryOrder ? parseFloat(entryOrder.filledQty) : 0
+      const filledQty =
+        entryOrders.length > 1
+          ? entryOrders.reduce((sum, o) => sum + parseFloat(o.filledQty), 0)
+          : entryOrder
+            ? parseFloat(entryOrder.filledQty)
+            : 0
 
       const state: IntentState = {
         intent,
@@ -169,11 +180,42 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
 
       if (entryOrder) {
         state.entryOrderId = entryOrder.clientOrderId
-        byEntryOrderId.set(entryOrder.clientOrderId, intent.id)
+        byEntryOrderId.set(canonicalize(intent.exchange, entryOrder.clientOrderId), intent.id)
         if (entryOrder.exchangeOrderId) {
           byEntryExchangeOrderId.set(entryOrder.exchangeOrderId, intent.id)
           state.entryExchangeOrderId = entryOrder.exchangeOrderId
         }
+      }
+
+      if (preFundingOrder) {
+        state.preFundingOrderId = preFundingOrder.clientOrderId
+        state.preFundingFilledQty = parseFloat(preFundingOrder.filledQty)
+        byEntryOrderId.set(canonicalize(intent.exchange, preFundingOrder.clientOrderId), intent.id)
+        if (preFundingOrder.exchangeOrderId) {
+          state.preFundingExchangeOrderId = preFundingOrder.exchangeOrderId
+          byEntryExchangeOrderId.set(preFundingOrder.exchangeOrderId, intent.id)
+        }
+      }
+
+      if (entryOrders.length > 1 || intent.entryPolicy?.kind === 'ladder_limit') {
+        const totalOrderQty = entryOrders.reduce((sum, o) => sum + parseFloat(o.qty), 0)
+        const ladderRungs: LadderRung[] = entryOrders.map(o => {
+          const filledQtyForRung = parseFloat(o.filledQty)
+          const qty = parseFloat(o.qty)
+          const avgFillPrice = o.price ? parseFloat(o.price) : 0
+          byEntryOrderId.set(canonicalize(intent.exchange, o.clientOrderId), intent.id)
+          if (o.exchangeOrderId) byEntryExchangeOrderId.set(o.exchangeOrderId, intent.id)
+          return {
+            clientOrderId: o.clientOrderId,
+            canonicalId: o.clientOrderId,
+            qtyFraction: totalOrderQty > 0 ? qty / totalOrderQty : 0,
+            filled: o.status === 'filled',
+            filledQty: filledQtyForRung,
+            avgFillPrice,
+          }
+        })
+        state.ladderRungs = ladderRungs
+        if (ladderRungs[0]) state.entryOrderId = ladderRungs[0].clientOrderId
       }
 
       if (exitOrders.length > 0) {
@@ -190,7 +232,7 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
           ...(closeOrder ? { close: toRef(closeOrder) } : {}),
         }
         for (const o of exitOrders) {
-          byCloseOrderId.set(o.clientOrderId, intent.id)
+          byCloseOrderId.set(canonicalize(intent.exchange, o.clientOrderId), intent.id)
           if (o.exchangeOrderId) {
             byCloseExchangeOrderId.set(o.exchangeOrderId, intent.id)
           }

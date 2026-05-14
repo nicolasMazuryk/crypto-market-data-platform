@@ -105,8 +105,7 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         }, delay)
         entry.timers.push(handle)
         logger.debug({ intentId, delay }, 'monitor.armed.timed')
-      } else {
-        // sl_tp_deadline
+      } else if (exitPolicy.kind === 'sl_tp_deadline' || exitPolicy.kind === 'sl_tp_deadline_post_funding_event') {
         const slId = state.exitOrderRefs?.sl?.clientOrderId
         const tpId = state.exitOrderRefs?.tp?.clientOrderId
 
@@ -148,6 +147,67 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         entry.unsubs.push(unsub)
 
         logger.debug({ intentId, deadlineDelay, slId, tpId }, 'monitor.armed.sl_tp_deadline')
+      } else if (exitPolicy.kind === 'sl_tp_deadline_retracement' || exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event') {
+        // TP is a dynamic retracement order managed by the execution manager's tracker;
+        // the tracker handles its own TP fill detection and calls monitor.disarm() + exit handler.
+        const slId = state.exitOrderRefs?.sl?.clientOrderId
+
+        const deadlineDelay = Math.max(0, exitPolicy.deadlineAt - now - skewMs)
+        const deadlineHandle = setTOFn(() => {
+          logger.info({ intentId, deadlineAt: exitPolicy.deadlineAt }, 'monitor.deadline_fired')
+          settle('deadline', {
+            triggerTs: clock.now(),
+            source: 'timer',
+            latencyMs: Math.max(0, clock.now() - exitPolicy.deadlineAt),
+          })
+        }, deadlineDelay)
+        entry.timers.push(deadlineHandle)
+
+        const unsub = bus.on('ws.order', event => {
+          if (event.exchange !== intent.exchange) return
+          const { order } = event
+          if (order.status !== 'filled' || order.clientOrderId !== slId) return
+          const ctx: ExitTriggerContext = {
+            triggerTs: order.updatedAt,
+            source: 'ws',
+            exitOrderClientId: slId,
+            latencyMs: event.receivedAt - order.updatedAt,
+          }
+          if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice
+          settle('sl', ctx)
+        })
+        entry.unsubs.push(unsub)
+
+        logger.debug({ intentId, deadlineDelay, slId }, 'monitor.armed.sl_tp_deadline_retracement')
+      } else {
+        // funding_fee_event: exit on the WS funding-fee credit; fall back to a hard timeout.
+        const { fundingTs, timeoutAt } = exitPolicy
+        // Allow ±5 s drift between the expected fundingTs and the actual event timestamp.
+        const toleranceMs = 5_000
+
+        const timeoutDelay = Math.max(0, timeoutAt - now - skewMs)
+        const timeoutHandle = setTOFn(() => {
+          settle('funding_fee_timeout', {
+            triggerTs: clock.now(),
+            source: 'timer',
+            latencyMs: Math.max(0, clock.now() - timeoutAt),
+          })
+        }, timeoutDelay)
+        entry.timers.push(timeoutHandle)
+
+        const unsub = bus.on('ws.funding_fee', event => {
+          if (event.exchange !== intent.exchange) return
+          if (event.symbol !== intent.symbol) return
+          if (event.fundingTime < fundingTs - toleranceMs) return
+          settle('funding_fee', {
+            triggerTs: event.receivedAt,
+            source: 'ws',
+            latencyMs: event.receivedAt - event.fundingTime,
+          })
+        })
+        entry.unsubs.push(unsub)
+
+        logger.debug({ intentId, timeoutDelay, fundingTs }, 'monitor.armed.funding_fee_event')
       }
     },
 

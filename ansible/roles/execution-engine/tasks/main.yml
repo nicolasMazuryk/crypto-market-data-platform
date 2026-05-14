@@ -135,7 +135,7 @@
 - name: Template execution secrets env file
   ansible.builtin.template:
     src: execution.env.j2
-    dest: "{{ execution_secrets_dir }}/execution.env"
+    dest: "{{ execution_secrets_dir }}/{{ execution_mode }}.env"
     owner: root
     group: root
     mode: "0400"

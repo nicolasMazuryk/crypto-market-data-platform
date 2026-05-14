@@ -31,7 +31,7 @@ export function validateProposalSummary(s: string): SummaryValidation {
   if (PLACEHOLDER_SUMMARIES.has(trimmed.toLowerCase())) {
     return { ok: false, reason: `summary is a placeholder word ("${trimmed}")` }
   }
-  if (trimmed.length < 15) return { ok: false, reason: `summary too short (${trimmed.length} chars, min 15)` }
+  if (trimmed.length < 15) return { ok: false, reason: `summary too short (${String(trimmed.length)} chars, min 15)` }
   return { ok: true }
 }
 

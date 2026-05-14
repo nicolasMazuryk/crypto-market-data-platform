@@ -14,8 +14,28 @@ const bybitSpec: CcxtAdapterSpec = {
       await ccxtEx.setLeverage(leverage, unified)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      // 110077 = pm mode cannot set leverage (portfolio margin accounts don't support per-symbol leverage)
-      if (msg.includes('110077')) return
+      // 110043 = leverage not modified (already at target); 110077 = pm mode cannot set leverage
+      if (msg.includes('110043') || msg.includes('110077')) return
+      throw err
+    }
+  },
+  setPositionMode: async (ccxtEx, hedged, unified) => {
+    if (!ccxtEx.setPositionMode || !unified) return
+    try {
+      await ccxtEx.setPositionMode(hedged, unified, { category: 'linear' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('position mode not modified') || msg.includes('110026') || msg.includes('110077')) return
+      throw err
+    }
+  },
+  setMarginMode: async (ccxtEx, unified, mode) => {
+    if (!ccxtEx.setMarginMode) return
+    try {
+      await ccxtEx.setMarginMode(mode, unified, { category: 'linear' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('not modified') || msg.includes('110026') || msg.includes('110077')) return
       throw err
     }
   },

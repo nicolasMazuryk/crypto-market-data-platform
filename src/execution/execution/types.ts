@@ -14,11 +14,29 @@ export type IntentStatus =
   | 'error'
   | 'cancelled'
 
-export type ExitReason = 'timed' | 'tp' | 'sl' | 'deadline' | 'kill_switch' | 'error'
+export type ExitReason =
+  | 'timed'
+  | 'tp'
+  | 'sl'
+  | 'deadline'
+  | 'kill_switch'
+  | 'error'
+  | 'funding_fee'
+  | 'funding_fee_timeout'
 
 export interface ExitOrderRef {
   clientOrderId: string
   exchangeOrderId?: string
+}
+
+export interface LadderRung {
+  clientOrderId: string
+  /** Canonical (exchange-normalised) clientOrderId used as map key. */
+  canonicalId: string
+  qtyFraction: number
+  filled: boolean
+  filledQty: number
+  avgFillPrice: number
 }
 
 export interface IntentState {
@@ -26,6 +44,10 @@ export interface IntentState {
   status: IntentStatus
   entryOrderId?: string
   entryExchangeOrderId?: string
+  preFundingOrderId?: string
+  preFundingExchangeOrderId?: string
+  preFundingFilledQty?: number
+  preFundingAvgFillPrice?: number
   exitOrderRefs?: { sl?: ExitOrderRef; tp?: ExitOrderRef; close?: ExitOrderRef }
   filledQty: number
   avgEntryPrice?: number
@@ -33,6 +55,8 @@ export interface IntentState {
   exitReason?: ExitReason
   error?: { code: string; message: string; at: number }
   updatedAt: number
+  /** Present for ladder_limit intents: per-rung fill tracking. */
+  ladderRungs?: LadderRung[]
 }
 
 export interface ExecutionManager {

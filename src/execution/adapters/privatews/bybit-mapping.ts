@@ -1,6 +1,6 @@
 import type { Exchange } from '../../types/exchange.js'
 import type { OrderSide, OrderStatus, Position, Balance, Order } from '../rest/types.js'
-import type { OrderEvent, PositionEvent, BalanceEvent } from './types.js'
+import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent } from './types.js'
 import type { ParsedWsMessage } from './private-ws-base.js'
 
 interface BybitOrderData {
@@ -41,6 +41,16 @@ interface BybitWalletCoin {
 
 interface BybitWalletData {
   coin?: BybitWalletCoin[]
+}
+
+interface BybitExecutionData {
+  symbol: string
+  execType: string
+  execFee?: string
+  execTime?: string
+  execQty?: string
+  feeRate?: string
+  feeCurrency?: string
 }
 
 interface BybitUpdate {
@@ -91,8 +101,8 @@ export function parseBybitMessage(
         filledQty: parseFloat(d.cumExecQty ?? '0'),
         reduceOnly: d.reduceOnly ?? false,
         status: mapBybitOrderStatus(d.orderStatus),
-        submittedAt: d.createdTime ? parseInt(d.createdTime, 10) : receivedAt,
-        updatedAt: d.updatedTime ? parseInt(d.updatedTime, 10) : receivedAt,
+        submittedAt: d.createdTime ? (v => v > 9_999_999_999_999 ? Math.floor(v / 1000) : v)(parseInt(d.createdTime, 10)) : receivedAt,
+        updatedAt: d.updatedTime ? (v => v > 9_999_999_999_999 ? Math.floor(v / 1000) : v)(parseInt(d.updatedTime, 10)) : receivedAt,
       }
       const px = parseFloat(d.price ?? '0')
       if (px > 0) order.price = px
@@ -130,7 +140,38 @@ export function parseBybitMessage(
     return { positions, eventType: topic }
   }
 
+  if (topic === 'execution') {
+    const fundingFees: FundingFeeEvent[] = []
+    const items = Array.isArray(data) ? data : [data]
+    for (const item of items) {
+      const d = item as BybitExecutionData
+      if (process.env.BYBIT_EXEC_DEBUG === '1') {
+        process.stdout.write(JSON.stringify({ _debug: 'bybit.execution', symbol: d.symbol, execType: d.execType, execTime: d.execTime, execFee: d.execFee }) + '\n')
+      }
+      if (d.execType !== 'Funding') continue
+      const fundingTime = d.execTime ? parseInt(d.execTime, 10) : receivedAt
+      const fundingRate = d.feeRate ? parseFloat(d.feeRate) : 0
+      const fundingAmount = d.execFee ? parseFloat(d.execFee) : 0
+      const positionQty = d.execQty ? Math.abs(parseFloat(d.execQty)) : 0
+      fundingFees.push({
+        exchange,
+        symbol: d.symbol,
+        fundingTime,
+        fundingRate,
+        fundingAmount,
+        asset: d.feeCurrency ?? 'USDT',
+        positionQty,
+        receivedAt,
+      })
+    }
+    if (fundingFees.length > 0) return { fundingFees, eventType: 'execution.funding' }
+    return { eventType: 'execution' }
+  }
+
   if (topic === 'wallet') {
+    if (process.env.BYBIT_EXEC_DEBUG === '1') {
+      process.stdout.write(JSON.stringify({ _debug: 'bybit.wallet', data }) + '\n')
+    }
     const balances: BalanceEvent[] = []
     const items = Array.isArray(data) ? data : [data]
     for (const item of items) {

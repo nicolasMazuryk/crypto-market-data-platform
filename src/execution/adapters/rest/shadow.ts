@@ -85,6 +85,14 @@ export function createShadowRestAdapter(opts: ShadowRestAdapterOptions): Exchang
       return Promise.resolve()
     },
 
+    setMarginMode(_symbol: string, _mode: 'cross' | 'isolated'): Promise<void> {
+      return Promise.resolve()
+    },
+
+    setPositionMode(_hedged: boolean, _symbol?: string): Promise<void> {
+      return Promise.resolve()
+    },
+
     createOrder(req: OrderRequest): Promise<OrderAck> {
       const ack = shadowAck(req.clientOrderId, req)
       logger.info({ exchange, req, ack, shadow: true }, 'shadow.createOrder')

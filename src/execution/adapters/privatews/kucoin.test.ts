@@ -77,4 +77,13 @@ runWsAdapterConformance({
       holdBalance: '50',
     },
   },
+  sampleFundingFeeRaw: {
+    topic: '/contractAccount/wallet',
+    subject: 'wallet.funding',
+    data: {
+      symbol: 'XBTUSDTM',
+      fundingFee: -4.5,
+      timestamp: 1700000000000,
+    },
+  },
 })

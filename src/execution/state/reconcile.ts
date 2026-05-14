@@ -89,15 +89,18 @@ export async function runReconcile(ctx: ReconcileContext): Promise<void> {
   for (const cid of localOpenCids) {
     if (!restOrdersByCid.has(cid)) {
       let terminalOrder: Order | undefined
+      const localOrder = ctx.getOrder(cid)
       try {
-        terminalOrder = await rest.getOrder({ symbol: '', clientOrderId: cid })
+        if (localOrder?.symbol) {
+          terminalOrder = await rest.getOrder({ symbol: localOrder.symbol, clientOrderId: cid })
+        }
       } catch {
         // best-effort
       }
       const resolved: Order =
         terminalOrder ??
         ({
-          ...(ctx.getOrder(cid) ?? {
+          ...(localOrder ?? {
             exchange,
             symbol: '',
             clientOrderId: cid,

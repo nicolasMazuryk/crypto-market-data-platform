@@ -88,7 +88,7 @@ async function syncBranchToHead(
   repoRoot: string,
   branchName: string,
   mainHead: string,
-  worktreeInfos: WorktreeInfo[],
+  worktreeInfos: WorktreeInfo[]
 ): Promise<void> {
   const checkedOutElsewhere = worktreeInfos.some(w => w.branch === `refs/heads/${branchName}`)
   if (checkedOutElsewhere) return

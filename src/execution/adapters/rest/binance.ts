@@ -8,6 +8,23 @@ const binanceSpec: CcxtAdapterSpec = {
   ccxtOptions: { defaultType: 'swap', adjustForTimeDifference: true, warnOnFetchOpenOrdersWithoutSymbol: false },
   duplicateOrderCodes: new Set(['-2010', '-4116']),
   leverageAlreadySetCode: '-4046',
+  setPositionMode: async (ccxtEx, hedged) => {
+    if (!ccxtEx.setPositionMode) return
+    try {
+      await ccxtEx.setPositionMode(hedged)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('-4059') || msg.includes('no need to change position side')) return
+      // -4067: Binance rejects mode change (or same-mode SET) when open orders exist.
+      // If the current mode already matches what we want, this is safe to ignore.
+      if (msg.includes('-4067') || msg.includes('Position side cannot be changed')) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const info = await (ccxtEx as any).fapiPrivateGetPositionSideDual?.() as { dualSidePosition: boolean } | undefined
+        if (info !== undefined && info.dualSidePosition === hedged) return
+      }
+      throw err
+    }
+  },
   buildCreateOrderParams: (req: OrderRequest) => {
     const p: Record<string, unknown> = { newClientOrderId: req.clientOrderId }
     if (req.reduceOnly) p.reduceOnly = true
@@ -20,9 +37,9 @@ const binanceSpec: CcxtAdapterSpec = {
     if (ref.clientOrderId) p.origClientOrderId = ref.clientOrderId
     return p
   },
-  buildFetchOrderParams: (ref: OrderRef) => ({
-    origClientOrderId: ref.clientOrderId ?? '',
-  }),
+  buildFetchOrderParams: (ref: OrderRef) => ref.exchangeOrderId
+    ? {}
+    : { origClientOrderId: ref.clientOrderId ?? '' },
   buildAmendOrderParams: (ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>) => ({
     origClientOrderId: ref.clientOrderId,
   }),

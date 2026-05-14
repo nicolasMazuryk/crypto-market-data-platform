@@ -27,7 +27,7 @@ export interface OrderPlacedEvent {
   symbol: string
   clientOrderId: string
   exchangeOrderId?: string
-  kind: 'entry' | 'sl' | 'tp' | 'close' | 'timed'
+  kind: 'entry' | 'pre_funding' | 'sl' | 'tp' | 'close' | 'timed'
   side: 'buy' | 'sell'
   orderType: 'market' | 'limit' | 'stop_market'
   qty: number
