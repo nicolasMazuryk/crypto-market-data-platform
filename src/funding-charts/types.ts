@@ -39,8 +39,17 @@ export type WorkerMessage =
   | { type: 'progress'; done: number; skipped: number; errors: number }
   | { type: 'done'; done: number; skipped: number; errors: number }
 
+export interface ClickHouseConnectionConfig {
+  host: string
+  httpPort: string
+  database: string
+  user: string
+  password: string
+}
+
 export interface WorkerInput {
   events: FundingEvent[]
   config: ChartConfig
   workerId: number
+  clickhouse: ClickHouseConnectionConfig
 }

@@ -1,6 +1,5 @@
 import type { ClickHouseClient } from '@clickhouse/client'
 
-import { getClickHouseClient } from '../db/client.js'
 import type { ChartConfig, FundingEvent, OrderbookRow } from './types.js'
 
 function toClickHouseDateTime(d: Date): string {
@@ -11,8 +10,7 @@ function parseClickHouseDateTime(s: string): Date {
   return new Date(s.replace(' ', 'T') + 'Z')
 }
 
-export async function* streamFundingEvents(config: ChartConfig): AsyncGenerator<FundingEvent> {
-  const client = getClickHouseClient()
+export async function* streamFundingEvents(config: ChartConfig, client: ClickHouseClient): AsyncGenerator<FundingEvent> {
 
   const conditions: string[] = []
 

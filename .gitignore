@@ -10,6 +10,8 @@ logs/
 coverage/
 package-lock.json
 
+charts/
+
 data/
 !src/backtesting/data/
 

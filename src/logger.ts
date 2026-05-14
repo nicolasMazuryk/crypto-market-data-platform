@@ -33,6 +33,7 @@ function levelFilterStream(
 // In production: stdout only (Docker/journald captures it; no unbounded local files).
 // In development: stdout (pino-pretty) + rotating file streams under logs/.
 let streams: pino.StreamEntry[]
+let _prettyTransport: ReturnType<typeof pino.transport> | undefined
 
 if (isProduction) {
   // JSON logs to stdout in production for Docker/journald
@@ -61,7 +62,7 @@ if (isProduction) {
     level => level >= PINO_LEVEL_ERROR
   )
 
-  const prettyTransport = pino.transport({
+  _prettyTransport = pino.transport({
     target: 'pino-pretty',
     options: {
       // Avoid ANSI in piped child output (autoresearch log files, CI) while
@@ -78,8 +79,19 @@ if (isProduction) {
     { stream: combinedFileStream, level: 'trace' },
     { stream: warnFileStream, level: 'warn' },
     { stream: errorFileStream, level: 'error' },
-    { stream: prettyTransport, level: 'trace' },
+    { stream: _prettyTransport, level: 'trace' },
   ]
+}
+
+/** Flush + close the pino-pretty worker thread so terminal output isn't lost on exit. */
+export function closeLogger(): Promise<void> {
+  const transport = _prettyTransport
+  if (!transport) return Promise.resolve()
+  return new Promise(resolve => {
+    transport.end(() => {
+      resolve()
+    })
+  })
 }
 
 const multistream = pino.multistream(streams)

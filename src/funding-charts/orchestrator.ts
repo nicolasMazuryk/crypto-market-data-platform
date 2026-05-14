@@ -1,17 +1,31 @@
 import { fileURLToPath } from 'url'
 import { Worker } from 'worker_threads'
 
+import { createClient } from '@clickhouse/client'
+
 import { logger } from '../logger.js'
 import { streamFundingEvents } from './queries.js'
-import type { ChartConfig, FundingEvent, WorkerMessage } from './types.js'
+import type { ChartConfig, ClickHouseConnectionConfig, FundingEvent, WorkerMessage } from './types.js'
 
 const WORKER_PATH = fileURLToPath(new URL('./worker-bootstrap.mjs', import.meta.url))
 
-export async function runOrchestrator(chartConfig: ChartConfig, limit?: number): Promise<void> {
+export async function runOrchestrator(
+  chartConfig: ChartConfig,
+  clickhouse: ClickHouseConnectionConfig,
+  limit?: number,
+): Promise<void> {
+  const client = createClient({
+    url: `http://${clickhouse.host}:${clickhouse.httpPort}`,
+    database: clickhouse.database,
+    username: clickhouse.user,
+    password: clickhouse.password,
+    request_timeout: 600_000,
+  })
+
   logger.info('collecting funding events...')
 
   const events: FundingEvent[] = []
-  for await (const event of streamFundingEvents(chartConfig)) {
+  for await (const event of streamFundingEvents(chartConfig, client)) {
     events.push(event)
     if (limit !== undefined && events.length >= limit) break
   }
@@ -60,7 +74,7 @@ export async function runOrchestrator(chartConfig: ChartConfig, limit?: number):
     if (chunk.length === 0) break
 
     const worker = new Worker(WORKER_PATH, {
-      workerData: { events: chunk, config: chartConfig, workerId: i },
+      workerData: { events: chunk, config: chartConfig, workerId: i, clickhouse },
       execArgv: [],
     })
 
@@ -85,6 +99,7 @@ export async function runOrchestrator(chartConfig: ChartConfig, limit?: number):
     await Promise.all(workerPromises)
   } finally {
     clearInterval(progressTimer)
+    await client.close()
   }
 
   const totalDone = workerDone.reduce((a, b) => a + b, 0)

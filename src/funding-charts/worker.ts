@@ -3,22 +3,23 @@ import { parentPort, workerData } from 'worker_threads'
 import { createClient } from '@clickhouse/client'
 import pLimit from 'p-limit'
 
-import { config } from '../config.js'
 import { logger } from '../logger.js'
 import { buildOutputPath, writePng } from './output.js'
 import { processFundingChartEvent } from './process-event.js'
 import { fetchOrderbookWindow } from './queries.js'
 import { renderChart } from './render.js'
-import type { ChartConfig, FundingEvent, WorkerMessage } from './types.js'
+import type { ChartConfig, ClickHouseConnectionConfig, FundingEvent, WorkerMessage } from './types.js'
 
 const {
   events,
   config: chartConfig,
   workerId,
+  clickhouse,
 } = workerData as {
   events: FundingEvent[]
   config: ChartConfig
   workerId: number
+  clickhouse: ClickHouseConnectionConfig
 }
 
 // Re-hydrate Date objects (structured clone transfers them correctly, but be safe)
@@ -27,12 +28,11 @@ const hydratedEvents: FundingEvent[] = events.map(e => ({
   funding_time: e.funding_time instanceof Date ? e.funding_time : new Date(e.funding_time as unknown as string),
 }))
 
-const { host, httpPort, database, user, password } = config.clickhouse
 const client = createClient({
-  url: `http://${host}:${httpPort}`,
-  database,
-  username: user,
-  password,
+  url: `http://${clickhouse.host}:${clickhouse.httpPort}`,
+  database: clickhouse.database,
+  username: clickhouse.user,
+  password: clickhouse.password,
   request_timeout: 600_000,
 })
 
