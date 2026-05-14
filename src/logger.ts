@@ -88,9 +88,8 @@ export function closeLogger(): Promise<void> {
   const transport = _prettyTransport
   if (!transport) return Promise.resolve()
   return new Promise(resolve => {
-    transport.end(() => {
-      resolve()
-    })
+    transport.on('finish', resolve)
+    transport.end()
   })
 }
 
