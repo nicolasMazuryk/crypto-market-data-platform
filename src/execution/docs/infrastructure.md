@@ -151,7 +151,7 @@ Ansible waits for `/ready` (200 OK) before marking the deployment successful (`e
 
 ### Prometheus
 
-Scrapes `localhost:9464/metrics`. Alert rules live in `docker/prometheus/rules/execution-engine.yml` (copied to server by the `observability` role). Retention: 30 days.
+Scrapes `localhost:9464/metrics`. Alert rules are rendered from `ansible/roles/observability/templates/execution-engine.yml.j2` by the `observability` role; the `EngineDown` rule is only emitted when `execution_engine_enabled: true`. The static copy at `docker/prometheus/rules/execution-engine.yml` is used for local dev only. Retention: 30 days.
 
 ### Grafana
 

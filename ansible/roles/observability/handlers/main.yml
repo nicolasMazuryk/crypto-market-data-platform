@@ -1,0 +1,5 @@
+---
+- name: Reload Prometheus
+  ansible.builtin.command:
+    cmd: docker compose -f {{ docker_compose_file }} kill -s HUP prometheus
+  changed_when: true

@@ -22,14 +22,14 @@
     group: nicolas
     mode: "0644"
 
-- name: Copy Prometheus alert rules
-  ansible.builtin.copy:
-    src: "{{ repo_dir }}/docker/prometheus/rules/execution-engine.yml"
+- name: Template Prometheus alert rules
+  ansible.builtin.template:
+    src: execution-engine.yml.j2
     dest: "{{ app_dir }}/observability/prometheus-rules/execution-engine.yml"
     owner: nicolas
     group: nicolas
     mode: "0644"
-    remote_src: true
+  notify: Reload Prometheus
 
 - name: Template Alertmanager config
   ansible.builtin.template:
