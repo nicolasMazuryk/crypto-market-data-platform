@@ -131,6 +131,28 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 
 ---
 
+## Safety Mechanisms
+
+### Kill Switch
+
+The engine exposes a kill switch with three states: `off`, `paused`, and `flatten`.
+
+When `killSwitchMode !== 'off'`, `preflight()` rejects every new intent with `intent.error { code: 'kill_switch' }` before any exchange API call is made. No order is submitted; no network activity is visible on the exchange side. Operators watching exchange logs will see no activity — the rejection is engine-internal only.
+
+The `flatten` mode additionally triggers `flattenAll()`, which issues reduce-only market orders to close all open positions across all exchanges.
+
+Code reference: `src/execution/execution/preflight.ts:32`.
+
+### Post-Exit Order Sweep (`sweepReduceOnlyOrders`)
+
+After every intent exit (TP, SL, deadline, timed, or kill switch), the engine calls `sweepReduceOnlyOrders` to cancel any lingering reduce-only orders on the exchange for that symbol. This cleanup step runs asynchronously after the exit transition.
+
+The sweep produces cancel API calls that appear in exchange logs after the close fill. These cancels are expected and not pathological — they are a safety net in case an SL or TP resting order was not consumed by the exit fill (e.g., both legs fired simultaneously, or the deadline market close filled while an SL/TP was still resting). Strategies that use `sl_tp_deadline` variants will always produce at least one post-exit cancel call per exit.
+
+Code reference: `src/execution/execution/manager.ts` (`sweepReduceOnlyOrders`).
+
+---
+
 ## Hard Parameter Bounds
 
 These are enforced by the config loader (`src/backtesting/config/loader.ts`).

@@ -74,24 +74,24 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
 
       let settled = false
       const settle = (reason: ExitReason, ctx: ExitTriggerContext): void => {
-        if (!settled && armed.has(intentId)) {
-          settled = true
-          doDisarm(intentId)
-          const triggerEvent: ExitTriggeredEvent = {
-            intentId,
-            exchange: intent.exchange,
-            symbol: intent.symbol,
-            reason,
-            triggerTs: ctx.triggerTs,
-            source: ctx.source,
-            ...(ctx.triggerPrice !== undefined ? { triggerPrice: ctx.triggerPrice } : {}),
-            ...(ctx.exitOrderClientId !== undefined ? { exitOrderClientId: ctx.exitOrderClientId } : {}),
-            ...(ctx.latencyMs !== undefined ? { latencyMs: ctx.latencyMs } : {}),
-          }
-          bus.emit('exit.triggered', triggerEvent)
-          logger.info({ intentId, reason, ...ctx }, 'monitor.settle')
-          emitExit(intentId, reason)
+        if (settled) return
+        settled = true
+        if (!armed.has(intentId)) return
+        doDisarm(intentId)
+        const triggerEvent: ExitTriggeredEvent = {
+          intentId,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          reason,
+          triggerTs: ctx.triggerTs,
+          source: ctx.source,
+          ...(ctx.triggerPrice !== undefined ? { triggerPrice: ctx.triggerPrice } : {}),
+          ...(ctx.exitOrderClientId !== undefined ? { exitOrderClientId: ctx.exitOrderClientId } : {}),
+          ...(ctx.latencyMs !== undefined ? { latencyMs: ctx.latencyMs } : {}),
         }
+        bus.emit('exit.triggered', triggerEvent)
+        logger.info({ intentId, reason, ...ctx }, 'monitor.settle')
+        emitExit(intentId, reason)
       }
 
       if (exitPolicy.kind === 'timed') {
@@ -198,7 +198,7 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         const unsub = bus.on('ws.funding_fee', event => {
           if (event.exchange !== intent.exchange) return
           if (event.symbol !== intent.symbol) return
-          if (event.fundingTime < fundingTs - toleranceMs) return
+          if (event.fundingTime < fundingTs - toleranceMs || event.fundingTime > fundingTs + toleranceMs) return
           settle('funding_fee', {
             triggerTs: event.receivedAt,
             source: 'ws',

@@ -14,7 +14,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         stop_loss: 0.01,
         tp_mode: 'A',
         tp_multiplier: 1.5,
-        tp_addend: 0.004,
+        tp_addend_pct: 0.4,
         deadline_seconds: 60,
         funding_applied_on_same_second: true,
       },
@@ -57,7 +57,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         stop_loss: 0.01,
         tp_mode: 'A',
         tp_multiplier: 1.5,
-        tp_addend: 0.004,
+        tp_addend_pct: 0.4,
         deadline_seconds: 60,
         funding_applied_on_same_second: true,
       },
@@ -98,7 +98,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         stop_loss: 0.01,
         tp_mode: 'A',
         tp_multiplier: 1.5,
-        tp_addend: 0.004,
+        tp_addend_pct: 0.4,
         deadline_seconds: 60,
         funding_applied_on_same_second: true,
       },
@@ -152,7 +152,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
         stop_loss: 0.01,
         tp_mode: 'A',
         tp_multiplier: 1.5,
-        tp_addend: 0.004,
+        tp_addend_pct: 0.4,
         deadline_seconds: 60,
         funding_applied_on_same_second: true,
       },
@@ -177,5 +177,93 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
     expect(result.exit_reason).toBe('DEADLINE')
     expect(result.exit_price).toBeGreaterThan(0)
     expect(result.hold_duration).toBeCloseTo(65, 0) // 5s entry offset + 60s deadline
+  })
+
+  it('Scenario variant-B-1: F=-0.5%, tp_addend_pct=0.4 → tpPct=0.9%, TP fills', () => {
+    // F = -0.5% = -0.005, absF = 0.005
+    // tpDistance = 0.005 + 0.4/100 = 0.009 (0.9%)
+    // entry SELL at 50000 → tpPrice = 50000 × (1 - 0.009) = 49550
+    // slPrice = 50000 × (1 + 0.01) = 50500
+    const strategy = new Strategy3('strategy_3b')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_3b',
+        direction: 'short',
+        funding_threshold: 0.001,
+        entry_offset_seconds: 5,
+        stop_loss: 0.01,
+        tp_mode: 'B',
+        tp_multiplier: 1.5,
+        tp_addend_pct: 0.4,
+        deadline_seconds: 60,
+        funding_applied_on_same_second: true,
+      },
+      BINANCE_FEES,
+      DEFAULT_SLIPPAGE
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const basePrice = 50000
+    // Entry at T-5 = 50000; price drops to 49500 at T+5, below tpPrice=49550
+    const window = buildWindow({
+      fundingTime,
+      basePrice,
+      priceFn: offset => {
+        if (offset < 0) return basePrice
+        return basePrice - offset * 100 // drops 100/s → 49500 at T+5
+      },
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.005 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('TP_HIT')
+    // tpPrice = 50000 × (1 - 0.009) = 49550; fill at ask_low which is slightly above bid
+    expect(result.exit_price).toBeCloseTo(49550, 0)
+  })
+
+  it('Scenario variant-B-2: F=-1.0%, tp_addend_pct=0.4 → tpPct=1.4%, TP fills', () => {
+    // F = -1.0% = -0.010, absF = 0.010
+    // tpDistance = 0.010 + 0.4/100 = 0.014 (1.4%)
+    // entry SELL at 50000 → tpPrice = 50000 × (1 - 0.014) = 49300
+    // slPrice = 50000 × (1 + 0.01) = 50500
+    const strategy = new Strategy3('strategy_3b')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_3b',
+        direction: 'short',
+        funding_threshold: 0.001,
+        entry_offset_seconds: 5,
+        stop_loss: 0.01,
+        tp_mode: 'B',
+        tp_multiplier: 1.5,
+        tp_addend_pct: 0.4,
+        deadline_seconds: 60,
+        funding_applied_on_same_second: true,
+      },
+      BINANCE_FEES,
+      DEFAULT_SLIPPAGE
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const basePrice = 50000
+    // Entry at T-5 = 50000; price drops to 49200 at T+8, below tpPrice=49300
+    const window = buildWindow({
+      fundingTime,
+      basePrice,
+      priceFn: offset => {
+        if (offset < 0) return basePrice
+        return basePrice - offset * 100 // drops 100/s → 49200 at T+8
+      },
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('TP_HIT')
+    // tpPrice = 50000 × (1 - 0.014) = 49300; fill at ask_low
+    expect(result.exit_price).toBeCloseTo(49300, 0)
   })
 })

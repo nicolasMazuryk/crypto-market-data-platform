@@ -83,11 +83,13 @@ export function createPrivateWsAdapterFromSpec<TRaw>(
   let state: ConnectionState | 'idle' = 'idle'
   let retries = 0
   let disconnectRequested = false
+  // Per-adapter (per-exchange) counter — seq from two adapters are independent and must not be compared across exchanges.
   let seq = 0
   let currentClient: PrivateWsClient | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectScheduled = false
   let connectionToken = 0
+  let disconnectedAt: number | null = null
 
   type AnyListener = (...args: unknown[]) => void
   const emitter = new EventEmitter()
@@ -120,16 +122,40 @@ export function createPrivateWsAdapterFromSpec<TRaw>(
   }
 
   function emitConnState(s: ConnectionState, reason?: string): void {
+    const prevState = state
+    const now = clock.now()
+
+    // Track downtime window.
+    if ((s === 'disconnected' || s === 'reconnecting') && disconnectedAt === null) {
+      disconnectedAt = now
+    }
+    let downtimeMs: number | null = null
+    if (s === 'connected' && disconnectedAt !== null) {
+      downtimeMs = now - disconnectedAt
+      disconnectedAt = null
+    }
+
     state = s
     const ev: ConnectionStateEvent = {
       exchange,
       state: s,
-      at: clock.now(),
+      at: now,
       ...(reason !== undefined ? { reason } : {}),
     }
     events.emit('connectionState', ev)
     bus.emit('ws.connection', ev)
     metrics.connectionState.set(connStateNum(s), { exchange })
+    logger.info(
+      {
+        event: 'ws.connection',
+        exchange,
+        state: s,
+        prevState,
+        downtimeMs,
+        ...(reason !== undefined ? { reason } : {}),
+      },
+      'ws.connection'
+    )
   }
 
   function scheduleReconnect(): void {

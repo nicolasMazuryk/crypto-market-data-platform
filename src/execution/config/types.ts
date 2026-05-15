@@ -87,6 +87,13 @@ export interface SchedulerConfig {
   fundingWindowMs: number
 }
 
+export interface EngineIdentity {
+  strategy: string
+  exchange: string
+  subAccountId: string
+  combinationId: string
+}
+
 export interface EngineConfig {
   mode: 'live' | 'dry_run'
   gitSha: string
@@ -98,4 +105,5 @@ export interface EngineConfig {
   risk: RiskConfig
   scheduler: SchedulerConfig
   testing?: TestingConfig
+  identity?: EngineIdentity
 }

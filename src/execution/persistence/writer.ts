@@ -6,6 +6,7 @@ import type { EventBus } from '../core/types.js'
 import type { PersistenceMetrics } from '../observability/metrics.js'
 import type { IntentState } from '../execution/types.js'
 import type { TradeIntent } from '../strategies/types.js'
+import type { EngineIdentity } from '../config/types.js'
 import type { DrizzleDb } from './db.js'
 import type { WalHandle, WalEntry } from './wal.js'
 import {
@@ -13,6 +14,7 @@ import {
   tradeIntents,
   orders,
   fills,
+  fillsDeadLetter,
   balancesHistory,
   fundingAttributions,
   opsEvents,
@@ -20,6 +22,7 @@ import {
   exitTriggers,
   realizedPnl,
 } from './drizzle/schema.js'
+import { logFillUnmatched, logWalDiscarded } from '../observability/log-events.js'
 
 export interface PersistenceWriterOptions {
   db: DrizzleDb
@@ -30,6 +33,7 @@ export interface PersistenceWriterOptions {
   metrics: PersistenceMetrics
   batchSize?: number
   flushIntervalMs?: number
+  identity?: EngineIdentity
 }
 
 export interface WriteOrderSyncParams {
@@ -128,6 +132,7 @@ export async function writeRowToDb(
         if (row.avgExitPrice) updateSet.avgExitPrice = row.avgExitPrice
         if (row.entryFilledAt) updateSet.entryFilledAt = toDate(row.entryFilledAt)
         if (row.exitFilledAt) updateSet.exitFilledAt = toDate(row.exitFilledAt)
+        if (row.fundingGateOpen !== undefined) updateSet.fundingGateOpen = row.fundingGateOpen
         await db
           .update(tradeIntents)
           .set(updateSet as Parameters<ReturnType<typeof db.update>['set']>[0])
@@ -175,6 +180,19 @@ export async function writeRowToDb(
         )
       break
     }
+
+    case 'fills':
+      await db
+        .insert(fills)
+        .values({ ...row, ts: toDate(row.ts) } as typeof fills.$inferInsert)
+        .onConflictDoNothing()
+      break
+
+    case 'fills_dead_letter':
+      await db
+        .insert(fillsDeadLetter)
+        .values({ ...row, ts: toDate(row.ts) } as typeof fillsDeadLetter.$inferInsert)
+      break
 
     case 'balances_history':
       await db
@@ -244,6 +262,11 @@ export async function drainWalEntriesToDb(db: DrizzleDb, wal: WalHandle, logger:
     } catch (err) {
       const code = (err as { code?: string }).code
       if (code && PERMANENT_PG_ERROR_CODES.has(code)) {
+        logWalDiscarded(logger, {
+          table: entry.table,
+          pgErrorCode: code,
+          pgErrorText: (err as Error).message || String(err),
+        })
         logger.warn({ code, table: entry.table }, 'wal: discarding entry with permanent schema error')
       } else {
         logger.warn({ err, table: entry.table }, 'wal: pre-recovery write failed, keeping entry')
@@ -255,7 +278,11 @@ export async function drainWalEntriesToDb(db: DrizzleDb, wal: WalHandle, logger:
 }
 
 export function createPersistenceWriter(opts: PersistenceWriterOptions): PersistenceWriterHandle {
-  const { db, wal, bus, runId, logger, metrics, batchSize = 100, flushIntervalMs = 250 } = opts
+  const { db, wal, bus, runId, logger, metrics, batchSize = 100, flushIntervalMs = 250, identity } = opts
+  const stamp = {
+    strategy: identity?.strategy ?? 'legacy',
+    subAccountId: identity?.subAccountId ?? 'legacy',
+  }
 
   const queue: QueuedWrite[] = []
   let flushTimer: ReturnType<typeof setInterval> | undefined
@@ -263,6 +290,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
 
   // Track last known status per intent for lifecycle event from_status calculation.
   const prevStatusByIntent = new Map<string, string>()
+  const prevLifecycleTsByIntent = new Map<string, number>()
 
   function enqueue(write: QueuedWrite): void {
     if (queue.length >= 1000) {
@@ -295,6 +323,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       entryAt: new Date(intent.entryAt),
       status: state.status,
       exitPolicy: intent.exitPolicy,
+      subAccountId: stamp.subAccountId,
     }
   }
 
@@ -339,6 +368,18 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
           onConflict: 'update',
         })
 
+        const nowMs = Date.now()
+        const prevTs = prevLifecycleTsByIntent.get(state.intent.id)
+        const latencyMs = prevTs != null ? nowMs - prevTs : null
+        prevLifecycleTsByIntent.set(state.intent.id, nowMs)
+
+        let ctx: Record<string, unknown> | null = null
+        if ((state.status === 'exiting' || state.status === 'exited') && state.exitReason) {
+          ctx = { reason: state.exitReason }
+        } else if (state.status === 'error' && state.error) {
+          ctx = { code: state.error.code, message: state.error.message }
+        }
+
         enqueue({
           table: 'intent_lifecycle_events',
           row: {
@@ -347,8 +388,8 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             fromStatus,
             toStatus: state.status,
             ts: new Date(),
-            latencyMs: null,
-            context: null,
+            latencyMs,
+            context: ctx,
           },
         })
       })
@@ -377,6 +418,8 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
           stopPrice: event.stopPrice != null ? String(event.stopPrice) : null,
           status: 'new',
           submittedAt: new Date(),
+          strategy: stamp.strategy,
+          subAccountId: stamp.subAccountId,
         }
         // Use 'update' so the UPSERT sets exchangeOrderId if the durability write already
         // inserted this row without it. onConflictDoUpdate only sets exchangeOrderId.
@@ -405,7 +448,9 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       })
     )
 
-    // Write fill rows immediately; requires a DB lookup to resolve the order UUID, intent_id, and kind.
+    // Write fill rows; requires a DB lookup to resolve the order UUID, intent_id, and kind.
+    // On order-not-found: insert into fills_dead_letter and emit fill.unmatched log.
+    // On success: enqueue fill row so it benefits from queue retry + WAL fallback.
     unsubs.push(
       bus.on('ws.fill', event => {
         void (async () => {
@@ -416,15 +461,32 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
               .where(and(eq(orders.exchange, event.exchange), eq(orders.clientOrderId, event.clientOrderId)))
               .limit(1)
             if (!orderRow) {
-              logger.warn(
-                { exchange: event.exchange, clientOrderId: event.clientOrderId, exchangeFillId: event.exchangeFillId },
-                'persistence: fill received but matching order not found'
-              )
+              logFillUnmatched(logger, {
+                exchange: event.exchange,
+                symbol: event.symbol,
+                clientOrderId: event.clientOrderId,
+                exchangeFillId: event.exchangeFillId,
+                rawFill: event,
+                reason: 'order_not_found',
+              })
+              try {
+                await db.insert(fillsDeadLetter).values({
+                  ts: new Date(),
+                  exchange: event.exchange,
+                  symbol: event.symbol,
+                  clientOrderId: event.clientOrderId,
+                  reason: 'order_not_found',
+                  rawFillEvent: event as unknown as Record<string, unknown>,
+                  subAccountId: identity?.subAccountId ?? null,
+                })
+              } catch (dlErr) {
+                logger.warn({ dlErr, exchangeFillId: event.exchangeFillId }, 'persistence: dead-letter insert failed')
+              }
               return
             }
-            await db
-              .insert(fills)
-              .values({
+            enqueue({
+              table: 'fills',
+              row: {
                 id: randomUUID(),
                 orderId: orderRow.id,
                 exchange: event.exchange,
@@ -437,11 +499,21 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
                 ts: new Date(event.ts),
                 intentId: orderRow.intentId,
                 orderKind: orderRow.kind,
-              })
-              .onConflictDoNothing()
-            metrics.writesTotal.inc(1, { table: 'fills', result: 'success' })
+                strategy: stamp.strategy,
+                subAccountId: stamp.subAccountId,
+              },
+              onConflict: 'ignore',
+            })
+            metrics.writesTotal.inc(1, { table: 'fills', result: 'queued' })
           } catch (err) {
-            logger.warn({ err, exchangeFillId: event.exchangeFillId }, 'persistence: fill write failed')
+            logFillUnmatched(logger, {
+              exchange: event.exchange,
+              symbol: event.symbol,
+              clientOrderId: event.clientOrderId,
+              exchangeFillId: event.exchangeFillId,
+              reason: 'lookup_failed',
+            })
+            logger.warn({ err, exchangeFillId: event.exchangeFillId }, 'persistence: fill lookup failed')
             metrics.writesTotal.inc(1, { table: 'fills', result: 'error' })
           }
         })()
@@ -461,7 +533,11 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             source: event.source,
             exitOrderClientId: event.exitOrderClientId ?? null,
             latencyMs: event.latencyMs ?? null,
-            context: null,
+            context: {
+              source: event.source,
+              triggerEvent: event.reason,
+              ...(event.exitOrderClientId !== undefined ? { exitOrderClientId: event.exitOrderClientId } : {}),
+            },
           },
         })
       })
@@ -552,6 +628,8 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
                 holdDurationMs,
                 exitReason: event.exitReason,
                 computedAt: new Date(),
+                strategy: stamp.strategy,
+                subAccountId: stamp.subAccountId,
               },
             })
           } catch (err) {
@@ -576,6 +654,8 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             unrealizedPnl: toFiniteStr(balance.unrealizedPnl),
             reason: 'periodic',
             ts: new Date(balance.updatedAt),
+            strategy: stamp.strategy,
+            subAccountId: stamp.subAccountId,
           },
           onConflict: 'ignore',
         })
@@ -584,21 +664,44 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
 
     unsubs.push(
       bus.on('ws.funding_fee', event => {
-        enqueue({
-          table: 'funding_attributions',
-          row: {
-            id: randomUUID(),
-            exchange: event.exchange,
-            symbol: event.symbol,
-            positionId: null,
-            fundingTime: new Date(event.fundingTime),
-            fundingRate: String(event.fundingRate),
-            fundingAmount: String(event.fundingAmount),
-            asset: event.asset,
-            ts: new Date(),
-          },
-          onConflict: 'ignore',
-        })
+        void (async () => {
+          let intentId: string | null = null
+          try {
+            const fundingTime = new Date(event.fundingTime)
+            const [intentRow] = await db
+              .select({ id: tradeIntents.id })
+              .from(tradeIntents)
+              .where(
+                and(
+                  eq(tradeIntents.exchange, event.exchange),
+                  eq(tradeIntents.symbol, event.symbol),
+                  lte(tradeIntents.entryAt, fundingTime)
+                )
+              )
+              .limit(1)
+            if (intentRow) intentId = intentRow.id
+          } catch {
+            // intentId stays null; funding attribution still recorded
+          }
+          enqueue({
+            table: 'funding_attributions',
+            row: {
+              id: randomUUID(),
+              exchange: event.exchange,
+              symbol: event.symbol,
+              positionId: null,
+              intentId,
+              fundingTime: new Date(event.fundingTime),
+              fundingRate: String(event.fundingRate),
+              fundingAmount: String(event.fundingAmount),
+              asset: event.asset,
+              ts: new Date(),
+              strategy: stamp.strategy,
+              subAccountId: stamp.subAccountId,
+            },
+            onConflict: 'ignore',
+          })
+        })()
       })
     )
 
@@ -613,6 +716,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             exchange: event.exchange,
             eventType: `state.desync.${event.kind}`,
             payload: JSON.stringify(event.details),
+            subAccountId: identity?.subAccountId ?? null,
           },
           onConflict: 'ignore',
         })
@@ -630,9 +734,16 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             exchange: event.exchange ?? null,
             eventType: event.eventType,
             payload: JSON.stringify(event.payload),
+            subAccountId: identity?.subAccountId ?? null,
           },
           onConflict: 'ignore',
         })
+      })
+    )
+
+    unsubs.push(
+      bus.on('intent.funding_gate_opened', event => {
+        enqueue({ table: 'trade_intents', row: { id: event.intentId, fundingGateOpen: true }, onConflict: 'update' })
       })
     )
   }
@@ -685,6 +796,11 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       } catch (err) {
         const code = (err as { code?: string }).code
         if (code && PERMANENT_PG_ERROR_CODES.has(code)) {
+          logWalDiscarded(logger, {
+            table: entry.table,
+            pgErrorCode: code,
+            pgErrorText: (err as Error).message || String(err),
+          })
           logger.warn({ code, table: entry.table }, 'persistence: WAL discarding entry with permanent schema error')
           metrics.writesTotal.inc(1, { table: entry.table, result: 'discarded' })
         } else {
@@ -738,6 +854,8 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
         intendedPrice: params.intendedPrice != null ? String(params.intendedPrice) : null,
         status: 'new',
         submittedAt: new Date(),
+        strategy: stamp.strategy,
+        subAccountId: stamp.subAccountId,
       }
       try {
         await db.insert(orders).values(row).onConflictDoNothing()

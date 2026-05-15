@@ -105,3 +105,35 @@ TP variant A (`F × 1.5`) and TP variant B (`F + 0.4%`) should be tested as **se
 - Predicted funding rate at each funding interval
 - Exchange fee schedule (maker/taker)
 - Trade-by-trade data (for precise fill simulation of SL/TP)
+
+---
+
+## Spec Divergences
+
+Known gaps between this spec and the live implementation.
+
+| ID | Severity | Status |
+|---|---|---|
+| `DEADLINE_NOT_IN_SPEC` | medium | ⏳ |
+
+### DEADLINE_NOT_IN_SPEC
+
+**Category:** SPEC_DIVERGENCE
+
+The spec describes exit as "SL or TP, whichever fires first." The code also implements a deadline timer (`deadlineAt = nextFundingTimestamp + deadlineSeconds`). If neither SL nor TP fills, the deadline forces a market close — behavior not mentioned in the spec.
+
+**Preconditions:** neither SL nor TP fills before `deadlineAt`
+
+**Trigger:** `deadlineAt` fires → market close placed
+
+**Behavior:** intent exits with `exitReason="deadline"`
+
+**Observability:**
+- `monitor.deadline_fired`
+- `intent.exited.complete` `{exitReason: "deadline"}`
+
+**Code refs:**
+- `src/execution/execution/monitor.ts:112` — deadline timer set
+- `src/execution/strategies/strategy_3.ts:67` — `deadlineAt` in `exitPolicy`
+
+**Note:** The deadline is a critical safety mechanism. Without it, a position could remain open indefinitely if both SL and TP orders fail to fill.

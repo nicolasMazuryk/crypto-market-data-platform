@@ -4,7 +4,7 @@ import { createEventBus } from '../core/bus.js'
 import { createClock } from '../core/clock.js'
 import { createExecutionLogger } from '../core/logger.js'
 import { MetricsRegistry, registerStateMetrics } from '../observability/metrics.js'
-import type { Order, Position, Balance } from '../adapters/rest/types.js'
+import type { Order, Position, Balance, ExchangeRestAdapter } from '../adapters/rest/types.js'
 import { createStateStore } from './store.js'
 import type { DesyncEvent } from './types.js'
 
@@ -49,13 +49,30 @@ function makeBalance(overrides: Partial<Balance> = {}): Balance {
   }
 }
 
-function makeStore() {
+function makeMockRest(overrides: Partial<ExchangeRestAdapter> = {}): ExchangeRestAdapter {
+  return {
+    exchange: 'binance',
+    setLeverage: vi.fn(),
+    createOrder: vi.fn(),
+    cancelOrder: vi.fn(),
+    amendOrder: vi.fn(),
+    getOpenOrders: vi.fn().mockResolvedValue([]),
+    getOrder: vi.fn().mockResolvedValue(undefined),
+    getPositions: vi.fn().mockResolvedValue([]),
+    getBalance: vi.fn().mockResolvedValue([]),
+    getServerTime: vi.fn().mockResolvedValue(Date.now()),
+    ...overrides,
+  }
+}
+
+function makeStore(restAdapter?: ExchangeRestAdapter) {
   const bus = createEventBus()
   const registry = new MetricsRegistry()
   const metrics = registerStateMetrics(registry)
+  const restAdapters = restAdapter ? new Map([['binance' as const, restAdapter]]) : new Map()
   const store = createStateStore({
     bus,
-    restAdapters: new Map(),
+    restAdapters,
     exchanges: ['binance'],
     clock: createClock(),
     logger: createExecutionLogger(),
@@ -240,5 +257,38 @@ describe('StateStore', () => {
     bus.emit('ws.connection', { exchange: 'binance', state: 'connected', at: 1 })
 
     expect(reconcileSpy).toHaveBeenCalledWith('binance')
+  })
+
+  // TELEM-01: reconcile success logs store.reconcile.complete at INFO
+  it('TELEM-01: resolves reconcile and does not emit reconcile_failed opsEvent on success', async () => {
+    const rest = makeMockRest()
+    const { bus, store } = makeStore(rest)
+
+    const opsEvents: unknown[] = []
+    bus.on('ops.event', e => opsEvents.push(e))
+
+    await store.reconcile('binance')
+
+    expect(opsEvents).toHaveLength(0)
+  })
+
+  // TELEM-01: reconcile failure emits reconcile_failed opsEvent at critical level.
+  // runReconcile catches REST errors internally (returns gracefully); only unhandled
+  // post-fetch exceptions propagate. Simulate by returning null (bypasses try/catch,
+  // then crashes on restOrders.map() outside it).
+  it('TELEM-01: emits reconcile_failed opsEvent at critical level when reconcile throws', async () => {
+    const rest = makeMockRest({
+      getOpenOrders: vi.fn().mockResolvedValue(null as unknown as Order[]),
+    })
+    const { bus, store } = makeStore(rest)
+
+    const opsEvents: { eventType: string; level: string }[] = []
+    bus.on('ops.event', e => opsEvents.push(e as { eventType: string; level: string }))
+
+    await expect(store.reconcile('binance')).rejects.toThrow()
+
+    expect(opsEvents).toHaveLength(1)
+    expect(opsEvents[0]!.eventType).toBe('reconcile_failed')
+    expect(opsEvents[0]!.level).toBe('fatal')
   })
 })

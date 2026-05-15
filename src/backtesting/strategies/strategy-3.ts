@@ -56,7 +56,7 @@ export class Strategy3 implements BaseStrategy {
     if (this.config.tp_mode === 'A') {
       tpDistance = absF * this.config.tp_multiplier
     } else {
-      tpDistance = absF + this.config.tp_addend
+      tpDistance = absF + this.config.tp_addend_pct / 100
     }
 
     const tpPrice = entryPrice * (1 - tpDistance)

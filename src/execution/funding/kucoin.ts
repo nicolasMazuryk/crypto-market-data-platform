@@ -50,6 +50,7 @@ export function createKucoinPuller(): ExchangeFundingPuller {
           nextFundingTimestamp,
           nextFundingDatetime: new Date(nextFundingTimestamp).toISOString(),
           timestamp: now,
+          ...(s.markPrice > 0 ? { markPrice: s.markPrice } : {}),
         })
       }
 

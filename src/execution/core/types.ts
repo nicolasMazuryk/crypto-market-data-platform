@@ -100,6 +100,7 @@ export interface DomainEvents {
   'ws.connection': (event: ConnectionStateEvent) => void
   'state.desync': (event: DesyncEvent) => void
   'ops.event': (event: OpsEventPayload) => void
+  'intent.funding_gate_opened': (event: { intentId: string }) => void
 }
 
 export type EventBus = TypedEventEmitter<DomainEvents>

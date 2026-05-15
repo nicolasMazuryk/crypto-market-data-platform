@@ -325,7 +325,7 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         stop_loss: requirePositiveNumber(merged, 'stop_loss', ctx),
         tp_mode,
         tp_multiplier: requirePositiveNumber(merged, 'tp_multiplier', ctx),
-        tp_addend: requirePositiveNumber(merged, 'tp_addend', ctx),
+        tp_addend_pct: requirePositiveNumber(merged, 'tp_addend_pct', ctx),
         deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 3, 900, ctx),
         funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
       }

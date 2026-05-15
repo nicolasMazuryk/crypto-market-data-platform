@@ -83,7 +83,7 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 - `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `stop_loss`:            >= 0.002   AND <= 0.040
 - `tp_multiplier`:        >= 1.2     AND <= 5.0    ← TP_a = F × multiplier; values < 1 target less than the funding; only active in mode A
-- `tp_addend`:            >= 0.001   AND <= 0.040  ← TP_b = F + addend; only active in mode B
+- `tp_addend_pct`:        >= 0.1     AND <= 4.0   ← TP_b = F + addend_pct/100; only active in mode B
 - `deadline_seconds`:     >= 3      AND <= 900       ← **integer only** (no decimals)
 
 ### strategy_4_1a / strategy_4_1b (LONG — ladder limit)

@@ -64,6 +64,16 @@ export class Strategy2 implements BaseStrategy {
     if (fundingCandle?.bid_open == null) return null
     const pFunding = fundingCandle.bid_open
 
+    // Detect settlement before the loop so activeTpFrom can be gated to max(T_low+1s, settlementTs+buffer).
+    const settlement = detectRealFundingSettlement(
+      data,
+      event.funding_time,
+      this.fundingSettlement.detection_window_seconds
+    )
+    const settlementEpochMs =
+      new Date(settlement.settlementTs.replace(' ', 'T') + 'Z').getTime() +
+      this.fundingSettlement.tp_post_settlement_buffer_seconds * 1000
+
     // Simulate SL + dynamic TP online. P_low is learned only from candles already seen
     // after funding; the repriced TP becomes active on the following timestamp.
     const entryPlus1Ts = toClickHouseDateTime(new Date(entryTime.getTime() + 1000))
@@ -96,7 +106,9 @@ export class Strategy2 implements BaseStrategy {
         pLow = row.bid_low
         if (pFunding > pLow) {
           activeTpPrice = pLow + (pFunding - pLow) * this.config.retracement_pct
-          activeTpFrom = toClickHouseDateTime(new Date(new Date(row.ts.replace(' ', 'T') + 'Z').getTime() + 1000))
+          activeTpFrom = toClickHouseDateTime(
+            new Date(Math.max(new Date(row.ts.replace(' ', 'T') + 'Z').getTime() + 1000, settlementEpochMs))
+          )
         }
       }
     }
@@ -115,12 +127,6 @@ export class Strategy2 implements BaseStrategy {
         exit = { price: lastFill.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
       }
     }
-
-    const settlement = detectRealFundingSettlement(
-      data,
-      event.funding_time,
-      this.fundingSettlement.detection_window_seconds
-    )
 
     const applyFunding = shouldApplyFunding({
       entryTs,

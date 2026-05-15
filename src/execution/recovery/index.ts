@@ -119,6 +119,10 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
       mode: config.mode,
       configHash: config.configHash,
       gitSha: config.gitSha,
+      strategy: config.identity?.strategy ?? 'legacy',
+      exchange: config.identity?.exchange ?? 'legacy',
+      subAccountId: config.identity?.subAccountId ?? 'legacy',
+      combinationId: config.identity?.combinationId ?? 'legacy',
     })
     logger.info({ runId }, 'recovery: started new run')
   }
@@ -176,6 +180,7 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
         status: intentRow.status as IntentStatus,
         filledQty,
         updatedAt: now,
+        ...(intentRow.fundingGateOpen ? { fundingGateOpen: true } : {}),
       }
 
       if (entryOrder) {
@@ -279,11 +284,18 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
             ts: Date.now(),
             level: 'warn',
             exchange,
-            eventType: 'orphan_order_cancelled',
+            eventType: 'recovery.orphan_order_cancelled',
             payload: { clientOrderId: order.clientOrderId, symbol: order.symbol },
           })
         } catch (err) {
           logger.warn({ err, exchange, clientOrderId: order.clientOrderId }, 'recovery: cancel orphan failed')
+          bus.emit('ops.event', {
+            ts: Date.now(),
+            level: 'error',
+            exchange,
+            eventType: 'recovery.orphan_order_cancel_failed',
+            payload: { clientOrderId: order.clientOrderId, symbol: order.symbol, error: String(err) },
+          })
         }
       }
     }
@@ -327,11 +339,18 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
           ts: Date.now(),
           level: 'warn',
           exchange,
-          eventType: 'orphan_position_flattened',
+          eventType: 'recovery.orphan_position_flattened',
           payload: { symbol: position.symbol, qty: position.qty },
         })
       } catch (err) {
         logger.error({ err, exchange, symbol: position.symbol }, 'recovery: flatten orphan failed')
+        bus.emit('ops.event', {
+          ts: Date.now(),
+          level: 'error',
+          exchange,
+          eventType: 'recovery.orphan_position_flatten_failed',
+          payload: { symbol: position.symbol, qty: position.qty, error: String(err) },
+        })
       }
     }
   }

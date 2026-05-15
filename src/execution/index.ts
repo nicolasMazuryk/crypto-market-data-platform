@@ -99,6 +99,7 @@ export interface EngineHandle {
 
 export interface StartEngineOptions {
   configPath: string
+  registryPath?: string
   exchangeFilter?: Exchange[]
   symbolFilter?: string[]
   metricsPort?: number
@@ -114,6 +115,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
 
   const rawConfig = loadEngineConfig({
     configPath: options.configPath,
+    ...(options.registryPath !== undefined ? { registryPath: options.registryPath } : {}),
     ...(options.fundingTimeOverride !== undefined
       ? {
           cliOverrides: {
@@ -319,6 +321,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
           metrics: persistenceMetrics,
           batchSize: config.persistence.batchSize,
           flushIntervalMs: config.persistence.flushIntervalMs,
+          ...(config.identity ? { identity: config.identity } : {}),
         })
       } else {
         runId = randomUUID()
@@ -328,6 +331,10 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
           mode: config.mode,
           configHash: config.configHash,
           gitSha: config.gitSha,
+          strategy: config.identity?.strategy ?? 'legacy',
+          exchange: config.identity?.exchange ?? 'legacy',
+          subAccountId: config.identity?.subAccountId ?? 'legacy',
+          combinationId: config.identity?.combinationId ?? 'legacy',
         })
         logger.info({ runId }, 'skip-recovery: started fresh run')
         persistenceWriter = createPersistenceWriter({
@@ -339,6 +346,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
           metrics: persistenceMetrics,
           batchSize: config.persistence.batchSize,
           flushIntervalMs: config.persistence.flushIntervalMs,
+          ...(config.identity ? { identity: config.identity } : {}),
         })
       }
     } catch (err) {
@@ -810,6 +818,7 @@ async function main(): Promise<void> {
     args: process.argv.slice(2),
     options: {
       config: { type: 'string' },
+      registry: { type: 'string' },
       exchange: { type: 'string', multiple: true },
       symbol: { type: 'string', multiple: true },
       funding: { type: 'string' },
@@ -828,6 +837,7 @@ async function main(): Promise<void> {
   }
 
   const opts: StartEngineOptions = { configPath: values.config }
+  if (values.registry) opts.registryPath = values.registry
   if (Array.isArray(values.exchange) && values.exchange.length > 0) {
     opts.exchangeFilter = values.exchange as Exchange[]
   }

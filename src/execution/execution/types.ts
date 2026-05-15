@@ -54,9 +54,14 @@ export interface IntentState {
   avgExitPrice?: number
   exitReason?: ExitReason
   error?: { code: string; message: string; at: number }
+  oco?: { bothFilled?: boolean }
   updatedAt: number
   /** Present for ladder_limit intents: per-rung fill tracking. */
   ladderRungs?: LadderRung[]
+  /** True once the funding gate has opened in spawnRetracementTracker. Persisted for restart re-arm. */
+  fundingGateOpen?: boolean
+  /** Incremented each time the close-placement branch is entered in handleMonitorExit. */
+  closeAttemptCount?: number
 }
 
 export interface ExecutionManager {

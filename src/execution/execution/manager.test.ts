@@ -10,7 +10,7 @@ import { MetricsRegistry, registerExecutionMetrics } from '../observability/metr
 import type { KillSwitch } from '../risk/types.js'
 import type { StateStore } from '../state/types.js'
 import type { TradeIntent } from '../strategies/types.js'
-import type { ExitReason, PositionMonitor } from './types.js'
+import type { ExitReason, IntentState, PositionMonitor } from './types.js'
 import { createExecutionManager } from './manager.js'
 import type { PreflightResult } from './preflight.js'
 
@@ -624,8 +624,14 @@ describe('OCO cancel strategies', () => {
 
     const slRef = manager.get(intent.id)!.exitOrderRefs!.sl!
 
-    // getOpenOrders: order present after Strategy A attempt, gone after Strategy B
+    // getOpenOrders call sequence (Fix G adds a snapshot call before cancelSiblingExit):
+    // 0: Fix G snapshot before cancel — order present
+    // 1: isStillOpen after Strategy A — order still present (A silently no-op'd)
+    // 2+: isStillOpen after Strategy B — order gone (B succeeded)
     vi.mocked(rest.getOpenOrders)
+      .mockResolvedValueOnce([
+        makeOrder(slRef.clientOrderId, { reduceOnly: true, exchangeOrderId: slRef.exchangeOrderId }),
+      ])
       .mockResolvedValueOnce([
         makeOrder(slRef.clientOrderId, { reduceOnly: true, exchangeOrderId: slRef.exchangeOrderId }),
       ])
@@ -652,12 +658,13 @@ describe('OCO cancel strategies', () => {
       exchangeOrderId: slRef.exchangeOrderId,
     })
 
-    // getOpenOrders: order present for A-verify, B-verify, and inside sweep; gone on final check
+    // getOpenOrders call sequence (Fix G adds a snapshot call before cancelSiblingExit):
+    // 0: Fix G snapshot before cancel; 1: after Strategy A verify; 2: after Strategy B verify;
+    // 3: inside sweepReduceOnlyOrders; 4: isStillOpen after sweep check
     let getOpenOrdersCount = 0
     vi.mocked(rest.getOpenOrders).mockImplementation(() => {
       getOpenOrdersCount++
-      // 1: after Strategy A verify; 2: after Strategy B verify; 3: inside sweepReduceOnlyOrders
-      return Promise.resolve(getOpenOrdersCount <= 3 ? [residualOrder] : [])
+      return Promise.resolve(getOpenOrdersCount <= 4 ? [residualOrder] : [])
     })
 
     monitor.triggerExit(intent.id, 'tp')
@@ -703,5 +710,118 @@ describe('OCO cancel strategies', () => {
     expect(manager.get(intent.id)!.status).toBe('exited')
     const cancelCalls = vi.mocked(rest.cancelOrder).mock.calls
     expect(cancelCalls.some(c => c[0].clientOrderId === tpRef.clientOrderId)).toBe(true)
+  })
+})
+
+// TELEM-02: WS close fill path emits intent.exited and transitions to exited
+describe('TELEM-02: WS close fill path', () => {
+  it('emits intent.exited on bus and transitions to exited when close order fills via WS', async () => {
+    const customMonitor = makeMonitor()
+    const { manager, bus, ids, rest } = makeManager({ monitor: customMonitor })
+    const intent = makeIntent()
+    const entryCid = ids.forIntent(intent.id, 0)
+
+    await manager.submit(intent)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(entryCid, { status: 'filled', filledQty: 0.001, avgFillPrice: 50000 }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 10))
+    expect(manager.get(intent.id)!.status).toBe('monitoring')
+
+    customMonitor.triggerExit(intent.id, 'timed')
+    await new Promise(r => setTimeout(r, 10))
+
+    const closeCall = vi.mocked(rest.createOrder).mock.calls.find(c => c[0].reduceOnly === true && c[0].type === 'market')
+    expect(closeCall).toBeDefined()
+    const closeCid = closeCall![0].clientOrderId
+
+    const exitedEvents: unknown[] = []
+    bus.on('intent.exited', e => exitedEvents.push(e))
+
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(closeCid, { status: 'filled', filledQty: 0.001, avgFillPrice: 50100 }),
+      seq: 2,
+      receivedAt: Date.now(),
+    })
+
+    expect(manager.get(intent.id)!.status).toBe('exited')
+    expect(exitedEvents).toHaveLength(1)
+  })
+})
+
+// UNDOC-03: spawnRetracementTracker re-armed in start() for monitoring retracement intents
+describe('UNDOC-03: spawnRetracementTracker re-arm on start', () => {
+  it('places TP for a monitoring retracement intent rehydrated before start()', async () => {
+    const now = Date.now()
+    const intent = makeIntent({
+      id: 'retracement-intent',
+      volume: 0.001,
+      exitPolicy: {
+        kind: 'sl_tp_deadline_retracement',
+        slPct: 1,
+        retracementPct: 0.5,
+        anchorPrice: 50000,
+        deadlineAt: now + 60000,
+        fundingTs: now - 1000,
+      },
+    })
+
+    const monitoringState: IntentState = {
+      intent,
+      status: 'monitoring',
+      filledQty: 0.001,
+      avgEntryPrice: 50000,
+      updatedAt: now,
+    }
+
+    const bus = createEventBus()
+    const clock = createClock()
+    const ids = createIds()
+    const metricsReg = new MetricsRegistry()
+    const metrics = registerExecutionMetrics(metricsReg)
+    const rest = makeRestAdapter()
+    const monitor = makeMonitor()
+
+    const markets: MarketMetadataProvider = {
+      list: () => [makeMarket()],
+      get: () => makeMarket(),
+      resolve: () => undefined,
+      refresh: vi.fn(),
+      onUpdate: vi.fn().mockReturnValue(() => {}),
+    }
+
+    const manager = createExecutionManager({
+      bus,
+      clock,
+      ids,
+      logger: createExecutionLogger(),
+      metrics,
+      restAdapters: new Map([['binance', rest]]),
+      state: makeStateStore(),
+      markets,
+      killSwitch: makeKillSwitch(),
+      monitor,
+      preflight: () => ({ ok: true, qty: 0.001 }),
+      refPrice: () => 48000,
+      initialState: {
+        intentStates: new Map([['retracement-intent', monitoringState]]),
+        byEntryOrderId: new Map(),
+        byEntryExchangeOrderId: new Map(),
+        byCloseOrderId: new Map(),
+        byCloseExchangeOrderId: new Map(),
+      },
+    })
+    manager.start()
+
+    await new Promise(r => setTimeout(r, 50))
+
+    const tpCall = vi.mocked(rest.createOrder).mock.calls.find(c => c[0].type === 'limit' && c[0].reduceOnly === true)
+    expect(tpCall).toBeDefined()
+    // TP price = P_low + (anchor - P_low) * retracementPct = 48000 + (50000-48000)*0.5 = 49000
+    expect(tpCall![0].price).toBeCloseTo(49000)
   })
 })

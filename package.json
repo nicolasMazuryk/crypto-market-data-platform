@@ -88,7 +88,8 @@
     "logs:tail": "tail -f logs/combined.log",
     "logs:errors": "tail -f logs/error.log",
     "logs:clean": "rm -rf logs/*.log",
-    "charts:funding": "tsx src/scripts/funding-chart-images.ts"
+    "charts:funding": "tsx src/scripts/funding-chart-images.ts",
+    "verify:live": "./scripts/run-live-verification.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

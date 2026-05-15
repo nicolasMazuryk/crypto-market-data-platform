@@ -81,3 +81,34 @@ Same structure as 4.1 but with single entry price instead of `P_avg`. Use Scenar
 - Predicted funding rate at each funding interval
 - Exchange fee schedule (maker/taker)
 - **Funding fee scenarios:** Strategies 4.2a (funding excluded) and 4.2b (funding included) account for exchange-dependent funding on positions opened at the exact funding timestamp.
+
+---
+
+## Spec Divergences
+
+Known gaps between this spec and the live implementation.
+
+| ID | Severity | Status |
+|---|---|---|
+| `LIMIT_EXPIRED_UNDOCUMENTED` | high | ⏳ |
+
+### LIMIT_EXPIRED_UNDOCUMENTED
+
+**Category:** SPEC_DIVERGENCE
+
+The spec describes only the successful fill scenario (step 2: "IF filled"). The code also handles the case where the limit order never fills by `deadlineAt`: it cancels the order and sets `error code=limit_expired`. The intent terminates with no position and no SL/TP placed — an undocumented code-only outcome.
+
+**Preconditions:** limit order placed; price never reaches limit level before `deadlineAt`; `filledQty = 0` at expiry
+
+**Trigger:** expiry timer fires at `deadlineAt` → `filledQty === 0` → `setError(s, 'limit_expired', ...)`
+
+**Behavior:** intent errors out, no exchange position, no SL/TP placed
+
+**Observability:**
+- `intent.error` `{code: "limit_expired"}`
+- DB: `intentLifecycleEvents` `working→error`
+
+**Code refs:**
+- `src/execution/execution/manager.ts:2642` — `setError limit_expired`
+
+**Note:** Common in low-volatility periods after funding settlement when price does not dip to the limit level.

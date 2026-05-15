@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path'
 
 import YAML from 'yaml'
 
-import type { EngineConfig, ExchangeConfig } from './types.js'
+import type { EngineConfig, EngineIdentity, ExchangeConfig } from './types.js'
 import { parseEngineConfig } from './schema.js'
 import { loadRegistry } from '../provisioning/registry/loader.js'
 import type { Registry } from '../provisioning/registry/schema.js'
@@ -167,5 +167,24 @@ export function loadEngineConfig(options: LoadEngineConfigOptions): EngineConfig
     ? { ...parsed.persistence, postgresUrl: postgresUrlOverride }
     : parsed.persistence
 
-  return Object.freeze({ ...parsed, exchanges, persistence }) as EngineConfig
+  let identity: EngineIdentity | undefined
+  if (registry) {
+    const enabledStrategy = parsed.strategies.find(s => s.enabled)
+    const enabledExchange = parsed.exchanges.find(e => e.enabled)
+    if (enabledStrategy && enabledExchange) {
+      const registryEntry = registry.combinations.find(
+        c => c.exchange === enabledExchange.exchange && c.assigned_strategy === enabledStrategy.id && c.status === 'active'
+      )
+      if (registryEntry) {
+        identity = {
+          strategy: enabledStrategy.id,
+          exchange: enabledExchange.exchange,
+          subAccountId: registryEntry.sub_account_id,
+          combinationId: `${enabledStrategy.id}-${enabledExchange.exchange}`,
+        }
+      }
+    }
+  }
+
+  return Object.freeze({ ...parsed, exchanges, persistence, ...(identity ? { identity } : {}) }) as EngineConfig
 }

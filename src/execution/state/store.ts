@@ -98,6 +98,13 @@ export function createStateStore(opts: StateStoreOptions): StateStoreHandle {
     const rest = restAdapters.get(exchange)
     if (!rest) return Promise.resolve()
 
+    const startMs = clock.now()
+    let desyncCount = 0
+    const countingEmitDesync = (e: DesyncEvent): void => {
+      desyncCount++
+      emitDesync(e)
+    }
+
     const p = runReconcile({
       exchange,
       rest,
@@ -117,7 +124,7 @@ export function createStateStore(opts: StateStoreOptions): StateStoreHandle {
       applyBalance: bal => {
         applyBalance(exchange, bal)
       },
-      emitDesync,
+      emitDesync: countingEmitDesync,
       emitSyntheticOrder: (e: OrderEvent) => {
         bus.emit('ws.order', e)
       },
@@ -128,9 +135,27 @@ export function createStateStore(opts: StateStoreOptions): StateStoreHandle {
         bus.emit('ws.balance', e)
       },
       nextSeq,
-    }).finally(() => {
-      inFlightReconcile.delete(exchange)
     })
+      .then(() => {
+        logger.info(
+          { event: 'store.reconcile.complete', exchange, durationMs: clock.now() - startMs, desyncCount },
+          'store.reconcile.complete'
+        )
+      })
+      .catch((err: unknown) => {
+        logger.error({ event: 'store.reconcile.failed', exchange, err }, 'store.reconcile.failed')
+        bus.emit('ops.event', {
+          ts: clock.now(),
+          level: 'fatal',
+          exchange,
+          eventType: 'reconcile_failed',
+          payload: { error: String(err) },
+        })
+        throw err
+      })
+      .finally(() => {
+        inFlightReconcile.delete(exchange)
+      })
 
     inFlightReconcile.set(exchange, p)
     return p
@@ -178,6 +203,20 @@ export function createStateStore(opts: StateStoreOptions): StateStoreHandle {
 
       busUnsubs.push(
         bus.on('ws.order', event => {
+          const prior = ordersByCid.get(event.exchange)?.get(event.order.clientOrderId)
+          if (prior !== undefined && TERMINAL_STATUSES.has(prior.status)) {
+            logger.debug(
+              {
+                exchange: event.exchange,
+                clientOrderId: event.order.clientOrderId,
+                priorStatus: prior.status,
+                incomingStatus: event.order.status,
+              },
+              'store: ws.order skipped — prior terminal order'
+            )
+            checkSeqGap(event.exchange, event.seq)
+            return
+          }
           applyOrder(event.exchange, event.order)
           checkSeqGap(event.exchange, event.seq)
         })

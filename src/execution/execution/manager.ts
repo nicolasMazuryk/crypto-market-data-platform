@@ -309,7 +309,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       if (price > 0) {
         const slPrice = intent.side === 'long' ? price * (1 - slPct / 100) : price * (1 + slPct / 100)
-        const exitQty = s.filledQty
+        const exitQty = intent.volume
 
         if (opts.beforeCreateOrder) {
           await opts
@@ -327,6 +327,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             })
             .catch((err: unknown) => {
               logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for sl order (retracement)')
+              bus.emit('ops.event', {
+                ts: clock.now(),
+                level: 'fatal',
+                exchange: intent.exchange,
+                eventType: 'durability_write_failed',
+                payload: { intentId: intent.id, kind: 'sl', err: String(err) },
+              })
             })
         }
 
@@ -408,7 +415,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const tpId = ids.forExit(intent.id, 'tp')
       const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
       const { slPct, tpPct } = intent.exitPolicy
-      const price = s.avgEntryPrice ?? refPrice(intent.exchange, intent.symbol) ?? 0
+      let price = s.avgEntryPrice ?? refPrice(intent.exchange, intent.symbol) ?? 0
 
       if (price <= 0) {
         logger.warn(
@@ -424,14 +431,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         return
       }
       if (price > 0) {
-        const slPrice = intent.side === 'long' ? price * (1 - slPct / 100) : price * (1 + slPct / 100)
-        const tpPrice = intent.side === 'long' ? price * (1 + tpPct / 100) : price * (1 - tpPct / 100)
-
-        // Size SL/TP from actual exchange position rather than s.filledQty alone.
-        // If a duplicate entry slipped past idempotency (Binance allows clientOrderId reuse
-        // after the first order closes), the exchange-side position can be larger than what
-        // we recorded. Using max(restQty, s.filledQty) ensures TP closes everything.
-        let exitQty = s.filledQty
+        // Size SL/TP to full intended volume so late incremental fills are hedged.
+        // The exchange will clamp reduceOnly orders to the actual position size.
+        let exitQty = intent.volume
         try {
           const positions = await rest.getPositions(intent.exchangeSymbol)
           const pos = positions.find(p => p.symbol === intent.symbol || p.symbol === intent.exchangeSymbol)
@@ -448,13 +450,20 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               'handleEntryFilled: REST position exceeds recorded fill — sizing SL/TP to actual'
             )
             exitQty = pos.qty
+            // Anchor prices to the exchange-reported entry price when position is oversized.
+            if (pos.entryPrice !== undefined && pos.entryPrice > 0) {
+              price = pos.entryPrice
+            }
           }
         } catch (err) {
           logger.warn(
             { intentId: intent.id, err },
-            'handleEntryFilled: getPositions failed — using s.filledQty for SL/TP'
+            'handleEntryFilled: getPositions failed — using intent.volume for SL/TP'
           )
         }
+
+        const slPrice = intent.side === 'long' ? price * (1 - slPct / 100) : price * (1 + slPct / 100)
+        const tpPrice = intent.side === 'long' ? price * (1 + tpPct / 100) : price * (1 - tpPct / 100)
 
         if (opts.beforeCreateOrder) {
           await Promise.all([
@@ -473,6 +482,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               })
               .catch((err: unknown) => {
                 logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for sl order')
+                bus.emit('ops.event', {
+                  ts: clock.now(),
+                  level: 'fatal',
+                  exchange: intent.exchange,
+                  eventType: 'durability_write_failed',
+                  payload: { intentId: intent.id, kind: 'sl', err: String(err) },
+                })
               }),
             opts
               .beforeCreateOrder({
@@ -489,6 +505,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               })
               .catch((err: unknown) => {
                 logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for tp order')
+                bus.emit('ops.event', {
+                  ts: clock.now(),
+                  level: 'fatal',
+                  exchange: intent.exchange,
+                  eventType: 'durability_write_failed',
+                  payload: { intentId: intent.id, kind: 'tp', err: String(err) },
+                })
               }),
           ])
         }
@@ -644,6 +667,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               })
               .catch((err: unknown) => {
                 logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for sl (post_funding)')
+                bus.emit('ops.event', {
+                  ts: clock.now(),
+                  level: 'fatal',
+                  exchange: intent.exchange,
+                  eventType: 'durability_write_failed',
+                  payload: { intentId: intent.id, kind: 'sl', err: String(err) },
+                })
               }),
             opts
               .beforeCreateOrder({
@@ -660,6 +690,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               })
               .catch((err: unknown) => {
                 logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for tp (post_funding)')
+                bus.emit('ops.event', {
+                  ts: clock.now(),
+                  level: 'fatal',
+                  exchange: intent.exchange,
+                  eventType: 'durability_write_failed',
+                  payload: { intentId: intent.id, kind: 'tp', err: String(err) },
+                })
               }),
           ])
         }
@@ -817,7 +854,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
     // For the funding_event variant, P_low tracking begins only when the WS event fires (or
     // the timeout fallback). For the legacy variant it begins at fundingTs (wall-clock).
-    let fundingGateOpen = !isFundingEventKind
+    // s.fundingGateOpen is set to true when the gate opens and persisted to DB for restart re-arm.
+    let fundingGateOpen = s.fundingGateOpen ?? !isFundingEventKind
 
     let pLow = Infinity
     let tpVersion = 0
@@ -825,6 +863,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     let currentTpUnsub: Unsubscribe | null = null
     let lastReplaceAt = 0
     let settled = false
+    let gateOpenedAt: number | null = null
     let tpPlacementFailures = 0
     const maxTpPlacementFailures = 3
 
@@ -838,6 +877,20 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       settled = true
       cleanup()
       if (avgFillPrice !== undefined) s.avgExitPrice = avgFillPrice
+      if (gateOpenedAt !== null) {
+        const closedAt = clock.now()
+        logger.info(
+          {
+            event: 'intent.funding_gate_closed',
+            intentId: intent.id,
+            openedAt: gateOpenedAt,
+            closedAt,
+            durationMs: closedAt - gateOpenedAt,
+            reason: 'tp',
+          },
+          'intent.funding_gate_closed'
+        )
+      }
       monitor.disarm(intent.id)
       await handleMonitorExit(s, 'tp')
     }
@@ -848,6 +901,20 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (settled) return
       settled = true
       cleanup()
+      if (gateOpenedAt !== null) {
+        const closedAt = clock.now()
+        logger.info(
+          {
+            event: 'intent.funding_gate_closed',
+            intentId: intent.id,
+            openedAt: gateOpenedAt,
+            closedAt,
+            durationMs: closedAt - gateOpenedAt,
+            reason: 'error',
+          },
+          'intent.funding_gate_closed'
+        )
+      }
       bus.emit('ops.event', {
         ts: clock.now(),
         level: 'error',
@@ -863,6 +930,23 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       await handleMonitorExit(s, 'error')
     }
 
+    const openFundingGate = (): void => {
+      if (fundingGateOpen) return
+      fundingGateOpen = true
+      gateOpenedAt = clock.now()
+      s.fundingGateOpen = true
+      bus.emit('intent.funding_gate_opened', { intentId: intent.id })
+      logger.info(
+        {
+          event: 'intent.funding_gate_opened',
+          intentId: intent.id,
+          openedAt: gateOpenedAt,
+          fundingTs,
+        },
+        'intent.funding_gate_opened'
+      )
+    }
+
     // Wire up the WS funding-fee gate for the new variant.
     if (isFundingEventKind) {
       const toleranceMs = 5_000
@@ -870,13 +954,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         if (event.exchange !== intent.exchange) return
         if (event.symbol !== intent.symbol) return
         if (event.fundingTime < fundingTs - toleranceMs) return
-        fundingGateOpen = true
+        openFundingGate()
         feeUnsub()
       })
 
       const timeoutDelay = Math.max(0, timeoutAt - clock.now())
       setTimeout(() => {
-        fundingGateOpen = true
+        openFundingGate()
       }, timeoutDelay)
     }
 
@@ -885,13 +969,23 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (now - lastReplaceAt < 1000) return
       lastReplaceAt = now
 
-      // Cancel the previous TP limit.
+      // Cancel the previous TP limit using exhaustion helper for reliable confirmation.
+      // A bare best-effort cancel races with WS replay — cancelSiblingExit verifies via open-orders.
       if (currentTpCanonId) {
         cleanup()
-        try {
-          await rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId: currentTpCanonId })
-        } catch {
-          // best effort — open-orders sweep at exit handles stragglers
+        const currentTpRef: ExitOrderRef = {
+          clientOrderId: currentTpCanonId,
+          ...(s.exitOrderRefs?.tp?.exchangeOrderId !== undefined
+            ? { exchangeOrderId: s.exitOrderRefs.tp.exchangeOrderId }
+            : {}),
+        }
+        const tpCancelResult = await cancelSiblingExit(rest, intent, currentTpRef)
+        if (tpCancelResult === 'failed') {
+          logger.warn(
+            { event: 'retracement.tp_cancel_failed', intentId: intent.id, clientOrderId: currentTpCanonId },
+            'retracement tracker: previous TP cancel failed, skipping TP replace this cycle'
+          )
+          return
         }
       }
 
@@ -928,7 +1022,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       })
 
       try {
-        const exitQty = s.filledQty
+        const exitQty = intent.volume
         const ack = await rest.createOrder({
           intentId: intent.id,
           clientOrderId: tpId,
@@ -1008,7 +1102,12 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (gateOpen) {
         const currentPrice = refPrice(intent.exchange, intent.symbol)
         if (currentPrice !== undefined && currentPrice < pLow) {
+          const pLowOld = pLow
           pLow = currentPrice
+          logger.info(
+            { event: 'retracement.p_low.update', intentId: intent.id, pLowOld, pLowNew: currentPrice },
+            'retracement.p_low.update'
+          )
           // Only place TP when price has actually dropped below the anchor.
           if (anchorPrice > pLow) {
             const tpPrice = pLow + (anchorPrice - pLow) * retracementPct
@@ -1171,6 +1270,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     rest: ExchangeRestAdapter
   ): Promise<void> {
     const MAX_POLLS = 15
+    let consecutiveErrors = 0
     for (let i = 0; i < MAX_POLLS; i++) {
       await new Promise<void>(r => setTimeout(r, 1000))
       if (TERMINAL.has(s.status) || s.status !== 'working') return
@@ -1180,14 +1280,24 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           : { symbol: s.intent.exchangeSymbol, clientOrderId }
         const order = await withGetOrderTimeout(rest.getOrder(ref))
         if (order) handleEntryOrderEvent(s, order)
+        consecutiveErrors = 0
       } catch (err) {
         logger.warn({ intentId: s.intent.id, attempt: i + 1, err }, 'manager: entry poll failed')
+        consecutiveErrors++
+        if (consecutiveErrors >= 3) {
+          logger.warn(
+            { event: 'poll.entry.circuit_open', intentId: s.intent.id, consecutiveErrors },
+            'poll.entry.circuit_open'
+          )
+          break
+        }
       }
     }
     // ORDER_NOT_FOUND (e.g. Gate.io purges archived orders) causes getOrder to return undefined,
     // leaving the intent stuck in 'working'. Confirm via all positions (no symbol filter —
     // exchange-specific fetchPositions([sym]) can return empty even when position exists).
     if (TERMINAL.has(s.status) || s.status !== 'working') return
+    logger.warn({ event: 'poll.entry.exhausted', intentId: s.intent.id, attempts: MAX_POLLS }, 'poll.entry.exhausted')
     try {
       const allPositions = await rest.getPositions()
       const pos = allPositions.find(
@@ -1223,8 +1333,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
   async function pollForCloseFill(
     s: IntentState,
     closeId: string,
-    closeExchangeOrderId: string,
-    rest: ExchangeRestAdapter
+    closeExchangeOrderId: string | undefined,
+    rest: ExchangeRestAdapter,
+    onExhausted?: () => void
   ): Promise<void> {
     const MAX_POLLS = 20
     for (let i = 0; i < MAX_POLLS; i++) {
@@ -1280,6 +1391,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       strategy: s.intent.strategy,
       code: 'close_poll_exhausted',
     })
+    onExhausted?.()
   }
 
   async function pollForSlTpFill(s: IntentState): Promise<void> {
@@ -1331,6 +1443,16 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         logger.warn({ intentId: intent.id, attempt: i + 1, err }, 'manager: sl/tp poll failed')
       }
     }
+    logger.warn(
+      {
+        event: 'poll.sl_tp.exhausted',
+        intentId: intent.id,
+        attempts: MAX_POLLS,
+        slClientOrderId: slRef?.clientOrderId,
+        tpClientOrderId: tpRef?.clientOrderId,
+      },
+      'poll.sl_tp.exhausted'
+    )
   }
 
   async function sweepReduceOnlyOrders(
@@ -1338,7 +1460,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     exchangeSymbol: string,
     intentId: string
   ): Promise<void> {
-    logger.info(
+    logger.debug(
       { event: 'oco.sweep.start', intentId, exchange: rest.exchange, symbol: exchangeSymbol },
       'oco.sweep.start'
     )
@@ -1346,7 +1468,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const open = await rest.getOpenOrders(exchangeSymbol)
       const reduceOnly = open.filter(o => o.reduceOnly)
       if (reduceOnly.length === 0) {
-        logger.info(
+        logger.debug(
           {
             event: 'oco.sweep.complete',
             intentId,
@@ -1376,6 +1498,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         )
       )
       const cancelledCount = results.filter(r => r.status === 'fulfilled').length
+      const failedCount = results.filter(r => r.status === 'rejected').length
       logger.info(
         {
           event: 'oco.sweep.complete',
@@ -1384,6 +1507,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           symbol: exchangeSymbol,
           foundCount: reduceOnly.length,
           cancelledCount,
+          failedCount,
+          foundOrderIds: reduceOnly.map(o => o.clientOrderId),
         },
         'oco.sweep.complete'
       )
@@ -1419,8 +1544,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     logger.info({ event: 'oco.cancel.attempt', strategy: 'A', ...ctx }, 'oco.cancel.attempt')
     try {
       await rest.cancelOrder({ symbol: exchangeSymbol, clientOrderId: ref.clientOrderId })
-    } catch {
-      // swallow — open-orders list is ground truth
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? String(err)
+      logger.info({ event: 'oco.cancel.already_gone', strategy: 'A', ...ctx, code }, 'oco.cancel.already_gone')
     }
     if (!(await isStillOpen())) {
       logger.info({ event: 'oco.cancel.success', strategy: 'A', ...ctx }, 'oco.cancel.success')
@@ -1433,8 +1559,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       logger.info({ event: 'oco.cancel.attempt', strategy: 'B', ...ctx }, 'oco.cancel.attempt')
       try {
         await rest.cancelOrder({ symbol: exchangeSymbol, exchangeOrderId: ref.exchangeOrderId })
-      } catch {
-        // swallow
+      } catch (err) {
+        const code = (err as { code?: string }).code ?? String(err)
+        logger.info({ event: 'oco.cancel.already_gone', strategy: 'B', ...ctx, code }, 'oco.cancel.already_gone')
       }
       if (!(await isStillOpen())) {
         logger.info({ event: 'oco.cancel.success', strategy: 'B', ...ctx }, 'oco.cancel.success')
@@ -1489,7 +1616,57 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       // One exit order already filled (detected by monitor). Cancel the residual.
       const residualRef = reason === 'sl' ? s.exitOrderRefs?.tp : s.exitOrderRefs?.sl
       if (residualRef) {
+        // Snapshot open orders before cancelling to detect the dual-fill race:
+        // if the residual order disappears from open orders AND is filled, both exits fired.
+        let residualWasOpen = false
+        try {
+          const openBefore = await rest.getOpenOrders(intent.exchangeSymbol)
+          residualWasOpen = openBefore.some(
+            o =>
+              o.clientOrderId === residualRef.clientOrderId ||
+              (residualRef.exchangeOrderId !== undefined && o.exchangeOrderId === residualRef.exchangeOrderId)
+          )
+        } catch {
+          // ignore — proceed with cancel regardless
+        }
+
         await cancelSiblingExit(rest, intent, residualRef)
+
+        // Check if the residual was actually filled (not just cancelled) — dual-fill race.
+        if (residualWasOpen) {
+          try {
+            const residualOrder = await rest.getOrder({
+              symbol: intent.exchangeSymbol,
+              clientOrderId: residualRef.clientOrderId,
+              ...(residualRef.exchangeOrderId ? { exchangeOrderId: residualRef.exchangeOrderId } : {}),
+            })
+            if (residualOrder?.status === 'filled' && residualOrder.filledQty > 0) {
+              s.oco = { bothFilled: true }
+              bus.emit('ops.event', {
+                ts: clock.now(),
+                level: 'warn',
+                exchange: intent.exchange,
+                eventType: 'oco.both_filled',
+                payload: {
+                  intentId: intent.id,
+                  primaryReason: reason,
+                  secondaryReason: reason === 'sl' ? 'tp' : 'sl',
+                },
+              })
+              logger.warn(
+                {
+                  event: 'oco.both_filled',
+                  intentId: intent.id,
+                  primaryReason: reason,
+                  secondaryReason: reason === 'sl' ? 'tp' : 'sl',
+                },
+                'oco.both_filled: both SL and TP filled'
+              )
+            }
+          } catch {
+            // ignore — dual-fill telemetry is best-effort
+          }
+        }
       }
       // Defense in depth: sweep any remaining reduce-only orders for this symbol.
       // cancelSiblingExit above can exhaust all strategies; a duplicate SL placement may also
@@ -1522,6 +1699,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const closeId = ids.forExit(intent.id, closeKind)
       const canonCloseId = canonicalize(intent.exchange, closeId)
       const closeQty = await confirmedCloseQty(s, rest)
+      s.closeAttemptCount = (s.closeAttemptCount ?? 0) + 1
       // Register BEFORE placing so racing WS fill events are not missed.
       s.exitOrderRefs = { close: { clientOrderId: closeId } }
       byCloseOrderId.set(canonCloseId, intent.id)
@@ -1540,6 +1718,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           })
         } catch (err) {
           logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for close order')
+          bus.emit('ops.event', {
+            ts: clock.now(),
+            level: 'fatal',
+            exchange: intent.exchange,
+            eventType: 'durability_write_failed',
+            payload: { intentId: intent.id, kind: closeKind, err: String(err) },
+          })
         }
       }
       try {
@@ -1555,7 +1740,12 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         })
         if (closeAck.status === 'rejected' && requiresWsOrderAdapter(intent.strategy)) {
           logger.error(
-            { event: 'close.ws_rejected', intentId: intent.id, rejectReason: closeAck.rejectReason },
+            {
+              event: 'close.ws_rejected',
+              intentId: intent.id,
+              attempt: s.closeAttemptCount,
+              rejectReason: closeAck.rejectReason,
+            },
             'close.ws_rejected: falling back to REST reduce-only market close'
           )
           closeAck = await rest.createOrder({
@@ -1595,7 +1785,14 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         bus.emit('order.placed', closePlaced)
         logger.info({ event: 'order.placed', ...closePlaced }, 'order.placed')
         // REST polling fallback for close fill (mirrors entry poll for WS-unreliable exchanges)
-        void pollForCloseFill(s, closeId, closeAck.exchangeOrderId, rest)
+        const onCloseExhausted =
+          reason === 'funding_fee'
+            ? () => {
+                void sweepReduceOnlyOrders(rest, intent.exchangeSymbol, intent.id)
+                void opts.state.reconcile(intent.exchange)
+              }
+            : undefined
+        void pollForCloseFill(s, closeId, closeAck.exchangeOrderId, rest, onCloseExhausted)
       } catch (err) {
         byCloseOrderId.delete(canonCloseId)
         delete s.exitOrderRefs
@@ -1822,6 +2019,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         if (s.status === 'monitoring' || s.status === 'exiting') {
           monitor.arm(s)
         }
+        if (
+          s.status === 'monitoring' &&
+          (s.intent.exitPolicy.kind === 'sl_tp_deadline_retracement' ||
+            s.intent.exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event')
+        ) {
+          spawnRetracementTracker(s)
+        }
       }
 
       busUnsubs.push(
@@ -1841,6 +2045,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (closeIntentId !== undefined) {
             const s = intentStates.get(closeIntentId)
             if (s && event.order.status === 'filled') {
+              if (TERMINAL.has(s.status)) return
               if (event.order.avgFillPrice !== undefined) {
                 s.avgExitPrice = event.order.avgFillPrice
               }
@@ -1857,6 +2062,16 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               recordExitMetrics(s, s.exitReason ?? 'error')
               emitIntentExited(s)
               transition(s, 'exited')
+              logger.info(
+                {
+                  event: 'intent.exited.complete',
+                  intentId: closeIntentId,
+                  exchange: s.intent.exchange,
+                  symbol: s.intent.symbol,
+                  exitReason: s.exitReason,
+                },
+                'intent.exited.complete'
+              )
               const wsRest = restAdapters.get(s.intent.exchange)
               if (wsRest) void sweepReduceOnlyOrders(wsRest, s.intent.exchangeSymbol, s.intent.id)
             }
@@ -1971,6 +2186,17 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       const check = preflight(intent, price)
       if (!check.ok) {
+        logger.warn(
+          {
+            event: 'preflight.rejected',
+            exchange: intent.exchange,
+            strategy: intent.strategy,
+            symbol: intent.symbol,
+            rejectionCode: check.code,
+            rejectionText: check.message,
+          },
+          'preflight.rejected'
+        )
         setError(s, check.code, check.message)
         metrics.intentRejectedTotal.inc(1, {
           exchange: intent.exchange,
@@ -1994,6 +2220,17 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       try {
         await ensureLeverage(rest, intent.exchange, intent.exchangeSymbol, intent.symbol, intent.leverage)
       } catch (err) {
+        logger.warn(
+          {
+            event: 'preflight.rejected',
+            exchange: intent.exchange,
+            strategy: intent.strategy,
+            symbol: intent.symbol,
+            rejectionCode: 'set_leverage_failed',
+            rejectionText: String(err),
+          },
+          'preflight.rejected'
+        )
         setError(s, 'set_leverage_failed', `setLeverage failed: ${String(err)}`)
         metrics.intentRejectedTotal.inc(1, {
           exchange: intent.exchange,
@@ -2041,28 +2278,71 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         s.preFundingOrderId = preFundingId
         byEntryOrderId.set(canonPreFundingId, intent.id)
 
-        let mainEventFired = false
+        let mainEventLock: Promise<void> | null = null
         let fundingFeeUnsub: Unsubscribe | null = null
         let timeoutHandle: ReturnType<typeof setTimeout> | null = null
 
         const closePreFunding = async () => {
-          const closeId = ids.forIntent(intent.id, 91)
-          const closeQty = s.preFundingFilledQty && s.preFundingFilledQty > 0 ? s.preFundingFilledQty : entryPolicy.preFundingVolume
-          try {
-            await rest.createOrder({
-              intentId: intent.id,
-              clientOrderId: closeId,
-              exchange: intent.exchange,
-              symbol: intent.exchangeSymbol,
-              // entrySide = mainSide = opposite of preFundingSide = closing direction for PRE_FUNDING
-              side: entrySide,
-              type: 'market',
-              qty: closeQty,
-              reduceOnly: true,
-            })
-          } catch {
-            logger.warn({ intentId: intent.id }, 'strategy6: failed to close pre-funding position')
+          // Cancel the pre-funding order before closing to stop further fills.
+          if (s.preFundingOrderId && !TERMINAL.has(s.status)) {
+            try {
+              await rest.cancelOrder({
+                symbol: intent.exchangeSymbol,
+                clientOrderId: s.preFundingOrderId,
+                ...(s.preFundingExchangeOrderId ? { exchangeOrderId: s.preFundingExchangeOrderId } : {}),
+              })
+            } catch {
+              // ignore — position fetch is ground truth
+            }
           }
+
+          const retryDelaysMs = [250, 1000, 3000]
+          for (let attempt = 0; attempt < 3; attempt++) {
+            if (attempt > 0) {
+              await new Promise<void>(resolve => setTimeout(resolve, retryDelaysMs[attempt - 1] ?? 250))
+            }
+            try {
+              let actualFilled = 0
+              try {
+                const positions = await rest.getPositions(intent.exchangeSymbol)
+                const pos = positions.find(p => p.symbol === intent.symbol || p.symbol === intent.exchangeSymbol)
+                actualFilled = pos?.qty ?? 0
+              } catch {
+                actualFilled = s.preFundingFilledQty ?? 0
+              }
+
+              if (actualFilled <= 0) {
+                logger.info({ intentId: intent.id }, 'strategy6.closePreFunding: no position to close')
+                return
+              }
+
+              const closeId = ids.forIntent(intent.id, 91 + attempt)
+              await rest.createOrder({
+                intentId: intent.id,
+                clientOrderId: closeId,
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                // entrySide = mainSide = opposite of preFundingSide = closing direction for PRE_FUNDING
+                side: entrySide,
+                type: 'market',
+                qty: actualFilled,
+                reduceOnly: true,
+              })
+              return
+            } catch (err) {
+              logger.warn({ intentId: intent.id, attempt, err }, 'strategy6.closePreFunding: attempt failed')
+            }
+          }
+
+          logger.error({ intentId: intent.id }, 'strategy6.closePreFunding: all retries exhausted')
+          bus.emit('ops.event', {
+            ts: clock.now(),
+            level: 'error',
+            exchange: intent.exchange,
+            eventType: 'close_pre_funding_failed',
+            payload: { intentId: intent.id },
+          })
+          setError(s, 'close_pre_funding_failed', 'pre-funding close failed after 3 attempts')
         }
 
         const confirmPreFundingFilled = async (): Promise<boolean> => {
@@ -2083,11 +2363,14 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         }
 
         const placeMain = async () => {
-          if (mainEventFired || TERMINAL.has(s.status)) return
-          mainEventFired = true
+          if (mainEventLock !== null || TERMINAL.has(s.status)) return
+          let _resolve!: () => void
+          mainEventLock = new Promise<void>(r => {
+            _resolve = r
+          })
           fundingFeeUnsub?.()
           if (timeoutHandle !== null) clearTimeout(timeoutHandle)
-
+          try {
           const preFundingFilled = await confirmPreFundingFilled()
           if (!preFundingFilled) {
             setError(s, 'pre_funding_not_filled', 'pre-funding order was not confirmed filled before MAIN')
@@ -2115,6 +2398,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               })
               .catch((err: unknown) => {
                 logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for strategy6 main')
+                bus.emit('ops.event', {
+                  ts: clock.now(),
+                  level: 'fatal',
+                  exchange: intent.exchange,
+                  eventType: 'durability_write_failed',
+                  payload: { intentId: intent.id, kind: 'entry', err: String(err) },
+                })
               })
           }
 
@@ -2169,21 +2459,24 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (!TERMINAL.has(s.status) && s.status === 'working') {
             void pollForEntryFill(s, mainOrderId, ack.exchangeOrderId, rest)
           }
+          } finally {
+            _resolve()
+          }
         }
 
         // Subscribe to ws.funding_fee for this (exchange, symbol)
         fundingFeeUnsub = bus.on('ws.funding_fee', event => {
           if (event.exchange !== intent.exchange) return
           if (event.symbol !== intent.symbol) return
-          if (event.fundingTime < fundingTs - toleranceMs) return
+          if (event.fundingTime < fundingTs - toleranceMs || event.fundingTime > fundingTs + toleranceMs) return
           void placeMain()
         })
 
         // Hard timeout: close PRE_FUNDING and abort if no event arrives
         const timeoutDelay = Math.max(0, timeoutAt - clock.now())
         timeoutHandle = setTimeout(() => {
-          if (mainEventFired || TERMINAL.has(s.status)) return
-          mainEventFired = true
+          if (mainEventLock !== null || TERMINAL.has(s.status)) return
+          mainEventLock = Promise.resolve()
           fundingFeeUnsub()
           logger.warn({ intentId: intent.id }, 'strategy6: funding fee timeout — closing pre-funding')
           void closePreFunding().then(() => {
@@ -2207,6 +2500,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             })
             .catch((err: unknown) => {
               logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for strategy6 pre-funding')
+              bus.emit('ops.event', {
+                ts: clock.now(),
+                level: 'fatal',
+                exchange: intent.exchange,
+                eventType: 'durability_write_failed',
+                payload: { intentId: intent.id, kind: 'pre_funding', err: String(err) },
+              })
             })
         }
 
@@ -2317,6 +2617,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
                   { intentId: intent.id, rungIdx: i, err },
                   'manager: durability write failed for ladder rung'
                 )
+                bus.emit('ops.event', {
+                  ts: clock.now(),
+                  level: 'fatal',
+                  exchange: intent.exchange,
+                  eventType: 'durability_write_failed',
+                  payload: { intentId: intent.id, kind: 'entry', err: String(err) },
+                })
               })
             })
           )
@@ -2449,6 +2756,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             })
           } catch (err) {
             logger.warn({ intentId: intent.id, err }, 'manager: durability write failed (limit entry)')
+            bus.emit('ops.event', {
+              ts: clock.now(),
+              level: 'fatal',
+              exchange: intent.exchange,
+              eventType: 'durability_write_failed',
+              payload: { intentId: intent.id, kind: 'entry', err: String(err) },
+            })
           }
         }
 
@@ -2561,7 +2875,21 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             { intentId: intent.id, err },
             'manager: durability write failed — proceeding without pre-submit persistence'
           )
+          bus.emit('ops.event', {
+            ts: clock.now(),
+            level: 'fatal',
+            exchange: intent.exchange,
+            eventType: 'durability_write_failed',
+            payload: { intentId: intent.id, kind: 'entry', err: String(err) },
+          })
         }
+      }
+
+      // Guard: intent may have been preempted during the durability write above (async yield).
+      // Bail before placing to avoid orphan orders that must immediately be cancelled.
+      if (s.status !== 'submitted') {
+        byEntryOrderId.delete(canonEntryId)
+        return s
       }
 
       let ack
@@ -2592,6 +2920,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       // yields allow concurrent submit() calls to call preemptSynchronously on this intent).
       // If status is no longer 'submitted', the intent is cancelled — cancel the placed order
       // best-effort and return without advancing state.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (s.status !== 'submitted') {
         logger.warn(
           { event: 'market_entry.preempted_in_flight', intentId: intent.id, exchange: intent.exchange, status: s.status },

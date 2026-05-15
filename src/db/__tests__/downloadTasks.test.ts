@@ -776,7 +776,9 @@ describe('download_tasks table', () => {
       error_breakdown: [],
     })
 
-    const totalLatestTasks = progress.reduce(
+    // Sum only the two controlled exchanges to avoid flakiness from leftover DB data in other exchanges.
+    const knownRows = progress.filter(row => row.exchange === exchangeA || row.exchange === exchangeB)
+    const totalLatestTasks = knownRows.reduce(
       (sum, row) => sum + row.completed_tasks + row.pending_tasks + row.failed_tasks,
       0
     )

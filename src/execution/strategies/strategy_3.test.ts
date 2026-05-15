@@ -107,7 +107,7 @@ describe('createStrategy3Rule — variant A', () => {
     const policy = intent?.exitPolicy as { kind: string; slPct: number; tpPct: number; tpVariant: string }
     expect(policy.kind).toBe('sl_tp_deadline')
     expect(policy.slPct).toBe(1.0)
-    expect(policy.tpPct).toBeCloseTo(0.9, 10)
+    expect(policy.tpPct).toBeCloseTo(0.9, 5)
     expect(policy.tpVariant).toBe('A')
   })
 

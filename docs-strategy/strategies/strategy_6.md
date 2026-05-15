@@ -123,3 +123,36 @@ The directional bet must overcome PRE_FUNDING cost and fees.
 ## Backtesting Data Requirements
 
 > **This strategy cannot be backtested.** The MAIN entry depends on receiving the `ws.funding_fee` event in real-time. Backtests cannot emulate private WS user-data streams.
+
+---
+
+## Spec Divergences
+
+Known gaps between this spec and the live implementation.
+
+| ID | Severity | Status |
+|---|---|---|
+| `GETPOSITIONS_POST_MAIN_FILL` | medium | ⏳ |
+
+### GETPOSITIONS_POST_MAIN_FILL
+
+**Category:** SPEC_DIVERGENCE
+
+After MAIN fill, the code calls `rest.getPositions()` to confirm actual net position qty before placing SL+TP. The spec does not mention this — it implicitly assumes `mainVolume - preFundingVolume` is correct. This REST round-trip is a defense against exchange-side netting quirks.
+
+**Preconditions:** MAIN order filled; `exitPolicy.kind=sl_tp_deadline_post_funding_event`
+
+**Trigger:** `handleEntryFilled` → `getPositions()` REST call
+
+**Behavior:**
+- REST succeeds → `exitQty = pos.qty`
+- REST fails → warn + fallback to tracked fills
+
+**Observability:**
+- warn: `'strategy6: position fetch failed, falling back to tracked fills'` (on failure only; success is silent)
+
+**Code refs:**
+- `src/execution/execution/manager.ts:609` — `getPositions` call
+- `src/execution/execution/manager.ts:619` — position fetch failed warn
+
+**Note:** Adds ~100–300ms latency on Binance FAPI. SL+TP placement window is not tightly specified so acceptable. If latency is a concern, consider caching position from WS `ACCOUNT_UPDATE`.

@@ -145,8 +145,8 @@ export interface Strategy3Config {
   tp_mode: TpMode
   /** TP multiplier for mode A (e.g., 1.5) */
   tp_multiplier: number
-  /** TP addend for mode B (e.g., 0.004 for 0.4%) */
-  tp_addend: number
+  /** TP addend in PERCENT for variant B (e.g., 0.4 for 0.4%) */
+  tp_addend_pct: number
   /** Max seconds after T_funding before forced exit (>= 2) */
   deadline_seconds: number
   /** Whether to apply funding when entry or exit timestamp equals funding timestamp */

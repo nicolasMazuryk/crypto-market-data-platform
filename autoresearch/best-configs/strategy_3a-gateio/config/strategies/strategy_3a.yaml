@@ -8,6 +8,6 @@ entry_offset_seconds: 2       # Enter at T_funding - 2s
 stop_loss: 0.01              # 1.0%
 tp_mode: "A"
 tp_multiplier: 3.0            # TP = F * 3.0
-tp_addend: 0.003              # Not used in mode A, but required
+tp_addend_pct: 0.30              # Not used in mode A, but required
 deadline_seconds: 180         # Max seconds after T_funding before forced exit
 funding_applied_on_same_second: true

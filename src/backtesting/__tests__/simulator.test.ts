@@ -140,6 +140,33 @@ describe('Order Simulator', () => {
     expect(result.warnings).toHaveLength(0)
   })
 
+  it('validUntil is inclusive: order fires on the exact validUntil candle', () => {
+    const candles: OrderbookRow[] = [
+      makeCandle('2025-06-01 00:00:01', { bid_high: 50050, bid_low: 49950 }),
+      makeCandle('2025-06-01 00:00:02', { bid_high: 50050, bid_low: 49950 }),
+      makeCandle('2025-06-01 00:00:03', { bid_high: 50050, bid_low: 49950 }),
+      makeCandle('2025-06-01 00:00:04', { bid_high: 50200, bid_low: 49950 }), // TP fires here
+    ]
+
+    const orders: Order[] = [
+      {
+        side: 'sell',
+        type: 'limit',
+        price: 50100,
+        quantity: 1,
+        validFrom: '2025-06-01 00:00:01',
+        validUntil: '2025-06-01 00:00:04', // exactly the last candle
+        reduceOnly: true,
+        label: 'tp',
+      },
+    ]
+
+    const result = simulateOrders(orders, candles, 0, 'long')
+    expect(result.fills).toHaveLength(1)
+    expect(result.fills[0]?.label).toBe('tp')
+    expect(result.fills[0]?.timestamp).toBe('2025-06-01 00:00:04')
+  })
+
   it('orders outside validFrom/validUntil are not processed', () => {
     const candles: OrderbookRow[] = [makeCandle('2025-06-01 00:00:01', { bid_high: 50200 })]
 

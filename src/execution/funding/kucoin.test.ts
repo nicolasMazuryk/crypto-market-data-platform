@@ -19,6 +19,7 @@ function makeSymbol(
     fundingFeeRate: number
     predictedFundingFeeRate: number | undefined | null
     nextFundingRateTime: number
+    markPrice: number
   }> = {}
 ) {
   return {
@@ -28,6 +29,7 @@ function makeSymbol(
     fundingFeeRate: 0.001,
     predictedFundingFeeRate: -0.0025,
     nextFundingRateTime: Date.now() + 3_600_000,
+    markPrice: 65000,
     ...overrides,
   }
 }
@@ -54,6 +56,38 @@ describe('KuCoin funding puller', () => {
     // Must use predicted rate (-0.0025), not the settled rate (0.001)
     expect(snap?.fundingRate).toBe(-0.0025)
     expect(snap?.fundingRatePercent).toBeCloseTo(-0.25)
+  })
+
+  it('populates markPrice from FuturesSymbolInfo', async () => {
+    const sym = makeSymbol({ markPrice: 65000 })
+    vi.mocked(FuturesClient).mockImplementation(
+      () =>
+        ({
+          getSymbols: vi.fn().mockResolvedValue({ data: [sym] }),
+        }) as never
+    )
+
+    const puller = createKucoinPuller()
+    const snapshots = await puller.pull()
+
+    const snap = snapshots.find(s => s.symbol === NORMALIZED_SYMBOL)
+    expect(snap?.markPrice).toBe(65000)
+  })
+
+  it('omits markPrice when FuturesSymbolInfo markPrice is zero', async () => {
+    const sym = makeSymbol({ markPrice: 0 })
+    vi.mocked(FuturesClient).mockImplementation(
+      () =>
+        ({
+          getSymbols: vi.fn().mockResolvedValue({ data: [sym] }),
+        }) as never
+    )
+
+    const puller = createKucoinPuller()
+    const snapshots = await puller.pull()
+
+    const snap = snapshots.find(s => s.symbol === NORMALIZED_SYMBOL)
+    expect(snap?.markPrice).toBeUndefined()
   })
 
   it('defaults to 0 and still emits the snapshot when predictedFundingFeeRate is missing', async () => {

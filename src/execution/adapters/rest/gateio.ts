@@ -9,6 +9,9 @@ const gateioSpec: CcxtAdapterSpec = {
   ccxtOptions: { defaultType: 'swap' },
   // Gate.io rejects duplicate text fields with TEXT_DUPLICATED (verify on live smoke run)
   duplicateOrderCodes: new Set(['TEXT_DUPLICATED']),
+  // Gate.io returns TEXT_DUPLICATED/ORDER_NOT_FOUND/ORDER_FINISHED when an order is already gone;
+  // treat all three as cancel-success so callers see the order as absent, not as an error.
+  cancelIgnoreCodes: new Set(['TEXT_DUPLICATED', 'ORDER_NOT_FOUND', 'ORDER_FINISHED']),
   setLeverage: async (ccxtEx, unified, leverage) => {
     if (!ccxtEx.setLeverage) return
     try {

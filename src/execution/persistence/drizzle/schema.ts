@@ -39,15 +39,26 @@ export const orderStatusEnum = pgEnum('order_status', [
 
 export const opsEventLevelEnum = pgEnum('ops_event_level', ['debug', 'info', 'warn', 'error', 'fatal'])
 
-export const runs = pgTable('runs', {
-  id: text('id').primaryKey(),
-  startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
-  endedAt: timestamp('ended_at', { withTimezone: true }),
-  mode: engineModeEnum('mode').notNull(),
-  configHash: text('config_hash').notNull().default(''),
-  gitSha: text('git_sha').notNull().default(''),
-  notes: text('notes'),
-})
+export const runs = pgTable(
+  'runs',
+  {
+    id: text('id').primaryKey(),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    mode: engineModeEnum('mode').notNull(),
+    configHash: text('config_hash').notNull().default(''),
+    gitSha: text('git_sha').notNull().default(''),
+    notes: text('notes'),
+    strategy: text('strategy').notNull().default('legacy'),
+    exchange: text('exchange').notNull().default('legacy'),
+    subAccountId: text('sub_account_id').notNull().default('legacy'),
+    combinationId: text('combination_id').notNull().default('legacy'),
+  },
+  table => [
+    index('idx_runs_identity').on(table.strategy, table.exchange, table.subAccountId),
+    index('idx_runs_combination_id').on(table.combinationId),
+  ]
+)
 
 export const tradeIntents = pgTable(
   'trade_intents',
@@ -75,9 +86,11 @@ export const tradeIntents = pgTable(
     exitReason: text('exit_reason'),
     entryFilledAt: timestamp('entry_filled_at', { withTimezone: true }),
     exitFilledAt: timestamp('exit_filled_at', { withTimezone: true }),
+    fundingGateOpen: boolean('funding_gate_open').notNull().default(false),
+    subAccountId: text('sub_account_id').notNull().default('legacy'),
   },
   table => [
-    index('idx_ti_run_exchange_status').on(table.runId, table.exchange, table.status),
+    index('idx_ti_run_exchange_status').on(table.runId, table.exchange, table.subAccountId, table.status),
     index('idx_ti_next_funding_ts').on(table.nextFundingTs),
     foreignKey({ columns: [table.runId], foreignColumns: [runs.id] }),
   ]
@@ -109,6 +122,8 @@ export const orders = pgTable(
     submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
     ackedAt: timestamp('acked_at', { withTimezone: true }),
     terminalAt: timestamp('terminal_at', { withTimezone: true }),
+    strategy: text('strategy').notNull().default('legacy'),
+    subAccountId: text('sub_account_id').notNull().default('legacy'),
   },
   table => [
     unique('uq_orders_exchange_client_order_id').on(table.exchange, table.clientOrderId),
@@ -136,11 +151,30 @@ export const fills = pgTable(
     markPrice: text('mark_price'),
     intentId: text('intent_id'),
     orderKind: text('order_kind'),
+    strategy: text('strategy').notNull().default('legacy'),
+    subAccountId: text('sub_account_id').notNull().default('legacy'),
   },
   table => [
     unique('uq_fills_exchange_fill_id').on(table.exchange, table.exchangeFillId),
     index('idx_fills_order_id').on(table.orderId),
   ]
+)
+
+export const fillsDeadLetter = pgTable(
+  'fills_dead_letter',
+  {
+    id: bigint('id', { mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    ts: timestamp('ts', { withTimezone: true }).notNull(),
+    exchange: text('exchange').notNull(),
+    symbol: text('symbol'),
+    clientOrderId: text('client_order_id'),
+    exchangeOrderId: text('exchange_order_id'),
+    reason: text('reason').notNull(),
+    rawFillEvent: jsonb('raw_fill_event'),
+    errorText: text('error_text'),
+    subAccountId: text('sub_account_id'),
+  },
+  table => [index('idx_fills_dead_letter_exchange_ts').on(table.exchange, table.ts)]
 )
 
 export const positions = pgTable(
@@ -171,6 +205,8 @@ export const positions = pgTable(
     openedAt: timestamp('opened_at', { withTimezone: true }).notNull(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
     status: text('status').notNull().default('open'),
+    strategy: text('strategy').notNull().default('legacy'),
+    subAccountId: text('sub_account_id').notNull().default('legacy'),
   },
   table => [
     unique('uq_positions_intent_id').on(table.intentId),
@@ -195,6 +231,8 @@ export const balancesHistory = pgTable(
     reason: text('reason'),
     intentId: text('intent_id'),
     ts: timestamp('ts', { withTimezone: true }).notNull(),
+    strategy: text('strategy').notNull().default('legacy'),
+    subAccountId: text('sub_account_id').notNull().default('legacy'),
   },
   table => [index('idx_balances_history_exchange_asset_ts').on(table.exchange, table.asset, table.ts)]
 )
@@ -206,11 +244,14 @@ export const fundingAttributions = pgTable(
     exchange: text('exchange').notNull(),
     symbol: text('symbol').notNull(),
     positionId: text('position_id'),
+    intentId: text('intent_id'),
     fundingTime: timestamp('funding_time', { withTimezone: true }).notNull(),
     fundingRate: text('funding_rate').notNull(),
     fundingAmount: text('funding_amount').notNull(),
     asset: text('asset').notNull(),
     ts: timestamp('ts', { withTimezone: true }).notNull(),
+    strategy: text('strategy').notNull().default('legacy'),
+    subAccountId: text('sub_account_id').notNull().default('legacy'),
   },
   table => [
     unique('uq_funding_attr').on(table.exchange, table.symbol, table.fundingTime),
@@ -227,6 +268,7 @@ export const opsEvents = pgTable(
     exchange: text('exchange'),
     eventType: text('event_type').notNull(),
     payload: jsonb('payload'),
+    subAccountId: text('sub_account_id'),
   },
   table => [
     index('idx_ops_events_ts').on(table.ts),
@@ -287,6 +329,8 @@ export const realizedPnl = pgTable(
     holdDurationMs: bigint('hold_duration_ms', { mode: 'number' }),
     exitReason: text('exit_reason'),
     computedAt: timestamp('computed_at', { withTimezone: true }).notNull(),
+    strategy: text('strategy').notNull().default('legacy'),
+    subAccountId: text('sub_account_id').notNull().default('legacy'),
   },
   table => [
     index('idx_realized_pnl_exchange_symbol').on(table.exchange, table.symbol),
@@ -310,3 +354,4 @@ export type OpsEventRow = typeof opsEvents.$inferSelect
 export type IntentLifecycleEventRow = typeof intentLifecycleEvents.$inferSelect
 export type ExitTriggerRow = typeof exitTriggers.$inferSelect
 export type RealizedPnlRow = typeof realizedPnl.$inferSelect
+export type FillsDeadLetterRow = typeof fillsDeadLetter.$inferSelect
