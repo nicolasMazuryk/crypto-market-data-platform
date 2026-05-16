@@ -1,9 +1,11 @@
+import { describe, expect, it } from 'vitest'
 import type { ExchangeConfig } from '../../config/types.js'
 import { createEventBus } from '../../core/bus.js'
 import { createClock } from '../../core/clock.js'
 import { createExecutionLogger } from '../../core/logger.js'
 import { MetricsRegistry, registerPrivateWsMetrics } from '../../observability/metrics.js'
 import { createGateioPrivateWsAdapter } from './gateio.js'
+import { createGateioMessageParser } from './gateio-mapping.js'
 import { runWsAdapterConformance } from './__tests__/conformance.js'
 
 function makeConfig(): ExchangeConfig {
@@ -88,4 +90,48 @@ runWsAdapterConformance({
       },
     ],
   },
+})
+
+describe('GateIO fill synthesis', () => {
+  it('synthesizes fill events when filledQty advances across two order updates', () => {
+    const parse = createGateioMessageParser()
+
+    const makeUpdate = (left: number, updateTime: number) => ({
+      channel: 'futures.orders',
+      event: 'update',
+      result: [
+        {
+          id: 'ord-100',
+          text: 't-cid-1',
+          contract: 'BTC_USDT',
+          size: 100,
+          price: '50000',
+          fill_price: '50000',
+          left,
+          status: left === 0 ? 'finished' : 'open',
+          is_reduce_only: false,
+          create_time: 1700000000,
+          update_time: updateTime,
+        },
+      ],
+    })
+
+    // left=100 → filledQty=0, no fill emitted
+    const r0 = parse(makeUpdate(100, 1700000001), 9999, 1)
+    expect(r0.fills).toBeUndefined()
+
+    // left=50 → filledQty=50, fill for delta=50
+    const r1 = parse(makeUpdate(50, 1700000002), 9999, 2)
+    expect(r1.fills).toHaveLength(1)
+    expect(r1.fills![0]!.qty).toBe(50)
+    expect(r1.fills![0]!.exchangeFillId).toContain('ord-100')
+
+    // left=0 → filledQty=100, fill for delta=50
+    const r2 = parse(makeUpdate(0, 1700000003), 9999, 3)
+    expect(r2.fills).toHaveLength(1)
+    expect(r2.fills![0]!.qty).toBe(50)
+
+    // Fill IDs must be distinct (different updatedAt)
+    expect(r1.fills![0]!.exchangeFillId).not.toBe(r2.fills![0]!.exchangeFillId)
+  })
 })

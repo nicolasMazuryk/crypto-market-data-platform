@@ -18,13 +18,27 @@
     group: root
     mode: "0755"
 
-- name: "Write per-instance config for {{ combo_entry.id }}"
+- name: "Stage per-instance config for {{ combo_entry.id }}"
   ansible.builtin.copy:
     content: "{{ combo_entry.config_content }}"
-    dest: "{{ execution_config_dir }}/execution.{{ combo_entry.id }}.yaml"
+    dest: "{{ execution_config_dir }}/execution.{{ combo_entry.id }}.yaml.new"
     owner: nicolas
     group: nicolas
     mode: "0644"
+
+- name: "Validate staged config for {{ combo_entry.id }}"
+  ansible.builtin.command:
+    cmd: >
+      docker run --rm
+      --volume {{ execution_config_dir }}:/opt/arbinet/config:ro
+      {{ app_name }}:{{ execution_image_tag }}
+      node dist/execution/cli/validate-config.js
+      /opt/arbinet/config/execution.{{ combo_entry.id }}.yaml.new
+  changed_when: false
+
+- name: "Promote validated config for {{ combo_entry.id }}"
+  ansible.builtin.command:
+    cmd: mv {{ execution_config_dir }}/execution.{{ combo_entry.id }}.yaml.new {{ execution_config_dir }}/execution.{{ combo_entry.id }}.yaml
 
 - name: "Write per-instance secrets env file for {{ combo_entry.id }}"
   ansible.builtin.template:

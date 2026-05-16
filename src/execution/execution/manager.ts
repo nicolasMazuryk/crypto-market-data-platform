@@ -31,6 +31,7 @@ import type {
 } from './types.js'
 import type { PreflightResult } from './preflight.js'
 import type { RiskConfig } from '../config/types.js'
+import { logFundingGateClosed, logFundingGateOpened } from '../observability/log-events.js'
 
 const TERMINAL: ReadonlySet<IntentStatus> = new Set(['exited', 'error', 'cancelled'])
 
@@ -861,6 +862,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     let tpVersion = 0
     let currentTpCanonId: string | null = null
     let currentTpUnsub: Unsubscribe | null = null
+    let exitUnsub: (() => void) | null = null
     let lastReplaceAt = 0
     let settled = false
     let gateOpenedAt: number | null = null
@@ -870,6 +872,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     const cleanup = () => {
       currentTpUnsub?.()
       currentTpUnsub = null
+      exitUnsub?.()
+      exitUnsub = null
     }
 
     const settleTp = async (avgFillPrice?: number) => {
@@ -877,20 +881,6 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       settled = true
       cleanup()
       if (avgFillPrice !== undefined) s.avgExitPrice = avgFillPrice
-      if (gateOpenedAt !== null) {
-        const closedAt = clock.now()
-        logger.info(
-          {
-            event: 'intent.funding_gate_closed',
-            intentId: intent.id,
-            openedAt: gateOpenedAt,
-            closedAt,
-            durationMs: closedAt - gateOpenedAt,
-            reason: 'tp',
-          },
-          'intent.funding_gate_closed'
-        )
-      }
       monitor.disarm(intent.id)
       await handleMonitorExit(s, 'tp')
     }
@@ -901,20 +891,6 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (settled) return
       settled = true
       cleanup()
-      if (gateOpenedAt !== null) {
-        const closedAt = clock.now()
-        logger.info(
-          {
-            event: 'intent.funding_gate_closed',
-            intentId: intent.id,
-            openedAt: gateOpenedAt,
-            closedAt,
-            durationMs: closedAt - gateOpenedAt,
-            reason: 'error',
-          },
-          'intent.funding_gate_closed'
-        )
-      }
       bus.emit('ops.event', {
         ts: clock.now(),
         level: 'error',
@@ -936,16 +912,25 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       gateOpenedAt = clock.now()
       s.fundingGateOpen = true
       bus.emit('intent.funding_gate_opened', { intentId: intent.id })
-      logger.info(
-        {
-          event: 'intent.funding_gate_opened',
+      logFundingGateOpened(logger, { intentId: intent.id, openedAt: gateOpenedAt, fundingTs })
+    }
+
+    // Single-source gate close: catch all exit paths including SL, deadline, timeout, error.
+    // Runs for every exit reason — emits exactly one funding_gate_closed per opened gate.
+    exitUnsub = bus.on('intent.exited', exitEvent => {
+      if (exitEvent.intentId !== intent.id) return
+      if (gateOpenedAt !== null) {
+        const closedAt = clock.now()
+        logFundingGateClosed(logger, {
           intentId: intent.id,
           openedAt: gateOpenedAt,
-          fundingTs,
-        },
-        'intent.funding_gate_opened'
-      )
-    }
+          closedAt,
+          durationMs: closedAt - gateOpenedAt,
+          reason: exitEvent.exitReason as Parameters<typeof logFundingGateClosed>[1]['reason'],
+        })
+      }
+      cleanup()
+    })
 
     // Wire up the WS funding-fee gate for the new variant.
     if (isFundingEventKind) {
@@ -1224,6 +1209,16 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       // Guard: WS adapters can replay fill events on reconnect. Only process from pre-fill states.
       if (s.status !== 'working' && s.status !== 'partially_filled' && s.status !== 'acked' && s.status !== 'submitted')
         return
+      // Fast-fill path: WS fill arrived before REST ACK updated the FSM. Synthesize acked→working
+      // so the audit trail always shows submitted→acked→working→filled even on sub-millisecond fills.
+      if (s.status === 'submitted') {
+        logger.info(
+          { event: 'order.fast_fill', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol },
+          'order.fast_fill: WS fill raced REST ACK — synthesizing acked/working transitions'
+        )
+        transition(s, 'acked')
+        transition(s, 'working')
+      }
       const now = clock.now()
       metrics.intentEntryLatencyMs.observe(now - s.intent.decidedAt, {
         exchange: s.intent.exchange,
@@ -1420,6 +1415,18 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (slOrder?.status === 'filled') {
             if (slOrder.avgFillPrice !== undefined) s.avgExitPrice = slOrder.avgFillPrice
             monitor.disarm(intent.id)
+            const triggerTs = slOrder.updatedAt ?? clock.now()
+            bus.emit('exit.triggered', {
+              intentId: intent.id,
+              exchange: intent.exchange,
+              symbol: intent.symbol,
+              reason: 'sl',
+              triggerTs,
+              source: 'rest_poll',
+              exitOrderClientId: slRef.clientOrderId,
+              ...(slOrder.avgFillPrice !== undefined ? { triggerPrice: slOrder.avgFillPrice } : {}),
+              latencyMs: clock.now() - triggerTs,
+            })
             await handleMonitorExit(s, 'sl')
             return
           }
@@ -1435,6 +1442,18 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (tpOrder?.status === 'filled') {
             if (tpOrder.avgFillPrice !== undefined) s.avgExitPrice = tpOrder.avgFillPrice
             monitor.disarm(intent.id)
+            const triggerTs = tpOrder.updatedAt ?? clock.now()
+            bus.emit('exit.triggered', {
+              intentId: intent.id,
+              exchange: intent.exchange,
+              symbol: intent.symbol,
+              reason: 'tp',
+              triggerTs,
+              source: 'rest_poll',
+              exitOrderClientId: tpRef.clientOrderId,
+              ...(tpOrder.avgFillPrice !== undefined ? { triggerPrice: tpOrder.avgFillPrice } : {}),
+              latencyMs: clock.now() - triggerTs,
+            })
             await handleMonitorExit(s, 'tp')
             return
           }
@@ -1540,13 +1559,22 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       }
     }
 
+    // Codes that mean the order is already gone — treat as cancel-success.
+    // INVALID_PARAM_VALUE is intentionally excluded: Gate.io returns it for cancel-by-text on
+    // stop_market orders (text not associated with trigger orders), which is NOT "already gone".
+    const CANCEL_GONE_CODES = new Set(['TEXT_DUPLICATED', 'ORDER_NOT_FOUND', 'ORDER_FINISHED'])
+
     // Strategy A: cancel by clientOrderId
     logger.info({ event: 'oco.cancel.attempt', strategy: 'A', ...ctx }, 'oco.cancel.attempt')
     try {
       await rest.cancelOrder({ symbol: exchangeSymbol, clientOrderId: ref.clientOrderId })
     } catch (err) {
       const code = (err as { code?: string }).code ?? String(err)
-      logger.info({ event: 'oco.cancel.already_gone', strategy: 'A', ...ctx, code }, 'oco.cancel.already_gone')
+      const isGone = CANCEL_GONE_CODES.has(code)
+      logger.info(
+        { event: isGone ? 'oco.cancel.already_gone' : 'oco.cancel.error', strategy: 'A', ...ctx, code },
+        isGone ? 'oco.cancel.already_gone' : 'oco.cancel.error'
+      )
     }
     if (!(await isStillOpen())) {
       logger.info({ event: 'oco.cancel.success', strategy: 'A', ...ctx }, 'oco.cancel.success')
@@ -1561,7 +1589,11 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         await rest.cancelOrder({ symbol: exchangeSymbol, exchangeOrderId: ref.exchangeOrderId })
       } catch (err) {
         const code = (err as { code?: string }).code ?? String(err)
-        logger.info({ event: 'oco.cancel.already_gone', strategy: 'B', ...ctx, code }, 'oco.cancel.already_gone')
+        const isGone = CANCEL_GONE_CODES.has(code)
+        logger.info(
+          { event: isGone ? 'oco.cancel.already_gone' : 'oco.cancel.error', strategy: 'B', ...ctx, code },
+          isGone ? 'oco.cancel.already_gone' : 'oco.cancel.error'
+        )
       }
       if (!(await isStillOpen())) {
         logger.info({ event: 'oco.cancel.success', strategy: 'B', ...ctx }, 'oco.cancel.success')
@@ -1630,7 +1662,30 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           // ignore — proceed with cancel regardless
         }
 
-        await cancelSiblingExit(rest, intent, residualRef)
+        const cancelResult = await cancelSiblingExit(rest, intent, residualRef)
+        if (cancelResult === 'cancelled') {
+          // Emit synthetic order event so the persistence writer marks the residual row cancelled.
+          const now = clock.now()
+          bus.emit('ws.order', {
+            exchange: intent.exchange,
+            seq: 0,
+            receivedAt: now,
+            order: {
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              clientOrderId: residualRef.clientOrderId,
+              exchangeOrderId: residualRef.exchangeOrderId ?? '',
+              side: exitSide,
+              type: 'stop_market',
+              qty: 0,
+              filledQty: 0,
+              reduceOnly: true,
+              status: 'cancelled',
+              submittedAt: now,
+              updatedAt: now,
+            },
+          })
+        }
 
         // Check if the residual was actually filled (not just cancelled) — dual-fill race.
         if (residualWasOpen) {
@@ -1687,13 +1742,11 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         'intent.exited.complete'
       )
     } else {
-      // timed / deadline / kill_switch → cancel existing exit orders, place market close
-      if (s.exitOrderRefs) {
-        const refs = [s.exitOrderRefs.sl, s.exitOrderRefs.tp].filter((r): r is ExitOrderRef => r !== undefined)
-        for (const ref of refs) {
-          await cancelSiblingExit(rest, intent, ref)
-        }
-      }
+      // timed / deadline / kill_switch → place market close immediately, then cancel siblings in parallel.
+      // Snapshot sibling refs BEFORE overwriting s.exitOrderRefs so the cancel loop retains them.
+      const siblingRefs = s.exitOrderRefs
+        ? [s.exitOrderRefs.sl, s.exitOrderRefs.tp].filter((r): r is ExitOrderRef => r !== undefined)
+        : []
 
       const closeKind = reason === 'timed' ? 'timed' : 'close'
       const closeId = ids.forExit(intent.id, closeKind)
@@ -1727,6 +1780,24 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           })
         }
       }
+      // Emit order.placed before the REST call so close order.placed always precedes order.filled
+      // even when WS fill races back before the REST ACK (GateIO market closes).
+      const closePlacedAt = clock.now()
+      const closePlacedPre: OrderPlacedEvent = {
+        intentId: intent.id,
+        exchange: intent.exchange,
+        symbol: intent.symbol,
+        clientOrderId: closeId,
+        kind: closeKind,
+        side: exitSide,
+        orderType: 'market',
+        qty: closeQty,
+        reduceOnly: true,
+        ackPending: true,
+      }
+      bus.emit('order.placed', closePlacedPre)
+      logger.info({ event: 'order.placed', ...closePlacedPre }, 'order.placed')
+
       try {
         let closeAck = await orderClient(intent.exchange, intent.strategy).createOrder({
           intentId: intent.id,
@@ -1770,20 +1841,34 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           byCloseExchangeOrderId.set(closeAck.exchangeOrderId, intent.id)
           s.exitOrderRefs = { close: { clientOrderId: closeId, exchangeOrderId: closeAck.exchangeOrderId } }
         }
-        const closePlaced: OrderPlacedEvent = {
-          intentId: intent.id,
-          exchange: intent.exchange,
-          symbol: intent.symbol,
-          clientOrderId: closeId,
-          kind: closeKind,
-          side: exitSide,
-          orderType: 'market',
-          qty: closeQty,
-          reduceOnly: true,
-          ...(closeAck.exchangeOrderId ? { exchangeOrderId: closeAck.exchangeOrderId } : {}),
+        logger.info(
+          {
+            event: 'order.acked',
+            intentId: intent.id,
+            exchange: intent.exchange,
+            symbol: intent.symbol,
+            clientOrderId: closeId,
+            kind: closeKind,
+            ...(closeAck.exchangeOrderId ? { exchangeOrderId: closeAck.exchangeOrderId } : {}),
+            ack_latency_ms: clock.now() - closePlacedAt,
+          },
+          'order.acked'
+        )
+        if (reason === 'deadline' && 'deadlineAt' in intent.exitPolicy) {
+          logger.info(
+            {
+              event: 'manager.close.placed_after_deadline',
+              intentId: intent.id,
+              exchange: intent.exchange,
+              latencyMs: clock.now() - intent.exitPolicy.deadlineAt,
+            },
+            'manager.close.placed_after_deadline'
+          )
         }
-        bus.emit('order.placed', closePlaced)
-        logger.info({ event: 'order.placed', ...closePlaced }, 'order.placed')
+        // Cancel residual SL/TP orders in parallel — reduce-only close guarantees no oversell.
+        if (siblingRefs.length > 0) {
+          void Promise.all(siblingRefs.map(ref => cancelSiblingExit(rest, intent, ref))).catch(() => {})
+        }
         // REST polling fallback for close fill (mirrors entry poll for WS-unreliable exchanges)
         const onCloseExhausted =
           reason === 'funding_fee'
@@ -2044,7 +2129,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             (exchangeOrderId ? byCloseExchangeOrderId.get(exchangeOrderId) : undefined)
           if (closeIntentId !== undefined) {
             const s = intentStates.get(closeIntentId)
-            if (s && event.order.status === 'filled') {
+            if (s && (event.order.status === 'filled' || event.order.status === 'partially_filled')) {
               if (TERMINAL.has(s.status)) return
               if (event.order.avgFillPrice !== undefined) {
                 s.avgExitPrice = event.order.avgFillPrice
@@ -2059,21 +2144,23 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               }
               bus.emit('order.filled', closeFilled)
               logger.info({ event: 'order.filled', ...closeFilled }, 'order.filled')
-              recordExitMetrics(s, s.exitReason ?? 'error')
-              emitIntentExited(s)
-              transition(s, 'exited')
-              logger.info(
-                {
-                  event: 'intent.exited.complete',
-                  intentId: closeIntentId,
-                  exchange: s.intent.exchange,
-                  symbol: s.intent.symbol,
-                  exitReason: s.exitReason,
-                },
-                'intent.exited.complete'
-              )
-              const wsRest = restAdapters.get(s.intent.exchange)
-              if (wsRest) void sweepReduceOnlyOrders(wsRest, s.intent.exchangeSymbol, s.intent.id)
+              if (event.order.status === 'filled') {
+                recordExitMetrics(s, s.exitReason ?? 'error')
+                emitIntentExited(s)
+                transition(s, 'exited')
+                logger.info(
+                  {
+                    event: 'intent.exited.complete',
+                    intentId: closeIntentId,
+                    exchange: s.intent.exchange,
+                    symbol: s.intent.symbol,
+                    exitReason: s.exitReason,
+                  },
+                  'intent.exited.complete'
+                )
+                const wsRest = restAdapters.get(s.intent.exchange)
+                if (wsRest) void sweepReduceOnlyOrders(wsRest, s.intent.exchangeSymbol, s.intent.id)
+              }
             }
           }
         })
@@ -2892,6 +2979,24 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         return s
       }
 
+      // Emit order.placed before the REST call so log ordering is correct even when a WS fill
+      // races back faster than the ACK (GateIO/OKX market orders). exchangeOrderId is absent until ACK.
+      const placedAt = clock.now()
+      const entryPlacedPre: OrderPlacedEvent = {
+        intentId: intent.id,
+        exchange: intent.exchange,
+        symbol: intent.symbol,
+        clientOrderId,
+        kind: 'entry',
+        side: entrySide,
+        orderType: 'market',
+        qty: check.qty,
+        reduceOnly: false,
+        ackPending: true,
+      }
+      bus.emit('order.placed', entryPlacedPre)
+      logger.info({ event: 'order.placed', ...entryPlacedPre }, 'order.placed')
+
       let ack
       try {
         ack = await orderClient(intent.exchange, intent.strategy).createOrder({
@@ -2922,14 +3027,20 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       // best-effort and return without advancing state.
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (s.status !== 'submitted') {
-        logger.warn(
+        // Legitimate pre-emption (filled/working/acked) is debug noise; only warn for truly orphaned states.
+        const isLegitTerminal = s.status === 'filled' || s.status === 'working' || s.status === 'acked'
+        logger[isLegitTerminal ? 'debug' : 'warn'](
           { event: 'market_entry.preempted_in_flight', intentId: intent.id, exchange: intent.exchange, status: s.status },
           'market order placed but intent preempted in-flight — cancelling orphan order'
         )
         byEntryOrderId.delete(canonEntryId)
         if (rest && ack.exchangeOrderId) {
           void rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId, exchangeOrderId: ack.exchangeOrderId })
-            .catch((err: unknown) => { logger.warn({ intentId: intent.id, err }, 'market_entry: orphan cancel failed') })
+            .catch((err: unknown) => {
+              const code = (err as { code?: string }).code ?? String(err)
+              const isCancelGone = new Set(['TEXT_DUPLICATED', 'ORDER_NOT_FOUND', 'ORDER_FINISHED']).has(code)
+              logger[isCancelGone ? 'debug' : 'warn']({ intentId: intent.id, err }, 'market_entry: orphan cancel failed')
+            })
         }
         return s
       }
@@ -2940,20 +3051,20 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         s.entryExchangeOrderId = ack.exchangeOrderId
         byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
       }
-      const entryPlaced: OrderPlacedEvent = {
-        intentId: intent.id,
-        exchange: intent.exchange,
-        symbol: intent.symbol,
-        clientOrderId,
-        kind: 'entry',
-        side: entrySide,
-        orderType: 'market',
-        qty: check.qty,
-        reduceOnly: false,
-        ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
-      }
-      bus.emit('order.placed', entryPlaced)
-      logger.info({ event: 'order.placed', ...entryPlaced }, 'order.placed')
+      // Log the ACK with latency breakdown: placement_latency_ms (submit→placed) and ack_latency_ms (placed→acked).
+      logger.info(
+        {
+          event: 'order.acked',
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId,
+          ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+          placement_latency_ms: placedAt - (s.intent.decidedAt ?? placedAt),
+          ack_latency_ms: clock.now() - placedAt,
+        },
+        'order.acked'
+      )
 
       // TS narrows s.status to 'submitted' after the preemption guard above; alias through
       // the full union so status checks after each transition() mutation compile correctly.

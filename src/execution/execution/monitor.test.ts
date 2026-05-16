@@ -501,4 +501,126 @@ describe('PositionMonitor', () => {
       expect(exits[0]?.reason).toBe('funding_fee')
     })
   })
+
+  describe('sl_tp_deadline: exchangeOrderId matching (GateIO stop_market fills)', () => {
+    function makeMonitorWithTimers() {
+      const bus = createEventBus()
+      const clock = createClock()
+      const timers: { cb: () => void }[] = []
+      const monitor = createPositionMonitor({
+        bus,
+        clock,
+        logger: createExecutionLogger(),
+        metrics: makeMetrics(),
+        setTimeoutFn: cb => { timers.push({ cb }); return timers.length - 1 },
+        clearTimeoutFn: () => {},
+      })
+      const exits: { intentId: string; reason: ExitReason }[] = []
+      monitor.onExitRequested((intentId, reason) => exits.push({ intentId, reason }))
+      return { bus, monitor, timers, exits }
+    }
+
+    it('SL fill with empty clientOrderId but matching exchangeOrderId triggers sl exit', () => {
+      const { bus, monitor, exits } = makeMonitorWithTimers()
+      const now = Date.now()
+      const state: IntentState = {
+        ...makeState('i1', 'sl_tp_deadline', now, ['sl-cid', 'tp-cid']),
+        exitOrderRefs: {
+          sl: { clientOrderId: 'sl-cid', exchangeOrderId: 'eid-sl-123' },
+          tp: { clientOrderId: 'tp-cid', exchangeOrderId: 'eid-tp-456' },
+        },
+      }
+      monitor.arm(state)
+
+      bus.emit('ws.order', {
+        exchange: 'binance',
+        order: {
+          exchange: 'binance',
+          symbol: 'BTCUSDT',
+          clientOrderId: '',
+          exchangeOrderId: 'eid-sl-123',
+          side: 'sell',
+          type: 'market',
+          qty: 0.001,
+          filledQty: 0.001,
+          reduceOnly: true,
+          status: 'filled',
+          submittedAt: now,
+          updatedAt: now,
+        },
+        seq: 1,
+        receivedAt: now,
+      })
+
+      expect(exits).toHaveLength(1)
+      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'sl' })
+    })
+
+    it('TP fill with empty clientOrderId but matching exchangeOrderId triggers tp exit', () => {
+      const { bus, monitor, exits } = makeMonitorWithTimers()
+      const now = Date.now()
+      const state: IntentState = {
+        ...makeState('i1', 'sl_tp_deadline', now, ['sl-cid', 'tp-cid']),
+        exitOrderRefs: {
+          sl: { clientOrderId: 'sl-cid', exchangeOrderId: 'eid-sl-123' },
+          tp: { clientOrderId: 'tp-cid', exchangeOrderId: 'eid-tp-456' },
+        },
+      }
+      monitor.arm(state)
+
+      bus.emit('ws.order', {
+        exchange: 'binance',
+        order: {
+          exchange: 'binance',
+          symbol: 'BTCUSDT',
+          clientOrderId: '',
+          exchangeOrderId: 'eid-tp-456',
+          side: 'sell',
+          type: 'limit',
+          qty: 0.001,
+          filledQty: 0.001,
+          reduceOnly: true,
+          status: 'filled',
+          submittedAt: now,
+          updatedAt: now,
+        },
+        seq: 1,
+        receivedAt: now,
+      })
+
+      expect(exits).toHaveLength(1)
+      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'tp' })
+    })
+
+    it('SL fill by matching clientOrderId still works (regression guard)', () => {
+      const { bus, monitor, exits } = makeMonitorWithTimers()
+      const now = Date.now()
+      const slId = 'sl-order-id'
+      const tpId = 'tp-order-id'
+      monitor.arm(makeState('i1', 'sl_tp_deadline', now, [slId, tpId]))
+
+      bus.emit('ws.order', {
+        exchange: 'binance',
+        order: {
+          exchange: 'binance',
+          symbol: 'BTCUSDT',
+          clientOrderId: slId,
+          exchangeOrderId: 'some-eid',
+          side: 'sell',
+          type: 'stop_market',
+          qty: 0.001,
+          filledQty: 0.001,
+          reduceOnly: true,
+          status: 'filled',
+          submittedAt: now,
+          updatedAt: now,
+        },
+        seq: 1,
+        receivedAt: now,
+      })
+
+      expect(exits).toHaveLength(1)
+      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'sl' })
+    })
+  })
 })

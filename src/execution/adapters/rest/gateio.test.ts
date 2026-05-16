@@ -36,6 +36,7 @@ function makeMockCcxt(overrides: Partial<CcxtExchange> = {}): CcxtExchange & {
   fetchBalance: ReturnType<typeof vi.fn>
   setLeverage: ReturnType<typeof vi.fn>
   fetchTime: ReturnType<typeof vi.fn>
+  parseJson: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
 } {
   const btcMarket = makeBtcPerp()
@@ -52,6 +53,7 @@ function makeMockCcxt(overrides: Partial<CcxtExchange> = {}): CcxtExchange & {
     fetchBalance: vi.fn().mockResolvedValue({ free: { USDT: 1000 }, used: { USDT: 50 } }),
     setLeverage: vi.fn().mockResolvedValue({}),
     fetchTime: vi.fn().mockResolvedValue(2000),
+    parseJson: vi.fn((text: string) => JSON.parse(text) as unknown),
     close: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as ReturnType<typeof makeMockCcxt>
@@ -116,6 +118,87 @@ runRestAdapterConformance({
   sampleSymbol: 'BTCUSDT',
   sampleCcxtSymbol: 'BTC/USDT:USDT',
   clientOrderIdParam: 'text',
+})
+
+describe('gateio lossless JSON parsing', () => {
+  function makeAdapter(mockCcxt = makeMockCcxt()) {
+    const registry = new MetricsRegistry()
+    const metrics = registerRestMetrics(registry)
+    const adapter = createGateioRestAdapter({
+      config: makeConfig(),
+      limiter: makeMockLimiter(),
+      clock: makeMockClock(),
+      ids: { forIntent: () => 'test', forExit: () => 'test' },
+      logger: makeLogger(),
+      metrics,
+      ccxtFactory: () => mockCcxt,
+    })
+    return { adapter, ccxt: mockCcxt }
+  }
+
+  it('parses unsafe Gate.io numeric order IDs as exact strings', () => {
+    const { ccxt } = makeAdapter()
+    const parsed = ccxt.parseJson('{"id":292733975903838387,"text":"abc","price":"1.5"}') as Record<
+      string,
+      unknown
+    >
+
+    expect(parsed.id).toBe('292733975903838387')
+    expect(parsed.text).toBe('abc')
+    expect(parsed.price).toBe('1.5')
+  })
+
+  it('does not change large digit sequences inside JSON strings', () => {
+    const { ccxt } = makeAdapter()
+    const parsed = ccxt.parseJson('{"note":"value 292733975903838387 inside string"}') as Record<string, unknown>
+
+    expect(parsed.note).toBe('value 292733975903838387 inside string')
+  })
+
+  it('leaves safe integer and decimal numeric values parseable as numbers', () => {
+    const { ccxt } = makeAdapter()
+    const parsed = ccxt.parseJson('{"id":12345,"qty":0.001}') as Record<string, unknown>
+
+    expect(parsed.id).toBe(12345)
+    expect(parsed.qty).toBe(0.001)
+  })
+
+  it('createOrder returns the exact Gate.io order ID from a parsed response body', async () => {
+    const mockCcxt = makeMockCcxt()
+    mockCcxt.createOrder.mockImplementation(() => {
+      const parsed = mockCcxt.parseJson('{"id":292733975903838387,"text":"test-cid"}') as Record<string, unknown>
+      return Promise.resolve(
+        makeOrderRaw({
+          id: parsed.id as string,
+          clientOrderId: parsed.text as string,
+        })
+      )
+    })
+    const { adapter } = makeAdapter(mockCcxt)
+
+    const ack = await adapter.createOrder({
+      intentId: 'i1',
+      clientOrderId: 'test-cid',
+      exchange: 'gateio',
+      symbol: 'BTCUSDT',
+      side: 'buy',
+      type: 'market',
+      qty: 0.001,
+    })
+
+    expect(ack.exchangeOrderId).toBe('292733975903838387')
+  })
+
+  it('cancelOrder passes the exact exchange order ID string to CCXT', async () => {
+    const { adapter, ccxt } = makeAdapter()
+
+    await adapter.cancelOrder({
+      symbol: 'BTCUSDT',
+      exchangeOrderId: '292733975903838387',
+    })
+
+    expect(ccxt.cancelOrder).toHaveBeenCalledWith('292733975903838387', 'BTC/USDT:USDT', {})
+  })
 })
 
 describe('gateio stop_market params', () => {

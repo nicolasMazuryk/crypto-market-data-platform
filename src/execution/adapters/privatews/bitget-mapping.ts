@@ -38,6 +38,7 @@ interface BitgetBalanceData {
   bizType?: string
   instId?: string
   amount?: string
+  fundingFeeRate?: string
 }
 
 interface BitgetUpdate {
@@ -156,7 +157,7 @@ export function parseBitgetMessage(
           exchange,
           symbol: d.instId,
           fundingTime,
-          fundingRate: 0,
+          fundingRate: d.fundingFeeRate ? parseFloat(d.fundingFeeRate) : 0,
           fundingAmount,
           asset: d.coinName,
           positionQty: 0,

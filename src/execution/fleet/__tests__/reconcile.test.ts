@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeDiff, computeFleetEntryHash, type ObservedState } from '../reconcile.js'
+import { computeDiff, computeFleetEntryHash, loadStrategyContents, type ObservedState } from '../reconcile.js'
 import type { Fleet, FleetEntry } from '../schema.js'
 
 function makeEntry(overrides: Partial<FleetEntry> = {}): FleetEntry {
@@ -195,5 +195,13 @@ describe('computeFleetEntryHash', () => {
     const h1 = computeFleetEntryHash(entry, STRATEGY_CONTENT, CODE_SHA)
     const h2 = computeFleetEntryHash(entry, STRATEGY_CONTENT, CODE_SHA)
     expect(h1).toBe(h2)
+  })
+})
+
+describe('loadStrategyContents', () => {
+  it('throws when an enabled entry references a missing strategy_config file', () => {
+    const fleet = makeFleet([makeEntry({ strategy_config: '/tmp/does-not-exist-strategy-config.yaml' })])
+
+    expect(() => loadStrategyContents(fleet)).toThrow(/failed to load strategy_config/)
   })
 })

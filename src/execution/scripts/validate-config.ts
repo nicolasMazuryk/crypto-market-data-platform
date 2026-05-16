@@ -17,7 +17,7 @@ import { parseArgs } from 'node:util'
 import YAML from 'yaml'
 
 import { ConfigError, EngineConfigRawSchema, parseEngineConfig } from '../config/schema.js'
-import { deepMerge } from '../config/loader.js'
+import { deepMerge, validateForLiveStart } from '../config/loader.js'
 
 const { values } = parseArgs({
   args: process.argv.slice(2),
@@ -67,7 +67,7 @@ if (!structuralResult.success) {
 
 // Stage 2: semantic validation — custom cross-field logic
 try {
-  parseEngineConfig(merged)
+  validateForLiveStart(parseEngineConfig(merged))
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err)
   console.error(`Config validation failed: ${values.config}\n`)

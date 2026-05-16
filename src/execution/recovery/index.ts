@@ -86,6 +86,13 @@ function rowToTradeIntent(row: TradeIntentRow): TradeIntent {
 
 export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult> {
   const { db, config, bus, restAdapters, logger, metrics } = opts
+
+  if (config.mode === 'live' && !config.identity) {
+    throw new Error(
+      'config.identity is required in live mode — check registry entry for this exchange/strategy combination'
+    )
+  }
+
   const now = Date.now()
 
   let runId: string

@@ -63,6 +63,16 @@
     remote_src: true
   notify: Restart execution-engine
 
+- name: Copy registry.yaml to execution config dir (needed by containers for identity)
+  ansible.builtin.copy:
+    src: "{{ repo_dir }}/live-configs/registry.yaml"
+    dest: "{{ execution_config_dir }}/registry.yaml"
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+    remote_src: true
+  notify: Restart execution-engine
+
 # ── 3. Resolve image tag (git SHA) ─────────────────────────────────────────────
 # Only auto-detect when execution_image_tag is not already set (e.g. by rollback).
 

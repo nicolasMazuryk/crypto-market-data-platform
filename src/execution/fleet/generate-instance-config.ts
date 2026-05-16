@@ -4,6 +4,8 @@ import { resolve } from 'node:path'
 import YAML from 'yaml'
 
 import type { FleetEntry } from './schema.js'
+import { deepMerge } from '../config/loader.js'
+import { parseEngineConfig } from '../config/schema.js'
 
 export interface GenerateInstanceConfigOptions {
   fleetEntry: FleetEntry
@@ -65,6 +67,18 @@ export function generateInstanceConfig(options: GenerateInstanceConfigOptions): 
   }
   if (Object.keys(riskOverride).length > 0) {
     override.risk = riskOverride
+  }
+
+  const strategies = (override.strategies as unknown[] | undefined) ?? []
+  if (!Array.isArray(strategies) || strategies.length === 0) {
+    throw new Error(
+      `generate-instance-config: strategy_config "${fleetEntry.strategy_config}" produced no strategies for ${fleetEntry.id}`
+    )
+  }
+
+  const validated = parseEngineConfig(deepMerge(baseRaw, override))
+  if (!validated.strategies.some(s => s.enabled)) {
+    throw new Error(`generate-instance-config: no enabled strategies after merge for ${fleetEntry.id}`)
   }
 
   return {

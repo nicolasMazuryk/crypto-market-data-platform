@@ -6,7 +6,7 @@ import { createExecutionLogger } from '../../core/logger.js'
 import { MetricsRegistry, registerPrivateWsMetrics } from '../../observability/metrics.js'
 import { createFakeBinanceWsClient } from '../../test-helpers/wsClientMock.js'
 import { createBinancePrivateWsAdapter } from './binance.js'
-import type { ConnectionStateEvent, OrderEvent, BalanceEvent, PositionEvent, FundingFeeEvent } from './types.js'
+import type { ConnectionStateEvent, OrderEvent, BalanceEvent, PositionEvent, FundingFeeEvent, FillEvent } from './types.js'
 import type { ExchangeConfig } from '../../config/types.js'
 import { createFakeWsClient, runWsAdapterConformance } from './__tests__/conformance.js'
 import { createPrivateWsAdapterFromSpec } from './private-ws-base.js'
@@ -364,4 +364,116 @@ runWsAdapterConformance({
       P: [{ s: 'BTCUSDT', pa: '0.01', ep: '30000', up: '0', ps: 'BOTH' }],
     },
   },
+})
+
+describe('Binance fill emission', () => {
+  let fakeClient: ReturnType<typeof createFakeBinanceWsClient>
+  let adapter: ReturnType<typeof createBinancePrivateWsAdapter>
+  const bus = createEventBus()
+  const clock = createClock()
+  const logger = createExecutionLogger()
+  const registry = new MetricsRegistry()
+  const metrics = registerPrivateWsMetrics(registry)
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    fakeClient = createFakeBinanceWsClient()
+    adapter = createBinancePrivateWsAdapter({
+      config: {
+        exchange: 'binance',
+        enabled: true,
+        credentialsEnvPrefix: 'BINANCE',
+        rateLimits: { criticalReservationFraction: 0.1, criticalWindowSeconds: 1, buckets: [] },
+        marketRefreshMs: 60000,
+        fundingPullMs: 60000,
+      },
+      bus,
+      clock,
+      logger,
+      metrics,
+      wsClientFactory: () => fakeClient,
+    })
+  })
+
+  afterEach(async () => {
+    await adapter.disconnect().catch(() => undefined)
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('emits FillEvent when ORDER_TRADE_UPDATE contains last-filled fields', async () => {
+    const fills: FillEvent[] = []
+    adapter.events.on('fill', e => fills.push(e))
+    const busFills: FillEvent[] = []
+    bus.on('ws.fill', e => busFills.push(e))
+
+    await adapter.connect()
+
+    fakeClient.emit.message({
+      e: 'ORDER_TRADE_UPDATE',
+      E: 1700000000000,
+      T: 1700000000000,
+      o: {
+        s: 'BTCUSDT',
+        c: 'cid-1',
+        S: 'BUY',
+        o: 'LIMIT',
+        q: '1',
+        p: '100',
+        ap: '100',
+        sp: '0',
+        X: 'PARTIALLY_FILLED',
+        i: 12345,
+        z: '1',
+        R: false,
+        T: '1700000000000',
+        l: '1',
+        L: '100',
+        n: '0.01',
+        N: 'USDT',
+        m: true,
+        t: 99999,
+      },
+    })
+
+    expect(fills).toHaveLength(1)
+    expect(fills[0]!.exchangeFillId).toBe('99999')
+    expect(fills[0]!.qty).toBe(1)
+    expect(fills[0]!.price).toBe(100)
+    expect(fills[0]!.feeAmount).toBe(0.01)
+    expect(fills[0]!.feeAsset).toBe('USDT')
+    expect(fills[0]!.isMaker).toBe(true)
+    expect(fills[0]!.exchangeOrderId).toBe('12345')
+    expect(busFills).toHaveLength(1)
+  })
+
+  it('does not emit FillEvent when last-filled qty is zero', async () => {
+    const fills: FillEvent[] = []
+    adapter.events.on('fill', e => fills.push(e))
+
+    await adapter.connect()
+
+    fakeClient.emit.message({
+      e: 'ORDER_TRADE_UPDATE',
+      E: 1700000000000,
+      T: 1700000000000,
+      o: {
+        s: 'BTCUSDT',
+        c: 'cid-2',
+        S: 'BUY',
+        o: 'LIMIT',
+        q: '1',
+        p: '100',
+        ap: '0',
+        sp: '0',
+        X: 'NEW',
+        i: 12346,
+        z: '0',
+        R: false,
+        T: '1700000000000',
+      },
+    })
+
+    expect(fills).toHaveLength(0)
+  })
 })

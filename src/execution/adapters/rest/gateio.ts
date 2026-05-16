@@ -3,6 +3,85 @@ import type { CcxtOrder } from '../../../exchanges/types.js'
 import type { OrderRequest, OrderRef } from './types.js'
 import { createCcxtRestAdapter, type CcxtAdapterSpec, type BaseRestAdapterOptions } from './ccxt-base.js'
 
+type JsonParserHost = {
+  parseJson?: (text: string) => unknown
+  onJsonResponse?: (text: string) => string
+}
+
+const MAX_SAFE_INTEGER_TEXT = String(Number.MAX_SAFE_INTEGER)
+
+function isDigit(ch: string | undefined): boolean {
+  return ch !== undefined && ch >= '0' && ch <= '9'
+}
+
+function isUnsafeIntegerLiteral(raw: string): boolean {
+  const abs = raw.startsWith('-') ? raw.slice(1) : raw
+  const normalized = abs.replace(/^0+/, '') || '0'
+  return (
+    normalized.length > MAX_SAFE_INTEGER_TEXT.length ||
+    (normalized.length === MAX_SAFE_INTEGER_TEXT.length && normalized > MAX_SAFE_INTEGER_TEXT)
+  )
+}
+
+function quoteLargeIntegersInJson(text: string): string {
+  let out = ''
+  let i = 0
+  let inString = false
+  let escaped = false
+
+  while (i < text.length) {
+    const ch = text[i]!
+
+    if (inString) {
+      out += ch
+      if (escaped) {
+        escaped = false
+      } else if (ch === '\\') {
+        escaped = true
+      } else if (ch === '"') {
+        inString = false
+      }
+      i += 1
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+      out += ch
+      i += 1
+      continue
+    }
+
+    if (ch === '-' || isDigit(ch)) {
+      const start = i
+      if (ch === '-') i += 1
+      while (isDigit(text[i])) i += 1
+
+      let isInteger = true
+      if (text[i] === '.') {
+        isInteger = false
+        i += 1
+        while (isDigit(text[i])) i += 1
+      }
+      if (text[i] === 'e' || text[i] === 'E') {
+        isInteger = false
+        i += 1
+        if (text[i] === '+' || text[i] === '-') i += 1
+        while (isDigit(text[i])) i += 1
+      }
+
+      const raw = text.slice(start, i)
+      out += isInteger && isUnsafeIntegerLiteral(raw) ? `"${raw}"` : raw
+      continue
+    }
+
+    out += ch
+    i += 1
+  }
+
+  return out
+}
+
 const gateioSpec: CcxtAdapterSpec = {
   exchange: 'gateio',
   ccxtId: ccxtIdMap.gateio,
@@ -11,6 +90,9 @@ const gateioSpec: CcxtAdapterSpec = {
   duplicateOrderCodes: new Set(['TEXT_DUPLICATED']),
   // Gate.io returns TEXT_DUPLICATED/ORDER_NOT_FOUND/ORDER_FINISHED when an order is already gone;
   // treat all three as cancel-success so callers see the order as absent, not as an error.
+  // INVALID_PARAM_VALUE is NOT in this set: cancel-by-text on stop_market orders returns
+  // INVALID_PARAM_VALUE because Gate.io does not associate text with trigger orders.
+  // The caller (cancelSiblingExit) must fall through to cancel-by-exchangeOrderId (Strategy B).
   cancelIgnoreCodes: new Set(['TEXT_DUPLICATED', 'ORDER_NOT_FOUND', 'ORDER_FINISHED']),
   setLeverage: async (ccxtEx, unified, leverage) => {
     if (!ccxtEx.setLeverage) return
@@ -32,6 +114,19 @@ const gateioSpec: CcxtAdapterSpec = {
       const msg = err instanceof Error ? err.message : String(err)
       if (msg.includes('NO_CHANGE') || msg.includes('no change')) return
       throw err
+    }
+  },
+  postBuildCcxt: ccxtEx => {
+    const host = ccxtEx as JsonParserHost
+    host.parseJson = (text: string): unknown => {
+      try {
+        const trimmed = text.trim()
+        if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return undefined
+        const responseText = host.onJsonResponse ? host.onJsonResponse(trimmed) : trimmed
+        return JSON.parse(quoteLargeIntegersInJson(responseText)) as unknown
+      } catch {
+        return undefined
+      }
     }
   },
   // CCXT does not expose setMarginMode for Gate.io perps; margin mode is injected

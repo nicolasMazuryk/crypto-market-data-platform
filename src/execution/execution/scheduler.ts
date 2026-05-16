@@ -8,6 +8,18 @@ import type { Exchange } from '../types/exchange.js'
 
 const DEFAULT_EVALUATE_LEAD_MS = 0 // 1500
 const HOUR_MS = 3_600_000
+const PREWARM_CONCURRENCY = 4
+
+async function runWithConcurrency<T>(tasks: T[], fn: (t: T) => Promise<void> | void): Promise<void> {
+  let i = 0
+  async function worker(): Promise<void> {
+    while (i < tasks.length) {
+      const task = tasks[i++]!
+      await fn(task)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(PREWARM_CONCURRENCY, tasks.length) }, worker))
+}
 
 export interface FundingEventSchedulerOptions {
   clock: Clock
@@ -69,6 +81,7 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
 
     let scheduledCount = 0
     const staleMaxAgeMs = opts.staleSnapshotMaxAgeMs ?? 30_000
+    const prewarmTasks: Array<[Exchange, string, number]> = []
 
     for (const exchange of exchanges) {
       // Collect and sort by fundingRate (most negative first) so the best opportunities
@@ -117,9 +130,14 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
         scheduledCount++
 
         for (const leverage of enabledLeverages) {
-          opts.leveragePrewarmer?.(exchange, symbol, leverage)
+          prewarmTasks.push([exchange, symbol, leverage] as [Exchange, string, number])
         }
       }
+    }
+
+    if (prewarmTasks.length > 0 && opts.leveragePrewarmer) {
+      const prewarmer = opts.leveragePrewarmer
+      void runWithConcurrency(prewarmTasks, ([ex, sym, lev]) => prewarmer(ex, sym, lev))
     }
 
     const nextWake = nextWakeTime(now, config.wakeBeforeHourEndMs)

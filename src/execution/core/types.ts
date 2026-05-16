@@ -34,6 +34,8 @@ export interface OrderPlacedEvent {
   price?: number
   stopPrice?: number
   reduceOnly: boolean
+  /** True when emitted before REST ACK; exchangeOrderId will be absent. Followed by order.acked log event. */
+  ackPending?: boolean
 }
 
 export interface OrderFilledEvent {
@@ -52,7 +54,7 @@ export interface ExitTriggeredEvent {
   reason: ExitReason
   triggerPrice?: number
   triggerTs: number
-  source: 'ws' | 'timer'
+  source: 'ws' | 'timer' | 'rest_poll'
   exitOrderClientId?: string
   latencyMs?: number
 }

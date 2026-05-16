@@ -108,6 +108,8 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
       } else if (exitPolicy.kind === 'sl_tp_deadline' || exitPolicy.kind === 'sl_tp_deadline_post_funding_event') {
         const slId = state.exitOrderRefs?.sl?.clientOrderId
         const tpId = state.exitOrderRefs?.tp?.clientOrderId
+        const slExchangeId = state.exitOrderRefs?.sl?.exchangeOrderId
+        const tpExchangeId = state.exitOrderRefs?.tp?.exchangeOrderId
 
         const deadlineDelay = Math.max(0, exitPolicy.deadlineAt - now - skewMs)
         const deadlineHandle = setTOFn(() => {
@@ -124,20 +126,26 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
           if (event.exchange !== intent.exchange) return
           const { order } = event
           if (order.status !== 'filled') return
-          if (order.clientOrderId === slId) {
+          const matchesSl =
+            (slId && order.clientOrderId === slId) ||
+            (slExchangeId && order.exchangeOrderId === slExchangeId)
+          const matchesTp =
+            (tpId && order.clientOrderId === tpId) ||
+            (tpExchangeId && order.exchangeOrderId === tpExchangeId)
+          if (matchesSl) {
             const ctx: ExitTriggerContext = {
               triggerTs: order.updatedAt,
               source: 'ws',
-              exitOrderClientId: slId,
+              ...(slId !== undefined ? { exitOrderClientId: slId } : {}),
               latencyMs: event.receivedAt - order.updatedAt,
             }
             if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice
             settle('sl', ctx)
-          } else if (order.clientOrderId === tpId) {
+          } else if (matchesTp) {
             const ctx: ExitTriggerContext = {
               triggerTs: order.updatedAt,
               source: 'ws',
-              exitOrderClientId: tpId,
+              ...(tpId !== undefined ? { exitOrderClientId: tpId } : {}),
               latencyMs: event.receivedAt - order.updatedAt,
             }
             if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice
@@ -151,6 +159,7 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         // TP is a dynamic retracement order managed by the execution manager's tracker;
         // the tracker handles its own TP fill detection and calls monitor.disarm() + exit handler.
         const slId = state.exitOrderRefs?.sl?.clientOrderId
+        const slExchangeId = state.exitOrderRefs?.sl?.exchangeOrderId
 
         const deadlineDelay = Math.max(0, exitPolicy.deadlineAt - now - skewMs)
         const deadlineHandle = setTOFn(() => {
@@ -166,11 +175,15 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         const unsub = bus.on('ws.order', event => {
           if (event.exchange !== intent.exchange) return
           const { order } = event
-          if (order.status !== 'filled' || order.clientOrderId !== slId) return
+          const matchesSl =
+            order.status === 'filled' &&
+            ((slId && order.clientOrderId === slId) ||
+              (slExchangeId && order.exchangeOrderId === slExchangeId))
+          if (!matchesSl) return
           const ctx: ExitTriggerContext = {
             triggerTs: order.updatedAt,
             source: 'ws',
-            exitOrderClientId: slId,
+            ...(slId !== undefined ? { exitOrderClientId: slId } : {}),
             latencyMs: event.receivedAt - order.updatedAt,
           }
           if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice

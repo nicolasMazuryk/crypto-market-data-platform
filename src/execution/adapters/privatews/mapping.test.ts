@@ -80,6 +80,18 @@ describe('mapOrderTradeUpdate', () => {
     const event = mapOrderTradeUpdate(raw, 0, 1)
     expect(event.order.side).toBe('sell')
   })
+
+  it('falls back to o.C when o.c is empty (cancel/replace and some FILLED events)', () => {
+    const raw = { ...FILLED_ORDER_UPDATE, o: { ...FILLED_ORDER_UPDATE.o, c: '', C: 'close-xyz-original' } }
+    const event = mapOrderTradeUpdate(raw, 0, 1)
+    expect(event.order.clientOrderId).toBe('close-xyz-original')
+  })
+
+  it('uses o.c when non-empty, ignores o.C', () => {
+    const raw = { ...ORDER_UPDATE, o: { ...ORDER_UPDATE.o, c: 'primary-cid', C: 'original-cid' } }
+    const event = mapOrderTradeUpdate(raw, 0, 1)
+    expect(event.order.clientOrderId).toBe('primary-cid')
+  })
 })
 
 describe('mapAccountUpdate', () => {

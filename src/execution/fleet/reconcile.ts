@@ -145,8 +145,9 @@ export function loadStrategyContents(fleet: Fleet): Map<string, string> {
     if (!entry.enabled) continue
     try {
       map.set(entry.id, readFileSync(resolve(entry.strategy_config), 'utf8'))
-    } catch {
-      map.set(entry.id, '')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      throw new Error(`failed to load strategy_config "${entry.strategy_config}" for ${entry.id}: ${message}`)
     }
   }
   return map

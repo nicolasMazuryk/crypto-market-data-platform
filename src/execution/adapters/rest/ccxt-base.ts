@@ -45,6 +45,8 @@ export interface CcxtAdapterSpec {
   setLeverage?(ccxtEx: CcxtExchange, unified: string, leverage: number): Promise<void>
   setMarginMode?(ccxtEx: CcxtExchange, unified: string, mode: 'cross' | 'isolated'): Promise<void>
   setPositionMode?(ccxtEx: CcxtExchange, hedged: boolean, unified?: string): Promise<void>
+  /** Hook called once on the freshly-built CCXT instance, before any request. */
+  postBuildCcxt?(ccxtEx: CcxtExchange): void
   /** Override the default fetchOrder-based lookup. Return undefined when the order is not found. */
   getOrder?(ccxtEx: CcxtExchange, ref: OrderRef, unified: string): Promise<CcxtOrder | undefined>
   defaultBalanceAsset?: string
@@ -148,6 +150,7 @@ export function createCcxtRestAdapter(
   const { config, limiter, clock, logger, metrics, tracer } = opts
   const exchange = spec.exchange
   const ccxtExchange = opts.ccxtFactory?.() ?? buildCcxtClient(spec, config as ExchangeConfigWithCreds)
+  spec.postBuildCcxt?.(ccxtExchange)
 
   function requireCcxtMethod<K extends keyof CcxtExchange>(name: K): NonNullable<CcxtExchange[K]> {
     const method = ccxtExchange[name]

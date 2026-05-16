@@ -125,6 +125,19 @@ function loadBaseRaw(configPath: string, basePath: string | undefined): Record<s
   return {}
 }
 
+export function validateForLiveStart(config: EngineConfig): void {
+  if (config.mode !== 'live') return
+
+  const enabledExchangesCount = config.exchanges.filter(e => e.enabled).length
+  const enabledStrategiesCount = config.strategies.filter(s => s.enabled).length
+  if (enabledExchangesCount > 0 && enabledStrategiesCount === 0) {
+    throw new Error(
+      `engine refuses to start: ${enabledExchangesCount.toString()} exchange(s) enabled but 0 strategies enabled. ` +
+        'Check the generated per-instance config and the live-configs/strategies/*.yaml source file.'
+    )
+  }
+}
+
 export function loadEngineConfig(options: LoadEngineConfigOptions): EngineConfig {
   const env = options.env ?? process.env
   const configPath = resolve(options.configPath)
@@ -159,6 +172,7 @@ export function loadEngineConfig(options: LoadEngineConfigOptions): EngineConfig
   }
 
   const parsed = parseEngineConfig(merged)
+  validateForLiveStart(parsed)
   const registry = options.registryPath ? loadRegistry(options.registryPath) : undefined
   const exchanges = injectCredentials(parsed.exchanges, parsed.mode, env, registry)
 

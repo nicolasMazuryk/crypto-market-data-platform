@@ -39,6 +39,7 @@ export interface FillEvent {
   exchange: Exchange
   symbol: string
   clientOrderId: string
+  exchangeOrderId?: string
   exchangeFillId: string
   qty: number
   price: number

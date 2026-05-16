@@ -1,9 +1,15 @@
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import YAML from 'yaml'
 
 import type { CcxtMarket } from '../exchanges/types.js'
 import { makeBtcPerp, makeEthPerp } from './test-helpers/ccxtMock.js'
+import { REQUIRED_IP_ALLOW_LIST } from './provisioning/registry/schema.js'
 
-const { MockEx, ccxtMock } = vi.hoisted(() => {
+const { MockEx, ccxtMock, loggerInfo } = vi.hoisted(() => {
   class MockEx {
     static setup: Record<string, { markets?: Record<string, CcxtMarket>; error?: Error }> = {}
     static reset(): void {
@@ -34,12 +40,37 @@ const { MockEx, ccxtMock } = vi.hoisted(() => {
       },
   })
 
-  return { MockEx, ccxtMock }
+  const loggerInfo = vi.fn()
+
+  return { MockEx, ccxtMock, loggerInfo }
 })
 
 vi.mock('ccxt', () => ({ default: ccxtMock }))
+vi.mock('./core/logger.js', () => {
+  const logger = {
+    trace: vi.fn(),
+    debug: vi.fn(),
+    info: loggerInfo,
+    warn: vi.fn(),
+    error: vi.fn(),
+    fatal: vi.fn(),
+    child: vi.fn(() => logger),
+    childFor: vi.fn(() => logger),
+    childForIntent: vi.fn(() => logger),
+  }
+  return { createExecutionLogger: () => logger }
+})
 
 import { startEngine, type EngineHandle } from './index.js'
+
+const tmpPaths: string[] = []
+
+function tmpPath(name: string): string {
+  const p = join(tmpdir(), `execution-index-test-${Date.now().toString()}-${Math.random().toString(36).slice(2)}`)
+  mkdirSync(p, { recursive: true })
+  tmpPaths.push(p)
+  return join(p, name)
+}
 
 async function fetchText(url: string): Promise<{ status: number; body: string }> {
   const res = await fetch(url)
@@ -54,6 +85,11 @@ describe('execution engine slice 1 bootstrap', () => {
     await handle?.stop()
     handle = undefined
     MockEx.reset()
+    loggerInfo.mockClear()
+    for (const p of tmpPaths.splice(0)) {
+      const dir = p.endsWith('.yaml') ? p.slice(0, p.lastIndexOf('/')) : p
+      if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
+    }
   })
 
   it('boots, exposes /metrics and /healthz, and shuts down cleanly', async () => {
@@ -90,6 +126,102 @@ describe('execution engine slice 1 bootstrap', () => {
         healthPort: 0,
       })
     ).rejects.toThrow()
+  })
+
+  it('rejects live startup when an exchange is enabled but no strategy is enabled', async () => {
+    const configPath = tmpPath('execution.empty-strategies.yaml')
+    writeFileSync(
+      configPath,
+      YAML.stringify({
+        mode: 'live',
+        exchanges: [
+          {
+            exchange: 'binance',
+            enabled: true,
+            credentialsEnvPrefix: 'BINANCE',
+          },
+        ],
+        strategies: [],
+      }),
+      'utf8'
+    )
+
+    await expect(
+      startEngine({
+        configPath,
+        metricsPort: 0,
+        healthPort: 0,
+      })
+    ).rejects.toThrow(/1 exchange\(s\) enabled but 0 strategies enabled/)
+  })
+
+  it('logs identity fields in engine.started when identity is resolved', async () => {
+    MockEx.setup.binanceusdm = { markets: {} }
+
+    const configPath = tmpPath('execution.identity.yaml')
+    const registryPath = tmpPath('registry.yaml')
+    writeFileSync(
+      configPath,
+      YAML.stringify({
+        mode: 'dry_run',
+        exchanges: [
+          {
+            exchange: 'binance',
+            enabled: true,
+            credentialsEnvPrefix: 'BINANCE',
+          },
+        ],
+        strategies: [
+          {
+            id: 'strategy_3a',
+            enabled: true,
+          },
+        ],
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      registryPath,
+      YAML.stringify({
+        combinations: [
+          {
+            exchange: 'binance',
+            sub_account_id: 'sub-123',
+            sub_account_label: 'strategy_3a-binance',
+            assigned_strategy: 'strategy_3a',
+            api_key: 'registry-key',
+            api_secret: 'registry-secret',
+            api_passphrase: null,
+            ip_allow_list: [...REQUIRED_IP_ALLOW_LIST],
+            allocated_capital_usdt: 200,
+            provisioning_mode: 'full_api',
+            status: 'active',
+            created_at: '2026-05-09T12:00:00Z',
+            last_assigned_at: '2026-05-09T12:00:00Z',
+            notes: '',
+          },
+        ],
+      }),
+      'utf8'
+    )
+
+    handle = await startEngine({
+      configPath,
+      registryPath,
+      metricsPort: 0,
+      healthPort: 0,
+    })
+
+    const startedPayload = loggerInfo.mock.calls
+      .map(call => call[0] as Record<string, unknown>)
+      .find(payload => payload.event === 'engine.started')
+
+    expect(startedPayload).toMatchObject({
+      strategy: 'strategy_3a',
+      exchange: 'binance',
+      subAccountId: 'sub-123',
+      combinationId: 'strategy_3a-binance',
+    })
   })
 })
 

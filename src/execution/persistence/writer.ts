@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { sql, eq, and, gte, lte } from 'drizzle-orm'
+import { sql, eq, and, gte, lte, or, isNull } from 'drizzle-orm'
 import type { Logger } from 'pino'
 
-import type { EventBus } from '../core/types.js'
+import type { EventBus, IntentExitedEvent } from '../core/types.js'
 import type { PersistenceMetrics } from '../observability/metrics.js'
 import type { IntentState } from '../execution/types.js'
 import type { TradeIntent } from '../strategies/types.js'
@@ -164,11 +164,13 @@ export async function writeRowToDb(
       // UPDATE status + filledQty for an existing order (from ws.order events)
       const updateSet: Record<string, unknown> = {
         status: sql`${(row as { status: string }).status}::order_status`,
-        filledQty: (row as { filledQty: string }).filledQty,
+        filledQty: sql`GREATEST(orders.filled_qty::numeric, ${(row as { filledQty: string }).filledQty}::numeric)`,
       }
       if (row.exchangeOrderId) updateSet.exchangeOrderId = row.exchangeOrderId
       if (row.ackedAt) updateSet.ackedAt = toDate(row.ackedAt)
       if (row.terminalAt) updateSet.terminalAt = toDate(row.terminalAt)
+      if (row.firstFillAt) updateSet.firstFillAt = sql`COALESCE(orders.first_fill_at, ${toDate(row.firstFillAt)})`
+      if (row.workingAt) updateSet.workingAt = sql`COALESCE(orders.working_at, ${toDate(row.workingAt)})`
       await db
         .update(orders)
         .set(updateSet as Parameters<ReturnType<typeof db.update>['set']>[0])
@@ -279,10 +281,18 @@ export async function drainWalEntriesToDb(db: DrizzleDb, wal: WalHandle, logger:
 
 export function createPersistenceWriter(opts: PersistenceWriterOptions): PersistenceWriterHandle {
   const { db, wal, bus, runId, logger, metrics, batchSize = 100, flushIntervalMs = 250, identity } = opts
+
+  if (!identity && process.env.NODE_ENV !== 'test') {
+    throw new Error('PersistenceWriter requires identity — set config.identity or check registry entry')
+  }
+
   const stamp = {
     strategy: identity?.strategy ?? 'legacy',
     subAccountId: identity?.subAccountId ?? 'legacy',
   }
+
+  const pendingPnlTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const pendingPnlIntentIds = new Set<string>()
 
   const queue: QueuedWrite[] = []
   let flushTimer: ReturnType<typeof setInterval> | undefined
@@ -339,6 +349,75 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
         throw err
       }
     }
+  }
+
+  async function computeAndEnqueuePnl(intentId: string, exitEvent: IntentExitedEvent): Promise<void> {
+    const fillRows = await db
+      .select({
+        qty: fills.qty,
+        price: fills.price,
+        feeAmount: fills.feeAmount,
+        orderKind: fills.orderKind,
+      })
+      .from(fills)
+      .innerJoin(orders, eq(fills.orderId, orders.id))
+      .where(eq(orders.intentId, intentId))
+
+    const fundingRows = await db
+      .select({ fundingAmount: fundingAttributions.fundingAmount })
+      .from(fundingAttributions)
+      .where(eq(fundingAttributions.intentId, intentId))
+
+    let entryFees = 0
+    let exitFees = 0
+    for (const f of fillRows) {
+      const fee = parseFloat(f.feeAmount)
+      if (!isNaN(fee)) {
+        if (f.orderKind === 'entry' || f.orderKind === 'pre_funding') entryFees += fee
+        else exitFees += fee
+      }
+    }
+
+    let fundingTotal = 0
+    for (const f of fundingRows) {
+      const amt = parseFloat(f.fundingAmount)
+      if (!isNaN(amt)) fundingTotal += amt
+    }
+
+    const qty = exitEvent.qty
+    const entryPx = exitEvent.avgEntryPrice
+    const exitPx = exitEvent.avgExitPrice
+
+    let grossPnl: number | null = null
+    if (entryPx != null && exitPx != null && qty > 0) {
+      grossPnl = exitEvent.side === 'long' ? (exitPx - entryPx) * qty : (entryPx - exitPx) * qty
+    }
+
+    const netPnl = grossPnl != null ? grossPnl - entryFees - exitFees + fundingTotal : null
+
+    const holdDurationMs = exitEvent.entryFilledAt != null ? exitEvent.exitFilledAt - exitEvent.entryFilledAt : null
+
+    enqueue({
+      table: 'realized_pnl',
+      row: {
+        intentId,
+        exchange: exitEvent.exchange,
+        symbol: exitEvent.symbol,
+        qty: String(qty),
+        avgEntryPrice: entryPx != null ? String(entryPx) : null,
+        avgExitPrice: exitPx != null ? String(exitPx) : null,
+        grossPnl: grossPnl != null ? String(grossPnl) : null,
+        entryFees: String(entryFees),
+        exitFees: String(exitFees),
+        fundingTotal: String(fundingTotal),
+        netPnl: netPnl != null ? String(netPnl) : null,
+        holdDurationMs,
+        exitReason: exitEvent.exitReason,
+        computedAt: new Date(),
+        strategy: stamp.strategy,
+        subAccountId: stamp.subAccountId,
+      },
+    })
   }
 
   function subscribeAll(): void {
@@ -444,6 +523,10 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
           ...(order.status !== 'new' ? { ackedAt: new Date(order.submittedAt) } : {}),
           ...(TERMINAL_ORDER_STATUSES.has(order.status) ? { terminalAt: new Date(order.updatedAt) } : {}),
         }
+        if (order.filledQty > 0) {
+          row.firstFillAt = new Date(order.updatedAt)
+          row.workingAt = new Date(order.submittedAt)
+        }
         enqueue({ table: 'orders_status', row })
       })
     )
@@ -455,11 +538,28 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
       bus.on('ws.fill', event => {
         void (async () => {
           try {
-            const [orderRow] = await db
-              .select({ id: orders.id, intentId: orders.intentId, kind: orders.kind })
-              .from(orders)
-              .where(and(eq(orders.exchange, event.exchange), eq(orders.clientOrderId, event.clientOrderId)))
-              .limit(1)
+            let orderRow: { id: string; intentId: string; kind: string | null } | undefined
+
+            // Primary lookup: by clientOrderId when non-empty
+            if (event.clientOrderId) {
+              const [row] = await db
+                .select({ id: orders.id, intentId: orders.intentId, kind: orders.kind })
+                .from(orders)
+                .where(and(eq(orders.exchange, event.exchange), eq(orders.clientOrderId, event.clientOrderId)))
+                .limit(1)
+              orderRow = row
+            }
+
+            // Fallback: by exchangeOrderId for exchanges that omit clientOrderId
+            if (!orderRow && event.exchangeOrderId) {
+              const [row] = await db
+                .select({ id: orders.id, intentId: orders.intentId, kind: orders.kind })
+                .from(orders)
+                .where(and(eq(orders.exchange, event.exchange), eq(orders.exchangeOrderId, event.exchangeOrderId)))
+                .limit(1)
+              orderRow = row
+            }
+
             if (!orderRow) {
               logFillUnmatched(logger, {
                 exchange: event.exchange,
@@ -558,80 +658,44 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             if (event.entryFilledAt != null) intentUpdate.entryFilledAt = new Date(event.entryFilledAt)
             enqueue({ table: 'trade_intents', row: intentUpdate, onConflict: 'update' })
 
-            // Compute realized PnL from fills and funding.
-            const fillRows = await db
-              .select({
-                qty: fills.qty,
-                price: fills.price,
-                feeAmount: fills.feeAmount,
-                orderKind: fills.orderKind,
-              })
-              .from(fills)
-              .innerJoin(orders, eq(fills.orderId, orders.id))
-              .where(eq(orders.intentId, event.intentId))
-
+            // Query funding attributions to decide whether to defer PnL computation.
             const fundingRows = await db
               .select({ fundingAmount: fundingAttributions.fundingAmount })
               .from(fundingAttributions)
-              .where(
-                and(
-                  eq(fundingAttributions.exchange, event.exchange),
-                  eq(fundingAttributions.symbol, event.symbol),
-                  ...(event.entryFilledAt != null ? [gte(fundingAttributions.ts, new Date(event.entryFilledAt))] : []),
-                  lte(fundingAttributions.ts, new Date(event.exitFilledAt))
-                )
-              )
+              .where(eq(fundingAttributions.intentId, event.intentId))
 
-            let entryFees = 0
-            let exitFees = 0
-            for (const f of fillRows) {
-              const fee = parseFloat(f.feeAmount)
-              if (!isNaN(fee)) {
-                if (f.orderKind === 'entry' || f.orderKind === 'pre_funding') entryFees += fee
-                else exitFees += fee
+            // If no funding attributions yet, check whether a funding tick occurred in this window.
+            // If so, defer the realized_pnl write for 30s to allow the WS event to arrive.
+            if (fundingRows.length === 0 && event.entryFilledAt != null) {
+              try {
+                const [intentInfo] = await db
+                  .select({ nextFundingTs: tradeIntents.nextFundingTs })
+                  .from(tradeIntents)
+                  .where(eq(tradeIntents.id, event.intentId))
+                const WINDOW_TOLERANCE_MS = 60_000
+                if (intentInfo?.nextFundingTs) {
+                  const nextFundingMs = intentInfo.nextFundingTs.getTime()
+                  const entryMs = event.entryFilledAt
+                  const exitMs = event.exitFilledAt
+                  if (entryMs <= nextFundingMs && nextFundingMs <= exitMs + WINDOW_TOLERANCE_MS) {
+                    // Defer: a funding event likely occurred but hasn't been processed yet.
+                    pendingPnlIntentIds.add(event.intentId)
+                    const deferred = event
+                    const timer = setTimeout(() => {
+                      pendingPnlTimers.delete(deferred.intentId)
+                      pendingPnlIntentIds.delete(deferred.intentId)
+                      void computeAndEnqueuePnl(deferred.intentId, deferred)
+                    }, 30_000)
+                    pendingPnlTimers.set(event.intentId, timer)
+                    return
+                  }
+                }
+              } catch {
+                // proceed with immediate write if check fails
               }
             }
 
-            let fundingTotal = 0
-            for (const f of fundingRows) {
-              const amt = parseFloat(f.fundingAmount)
-              if (!isNaN(amt)) fundingTotal += amt
-            }
-
-            const qty = event.qty
-            const entryPx = event.avgEntryPrice
-            const exitPx = event.avgExitPrice
-
-            let grossPnl: number | null = null
-            if (entryPx != null && exitPx != null && qty > 0) {
-              grossPnl = event.side === 'long' ? (exitPx - entryPx) * qty : (entryPx - exitPx) * qty
-            }
-
-            const netPnl = grossPnl != null ? grossPnl - entryFees - exitFees + fundingTotal : null
-
-            const holdDurationMs = event.entryFilledAt != null ? event.exitFilledAt - event.entryFilledAt : null
-
-            enqueue({
-              table: 'realized_pnl',
-              row: {
-                intentId: event.intentId,
-                exchange: event.exchange,
-                symbol: event.symbol,
-                qty: String(qty),
-                avgEntryPrice: entryPx != null ? String(entryPx) : null,
-                avgExitPrice: exitPx != null ? String(exitPx) : null,
-                grossPnl: grossPnl != null ? String(grossPnl) : null,
-                entryFees: String(entryFees),
-                exitFees: String(exitFees),
-                fundingTotal: String(fundingTotal),
-                netPnl: netPnl != null ? String(netPnl) : null,
-                holdDurationMs,
-                exitReason: event.exitReason,
-                computedAt: new Date(),
-                strategy: stamp.strategy,
-                subAccountId: stamp.subAccountId,
-              },
-            })
+            await computeAndEnqueuePnl(event.intentId, event)
           } catch (err) {
             logger.warn({ err, intentId: event.intentId }, 'persistence: intent.exited handler failed')
           }
@@ -665,42 +729,129 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
     unsubs.push(
       bus.on('ws.funding_fee', event => {
         void (async () => {
-          let intentId: string | null = null
+          const fundingTime = new Date(event.fundingTime)
+          const TOLERANCE_MS = 60_000 // allow attribution for intents that exited up to 1 min after fundingTime
+
+          let candidates: Array<{ id: string }> = []
           try {
-            const fundingTime = new Date(event.fundingTime)
-            const [intentRow] = await db
+            candidates = await db
               .select({ id: tradeIntents.id })
               .from(tradeIntents)
               .where(
                 and(
                   eq(tradeIntents.exchange, event.exchange),
                   eq(tradeIntents.symbol, event.symbol),
-                  lte(tradeIntents.entryAt, fundingTime)
+                  eq(tradeIntents.subAccountId, stamp.subAccountId),
+                  lte(tradeIntents.entryFilledAt, fundingTime),
+                  or(
+                    isNull(tradeIntents.exitFilledAt),
+                    gte(tradeIntents.exitFilledAt, new Date(event.fundingTime - TOLERANCE_MS))
+                  )
                 )
               )
-              .limit(1)
-            if (intentRow) intentId = intentRow.id
           } catch {
-            // intentId stays null; funding attribution still recorded
+            // candidates stays empty
           }
-          enqueue({
-            table: 'funding_attributions',
-            row: {
-              id: randomUUID(),
-              exchange: event.exchange,
-              symbol: event.symbol,
-              positionId: null,
-              intentId,
-              fundingTime: new Date(event.fundingTime),
-              fundingRate: String(event.fundingRate),
-              fundingAmount: String(event.fundingAmount),
-              asset: event.asset,
-              ts: new Date(),
-              strategy: stamp.strategy,
-              subAccountId: stamp.subAccountId,
-            },
-            onConflict: 'ignore',
-          })
+
+          if (candidates.length === 0) {
+            logger.warn(
+              {
+                event: 'funding.unattributed',
+                exchange: event.exchange,
+                symbol: event.symbol,
+                subAccountId: stamp.subAccountId,
+                fundingTime: event.fundingTime,
+              },
+              'funding.unattributed'
+            )
+            enqueue({
+              table: 'funding_attributions',
+              row: {
+                id: randomUUID(),
+                exchange: event.exchange,
+                symbol: event.symbol,
+                positionId: null,
+                intentId: null,
+                fundingTime,
+                fundingRate: String(event.fundingRate),
+                fundingAmount: String(event.fundingAmount),
+                asset: event.asset,
+                ts: new Date(),
+                strategy: stamp.strategy,
+                subAccountId: stamp.subAccountId,
+              },
+              onConflict: 'ignore',
+            })
+          } else {
+            for (const { id: intentId } of candidates) {
+              enqueue({
+                table: 'funding_attributions',
+                row: {
+                  id: randomUUID(),
+                  exchange: event.exchange,
+                  symbol: event.symbol,
+                  positionId: null,
+                  intentId,
+                  fundingTime,
+                  fundingRate: String(event.fundingRate),
+                  fundingAmount: String(event.fundingAmount),
+                  asset: event.asset,
+                  ts: new Date(),
+                  strategy: stamp.strategy,
+                  subAccountId: stamp.subAccountId,
+                },
+                onConflict: 'ignore',
+              })
+            }
+          }
+
+          // If any deferred PnL writes were waiting for this intent's funding event, trigger them now
+          for (const intentId of [...pendingPnlIntentIds]) {
+            if (candidates.some(c => c.id === intentId)) {
+              const timer = pendingPnlTimers.get(intentId)
+              if (timer !== undefined) clearTimeout(timer)
+              pendingPnlTimers.delete(intentId)
+              pendingPnlIntentIds.delete(intentId)
+              // We need the exit event data — fetch from DB then recompute
+              // Use a minimal stand-in: computeAndEnqueuePnl with just intentId
+              // (the function reads fills/funding from DB anyway)
+              void (async () => {
+                try {
+                  const [row] = await db
+                    .select({
+                      exitReason: tradeIntents.exitReason,
+                      avgEntryPrice: tradeIntents.avgEntryPrice,
+                      avgExitPrice: tradeIntents.avgExitPrice,
+                      exitFilledAt: tradeIntents.exitFilledAt,
+                      entryFilledAt: tradeIntents.entryFilledAt,
+                      side: tradeIntents.side,
+                      amountUsd: tradeIntents.amountUsd,
+                    })
+                    .from(tradeIntents)
+                    .where(eq(tradeIntents.id, intentId))
+                  if (!row?.exitFilledAt) return
+                  // Rebuild a minimal IntentExitedEvent shape for computeAndEnqueuePnl
+                  // We only need it for metadata — fills/funding are re-queried inside
+                  const rebuiltEvent: IntentExitedEvent = {
+                    intentId,
+                    exchange: event.exchange,
+                    symbol: event.symbol,
+                    side: row.side,
+                    qty: 0, // not needed — fills are re-queried
+                    exitReason: row.exitReason ?? 'unknown',
+                    decidedAt: 0,
+                    exitFilledAt: row.exitFilledAt.getTime(),
+                    ...(row.avgEntryPrice ? { avgEntryPrice: parseFloat(row.avgEntryPrice) } : {}),
+                    ...(row.avgExitPrice ? { avgExitPrice: parseFloat(row.avgExitPrice) } : {}),
+                    ...(row.entryFilledAt ? { entryFilledAt: row.entryFilledAt.getTime() } : {}),
+                  }
+                  await computeAndEnqueuePnl(intentId, rebuiltEvent)
+                } catch {
+                  // ignore
+                }
+              })()
+            }
+          }
         })()
       })
     )
@@ -824,6 +975,9 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
 
     stop(): void {
       if (flushTimer) clearInterval(flushTimer)
+      for (const timer of pendingPnlTimers.values()) clearTimeout(timer)
+      pendingPnlTimers.clear()
+      pendingPnlIntentIds.clear()
       for (const u of unsubs) u()
     },
 

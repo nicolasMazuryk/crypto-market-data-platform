@@ -1,6 +1,7 @@
 import type { Exchange } from '../../types/exchange.js'
 import type { Order, OrderSide, OrderStatus, OrderType, Position, Balance } from '../rest/types.js'
-import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent } from './types.js'
+import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent, FillEvent } from './types.js'
+import type { FundingRateCache } from './funding-rate-cache.js'
 
 export interface BinanceOrderUpdateRaw {
   e: 'ORDER_TRADE_UPDATE'
@@ -9,6 +10,8 @@ export interface BinanceOrderUpdateRaw {
   o: {
     s: string
     c: string
+    /** Original client order id — populated on cancel/replace and some FILLED events where c is empty. */
+    C?: string
     S: string
     o: string
     q: string
@@ -20,6 +23,12 @@ export interface BinanceOrderUpdateRaw {
     z: string
     R: boolean
     T: string | number
+    l?: string
+    L?: string
+    n?: string
+    N?: string
+    m?: boolean
+    t?: number
   }
 }
 
@@ -91,7 +100,7 @@ export function mapOrderTradeUpdate(
   const order: Order = {
     exchange,
     symbol: o.s,
-    clientOrderId: o.c,
+    clientOrderId: o.c || (o.C ?? ''),
     exchangeOrderId: String(o.i),
     side: o.S.toLowerCase() as OrderSide,
     type: mapWsOrderType(o.o),
@@ -109,6 +118,31 @@ export function mapOrderTradeUpdate(
   const stopPrice = parseFloat(o.sp)
   if (stopPrice > 0) order.stopPrice = stopPrice
   return { exchange, order, seq, receivedAt }
+}
+
+export function mapFillFromOrderTradeUpdate(
+  raw: BinanceOrderUpdateRaw,
+  receivedAt: number,
+  exchange: Exchange = 'binance'
+): FillEvent | null {
+  const o = raw.o
+  const lastQty = parseFloat(o.l ?? '0')
+  if (lastQty <= 0) return null
+  if (!o.t) return null
+  return {
+    exchange,
+    symbol: o.s,
+    clientOrderId: o.c,
+    exchangeOrderId: String(o.i),
+    exchangeFillId: String(o.t),
+    qty: lastQty,
+    price: parseFloat(o.L ?? '0'),
+    feeAsset: o.N ?? 'USDT',
+    feeAmount: Math.abs(parseFloat(o.n ?? '0')),
+    isMaker: o.m ?? false,
+    ts: Number(o.T) || raw.T,
+    receivedAt,
+  }
 }
 
 export function mapAccountUpdate(
@@ -155,7 +189,8 @@ export function mapFundingFee(
   raw: BinanceAccountUpdateRaw,
   receivedAt: number,
   _seq: number,
-  exchange: Exchange = 'binance'
+  exchange: Exchange = 'binance',
+  rateCache?: FundingRateCache
 ): FundingFeeEvent | null {
   if (raw.a.m !== 'FUNDING_FEE') return null
   const firstPos = raw.a.P[0]
@@ -165,7 +200,7 @@ export function mapFundingFee(
     exchange,
     symbol: firstPos.s,
     fundingTime: raw.T,
-    fundingRate: 0,
+    fundingRate: rateCache?.get(firstPos.s, raw.T) ?? 0,
     fundingAmount: parseFloat(firstBal.bc),
     asset: firstBal.a,
     positionQty: Math.abs(parseFloat(firstPos.pa)),

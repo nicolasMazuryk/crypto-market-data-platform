@@ -6,4 +6,4 @@ strategies:
     entryOffsetSeconds: 3
     exitOffsetSeconds: 4
     amountUsd: 20
-    leverage: 5
+    leverage: 4

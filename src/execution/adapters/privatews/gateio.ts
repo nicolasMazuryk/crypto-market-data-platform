@@ -7,26 +7,27 @@ import {
   type PrivateWsClient,
 } from './private-ws-base.js'
 import { createGateioWsClient, type GateioWsClientOptions } from './gateio-client.js'
-import { parseGateioMessage } from './gateio-mapping.js'
+import { createGateioMessageParser } from './gateio-mapping.js'
 
 export interface GateioPrivateWsAdapterOptions extends PrivateWsAdapterOptions {
   wsClientFactory?: () => PrivateWsClient
 }
 
-const gateioSpec: PrivateWsAdapterSpec = {
-  exchange: 'gateio',
-  createClient: (config: ExchangeConfig & { credentials?: ExchangeCredentials }) => {
-    const clientOpts: GateioWsClientOptions = {}
-    if (config.credentials) {
-      clientOpts.credentials = { apiKey: config.credentials.apiKey, apiSecret: config.credentials.apiSecret }
-    }
-    if (config.privateWsUrl) clientOpts.wsBaseUrl = config.privateWsUrl
-    return createGateioWsClient(clientOpts)
-  },
-  parseMessage: (raw, receivedAt, seq) => parseGateioMessage(raw, receivedAt, seq),
-}
-
 export function createGateioPrivateWsAdapter(opts: GateioPrivateWsAdapterOptions): ExchangePrivateWsAdapter {
-  const spec = opts.wsClientFactory ? { ...gateioSpec, createClient: opts.wsClientFactory } : gateioSpec
+  const parseMessage = createGateioMessageParser()
+  const spec: PrivateWsAdapterSpec = {
+    exchange: 'gateio',
+    createClient: opts.wsClientFactory
+      ? opts.wsClientFactory
+      : (config: ExchangeConfig & { credentials?: ExchangeCredentials }) => {
+          const clientOpts: GateioWsClientOptions = {}
+          if (config.credentials) {
+            clientOpts.credentials = { apiKey: config.credentials.apiKey, apiSecret: config.credentials.apiSecret }
+          }
+          if (config.privateWsUrl) clientOpts.wsBaseUrl = config.privateWsUrl
+          return createGateioWsClient(clientOpts)
+        },
+    parseMessage: (raw, receivedAt, seq) => parseMessage(raw, receivedAt, seq),
+  }
   return createPrivateWsAdapterFromSpec(spec, opts)
 }

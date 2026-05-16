@@ -254,7 +254,7 @@ export const fundingAttributions = pgTable(
     subAccountId: text('sub_account_id').notNull().default('legacy'),
   },
   table => [
-    unique('uq_funding_attr').on(table.exchange, table.symbol, table.fundingTime),
+    unique('uq_funding_attr').on(table.exchange, table.symbol, table.fundingTime, table.intentId),
     index('idx_funding_attr_exchange_symbol_ts').on(table.exchange, table.symbol, table.fundingTime),
   ]
 )

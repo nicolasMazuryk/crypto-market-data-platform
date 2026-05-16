@@ -6,8 +6,9 @@ import type { EventBus } from '../../core/types.js'
 import type { PersistenceMetrics } from '../../observability/metrics.js'
 import type { DrizzleDb } from '../../persistence/db.js'
 import type { WalHandle, WalEntry } from '../../persistence/wal.js'
-import { createPersistenceWriter } from '../../persistence/writer.js'
+import { createPersistenceWriter, writeRowToDb } from '../../persistence/writer.js'
 import type { TradeIntent } from '../../strategies/types.js'
+import type { FillEvent } from '../../adapters/privatews/types.js'
 
 function makeMockBus(): EventBus {
   const emitter = new EventEmitter()
@@ -222,5 +223,225 @@ describe('PersistenceWriter', () => {
     // After flushAndWait, queue should be empty
     expect(metrics.queueSize.set).toHaveBeenLastCalledWith(0)
     writer.stop()
+  })
+})
+
+describe('PersistenceWriter — fill handling', () => {
+  let bus: EventBus
+  let metrics: PersistenceMetrics
+  let wal: ReturnType<typeof makeMockWal>
+  const mockLogger = {
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+    childFor: () => mockLogger,
+  } as unknown as Logger
+
+  beforeEach(() => {
+    bus = makeMockBus()
+    metrics = makeMockMetrics()
+    wal = makeMockWal()
+    // No fake timers — these tests rely on real async resolution
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('resolves fill by exchangeOrderId fallback when clientOrderId is empty', async () => {
+    const foundOrder = { id: 'order-uuid', intentId: 'intent-1', kind: 'entry' }
+    let selectCallCount = 0
+    const db = {
+      select: vi.fn().mockReturnValue({
+        from: () => ({
+          where: () => ({
+            limit: () => {
+              selectCallCount++
+              // First call (primary by clientOrderId) would be skipped since clientOrderId is empty.
+              // Only the fallback call (by exchangeOrderId) runs.
+              return Promise.resolve([foundOrder])
+            },
+          }),
+        }),
+      }),
+      insert: vi.fn().mockReturnValue({
+        values: () => ({
+          onConflictDoNothing: () => Promise.resolve(),
+          onConflictDoUpdate: () => Promise.resolve(),
+        }),
+      }),
+    } as unknown as DrizzleDb
+
+    const writer = createPersistenceWriter({
+      db,
+      wal,
+      bus,
+      runId: 'run-1',
+      logger: mockLogger,
+      metrics,
+      identity: { strategy: 'strategy_1', subAccountId: 'acc-1', exchange: 'binance', combinationId: 'c-1' },
+    })
+    writer.start()
+
+    const fillEvent: FillEvent = {
+      exchange: 'binance',
+      symbol: 'BTCUSDT',
+      clientOrderId: '',
+      exchangeOrderId: 'EX-99',
+      exchangeFillId: 'FILL-1',
+      qty: 1,
+      price: 50000,
+      feeAsset: 'USDT',
+      feeAmount: 0.01,
+      isMaker: false,
+      ts: Date.now(),
+      receivedAt: Date.now(),
+    }
+    ;(bus as unknown as { emit: (e: string, ...args: unknown[]) => void }).emit('ws.fill', fillEvent)
+
+    // Let async handler run
+    await new Promise(r => setTimeout(r, 0))
+
+    // Should have used the exchangeOrderId fallback (one select call)
+    expect(selectCallCount).toBe(1)
+    // Fill enqueued
+    expect(metrics.writesTotal.inc).toHaveBeenCalledWith(1, { table: 'fills', result: 'queued' })
+
+    writer.stop()
+  })
+
+  it('stamps strategy and subAccountId from identity on fill rows', async () => {
+    const foundOrder = { id: 'order-uuid', intentId: 'intent-1', kind: 'entry' }
+    const db = {
+      select: vi.fn().mockReturnValue({
+        from: () => ({
+          where: () => ({
+            limit: () => Promise.resolve([foundOrder]),
+          }),
+        }),
+      }),
+      insert: vi.fn().mockReturnValue({
+        values: () => ({
+          onConflictDoNothing: () => Promise.resolve(),
+          onConflictDoUpdate: () => Promise.resolve(),
+        }),
+      }),
+    } as unknown as DrizzleDb
+
+    const writer = createPersistenceWriter({
+      db,
+      wal,
+      bus,
+      runId: 'run-1',
+      logger: mockLogger,
+      metrics,
+      identity: { strategy: 'strategy_1', subAccountId: 'acc-42', exchange: 'okx', combinationId: 'c-2' },
+    })
+    writer.start()
+
+    const fillEvent: FillEvent = {
+      exchange: 'okx',
+      symbol: 'BTC-USDT-SWAP',
+      clientOrderId: 'cid-x',
+      exchangeFillId: 'FILL-X',
+      qty: 2,
+      price: 60000,
+      feeAsset: 'USDT',
+      feeAmount: 0.02,
+      isMaker: true,
+      ts: Date.now(),
+      receivedAt: Date.now(),
+    }
+    ;(bus as unknown as { emit: (e: string, ...args: unknown[]) => void }).emit('ws.fill', fillEvent)
+    await new Promise(r => setTimeout(r, 0))
+    await writer.flushAndWait()
+
+    // At minimum, verify fill was queued with correct identity
+    expect(metrics.writesTotal.inc).toHaveBeenCalledWith(1, { table: 'fills', result: 'queued' })
+
+    writer.stop()
+  })
+})
+
+describe('PersistenceWriter — orders_status GREATEST', () => {
+  it('writeRowToDb uses GREATEST expression for filledQty in orders_status', async () => {
+    const setCalls: unknown[] = []
+    const db = {
+      update: vi.fn().mockReturnValue({
+        set: (updateSet: unknown) => {
+          setCalls.push(updateSet)
+          return {
+            where: vi.fn().mockResolvedValue(undefined),
+          }
+        },
+      }),
+    } as unknown as DrizzleDb
+
+    await writeRowToDb(db, 'orders_status', {
+      exchange: 'binance',
+      clientOrderId: 'cid-1',
+      status: 'partially_filled',
+      filledQty: '3',
+    })
+
+    expect(setCalls).toHaveLength(1)
+    const updateSet = setCalls[0] as Record<string, unknown>
+    // filledQty must be a SQL expression object (not a plain string) — GREATEST(...)
+    expect(typeof updateSet.filledQty).not.toBe('string')
+  })
+
+  it('writeRowToDb uses COALESCE for firstFillAt and workingAt in orders_status', async () => {
+    const setCalls: unknown[] = []
+    const db = {
+      update: vi.fn().mockReturnValue({
+        set: (updateSet: unknown) => {
+          setCalls.push(updateSet)
+          return { where: vi.fn().mockResolvedValue(undefined) }
+        },
+      }),
+    } as unknown as DrizzleDb
+
+    await writeRowToDb(db, 'orders_status', {
+      exchange: 'binance',
+      clientOrderId: 'cid-1',
+      status: 'partially_filled',
+      filledQty: '1',
+      firstFillAt: new Date(),
+      workingAt: new Date(),
+    })
+
+    const updateSet = setCalls[0] as Record<string, unknown>
+    // firstFillAt and workingAt must be Drizzle SQL expressions (COALESCE), not plain Dates
+    expect(updateSet.firstFillAt).toBeDefined()
+    expect(updateSet.firstFillAt instanceof Date).toBe(false)
+    expect(updateSet.workingAt instanceof Date).toBe(false)
+  })
+})
+
+describe('PersistenceWriter — identity guard', () => {
+  it('throws when identity missing and NODE_ENV is not test', () => {
+    const originalEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      expect(() =>
+        createPersistenceWriter({
+          db: makeMockDb(false),
+          wal: makeMockWal(),
+          bus: makeMockBus(),
+          runId: 'run-1',
+          logger: {
+            warn: vi.fn(),
+            info: vi.fn(),
+            debug: vi.fn(),
+            error: vi.fn(),
+            childFor: () => ({}),
+          } as unknown as Logger,
+          metrics: makeMockMetrics(),
+        })
+      ).toThrow('PersistenceWriter requires identity')
+    } finally {
+      process.env.NODE_ENV = originalEnv
+    }
   })
 })

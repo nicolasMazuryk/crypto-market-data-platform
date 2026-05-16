@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { describe, it, expect, afterEach } from 'vitest'
 import YAML from 'yaml'
 
-import { loadEngineConfig } from './loader.js'
+import { loadEngineConfig, validateForLiveStart } from './loader.js'
+import { parseEngineConfig } from './schema.js'
 import type { ExchangeConfig, ExchangeCredentials } from './types.js'
 import { REQUIRED_IP_ALLOW_LIST } from '../provisioning/registry/schema.js'
 
@@ -165,5 +166,23 @@ describe('loadEngineConfig — registry credential resolution', () => {
     const config = loadEngineConfig({ configPath, basePath: '', env })
     const bybit = config.exchanges.find(e => e.exchange === 'bybit') as ExchangeWithCredentials | undefined
     expect(bybit?.credentials?.apiKey).toBe('env-key')
+  })
+})
+
+describe('validateForLiveStart', () => {
+  it('throws in live mode when an exchange is enabled but no strategy is enabled', () => {
+    const config = parseEngineConfig({
+      mode: 'live',
+      exchanges: [
+        {
+          exchange: 'bybit',
+          enabled: true,
+          credentialsEnvPrefix: 'BYBIT',
+        },
+      ],
+      strategies: [],
+    })
+
+    expect(() => validateForLiveStart(config)).toThrow(/1 exchange\(s\) enabled but 0 strategies enabled/)
   })
 })

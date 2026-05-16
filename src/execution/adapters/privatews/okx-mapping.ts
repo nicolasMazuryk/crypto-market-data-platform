@@ -1,6 +1,6 @@
 import type { Exchange } from '../../types/exchange.js'
 import type { OrderSide, OrderStatus, Position, Balance, Order } from '../rest/types.js'
-import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent } from './types.js'
+import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent, FillEvent } from './types.js'
 import type { ParsedWsMessage } from './private-ws-base.js'
 
 interface OkxOrderData {
@@ -14,6 +14,12 @@ interface OkxOrderData {
   avgPx?: string
   state: string
   fillSz?: string
+  accFillSz?: string
+  tradeId?: string
+  fillPx?: string
+  fillFee?: string
+  fillFeeCcy?: string
+  execType?: string
   reduceOnly?: boolean
   cTime?: string
   uTime?: string
@@ -43,6 +49,7 @@ interface OkxAccountBill {
   ts?: string
   sz?: string
   ccy?: string
+  rate?: string
 }
 
 interface OkxAccountData {
@@ -87,6 +94,7 @@ export function parseOkxMessage(
 
   if (channel === 'orders') {
     const orders: OrderEvent[] = []
+    const fills: FillEvent[] = []
     for (const item of data) {
       const d = item as OkxOrderData
       const order: Order = {
@@ -97,7 +105,7 @@ export function parseOkxMessage(
         side: mapOkxSide(d.side),
         type: d.ordType === 'limit' ? 'limit' : 'market',
         qty: parseFloat(d.sz),
-        filledQty: parseFloat(d.fillSz ?? '0'),
+        filledQty: parseFloat(d.accFillSz ?? d.fillSz ?? '0'),
         reduceOnly: d.reduceOnly === true,
         status: mapOkxOrderStatus(d.state),
         submittedAt: d.cTime ? parseInt(d.cTime, 10) : receivedAt,
@@ -108,8 +116,26 @@ export function parseOkxMessage(
       const avgPx = parseFloat(d.avgPx ?? '0')
       if (avgPx > 0) order.avgFillPrice = avgPx
       orders.push({ exchange, order, seq, receivedAt })
+
+      const fillSz = parseFloat(d.fillSz ?? '0')
+      if (fillSz > 0 && d.tradeId) {
+        fills.push({
+          exchange,
+          symbol: d.instId,
+          clientOrderId: d.clOrdId ?? '',
+          exchangeOrderId: d.ordId,
+          exchangeFillId: d.tradeId,
+          qty: fillSz,
+          price: parseFloat(d.fillPx ?? '0'),
+          feeAsset: d.fillFeeCcy ?? 'USDT',
+          feeAmount: Math.abs(parseFloat(d.fillFee ?? '0')),
+          isMaker: d.execType === 'M',
+          ts: d.uTime ? parseInt(d.uTime, 10) : receivedAt,
+          receivedAt,
+        })
+      }
     }
-    return { orders, eventType: 'orders' }
+    return { orders, ...(fills.length > 0 ? { fills } : {}), eventType: 'orders' }
   }
 
   if (channel === 'positions') {
@@ -164,7 +190,7 @@ export function parseOkxMessage(
           exchange,
           symbol: bill.instId,
           fundingTime,
-          fundingRate: 0,
+          fundingRate: bill.rate ? parseFloat(bill.rate) : 0,
           fundingAmount,
           asset: bill.ccy ?? 'USDT',
           positionQty,

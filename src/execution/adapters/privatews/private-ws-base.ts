@@ -125,7 +125,11 @@ export function createPrivateWsAdapterFromSpec<TRaw>(
     const prevState = state
     const now = clock.now()
 
-    // Track downtime window.
+    // Track downtime window. Capture disconnectedAt when leaving 'connected' for any state,
+    // including 'connecting' (covers connect() retry path that skips 'reconnecting').
+    if (prevState === 'connected' && s !== 'connected' && disconnectedAt === null) {
+      disconnectedAt = now
+    }
     if ((s === 'disconnected' || s === 'reconnecting') && disconnectedAt === null) {
       disconnectedAt = now
     }

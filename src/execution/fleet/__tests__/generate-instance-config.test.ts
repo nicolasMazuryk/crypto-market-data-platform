@@ -6,6 +6,8 @@ import YAML from 'yaml'
 
 import { generateInstanceConfig } from '../generate-instance-config.js'
 import type { FleetEntry } from '../schema.js'
+import { deepMerge } from '../../config/loader.js'
+import { parseEngineConfig } from '../../config/schema.js'
 
 const BASE_CONFIG = {
   exchanges: [
@@ -147,6 +149,36 @@ describe('generateInstanceConfig', () => {
     expect(strategies).toHaveLength(1)
     expect(strategies[0]?.id).toBe('strategy_3a')
     expect(strategies[0]?.enabled).toBe(true)
+  })
+
+  it('renders YAML that re-parses as an engine config after base merge', () => {
+    const entry = { ...FLEET_ENTRY, strategy_config: strategyConfigPath }
+    const result = generateInstanceConfig({ fleetEntry: entry, basePath })
+    const override = (YAML.parse(result.content) ?? {}) as Record<string, unknown>
+
+    const parsed = parseEngineConfig(deepMerge(BASE_CONFIG, override))
+
+    expect(parsed.mode).toBe('live')
+    expect(parsed.exchanges).toHaveLength(1)
+    expect(parsed.strategies.some(s => s.id === 'strategy_3a' && s.enabled)).toBe(true)
+  })
+
+  it('throws when strategy_config contains an empty strategies array', () => {
+    writeFileSync(strategyConfigPath, YAML.stringify({ strategies: [] }), 'utf8')
+    const entry = { ...FLEET_ENTRY, strategy_config: strategyConfigPath }
+
+    expect(() => generateInstanceConfig({ fleetEntry: entry, basePath })).toThrow(
+      /produced no strategies for strategy_3a-bybit/
+    )
+  })
+
+  it('throws when strategy_config omits strategies', () => {
+    writeFileSync(strategyConfigPath, YAML.stringify({ risk: {} }), 'utf8')
+    const entry = { ...FLEET_ENTRY, strategy_config: strategyConfigPath }
+
+    expect(() => generateInstanceConfig({ fleetEntry: entry, basePath })).toThrow(
+      /produced no strategies for strategy_3a-bybit/
+    )
   })
 
   it('throws when exchange not found in base config', () => {

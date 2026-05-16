@@ -1,6 +1,6 @@
 import type { Exchange } from '../../types/exchange.js'
 import type { OrderSide, OrderStatus, Position, Balance, Order } from '../rest/types.js'
-import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent } from './types.js'
+import type { OrderEvent, PositionEvent, BalanceEvent, FundingFeeEvent, FillEvent } from './types.js'
 import type { ParsedWsMessage } from './private-ws-base.js'
 
 interface BybitOrderData {
@@ -51,6 +51,11 @@ interface BybitExecutionData {
   execQty?: string
   feeRate?: string
   feeCurrency?: string
+  orderId?: string
+  orderLinkId?: string
+  execId?: string
+  execPrice?: string
+  isMaker?: boolean
 }
 
 interface BybitUpdate {
@@ -142,30 +147,52 @@ export function parseBybitMessage(
 
   if (topic === 'execution') {
     const fundingFees: FundingFeeEvent[] = []
+    const fills: FillEvent[] = []
     const items = Array.isArray(data) ? data : [data]
     for (const item of items) {
       const d = item as BybitExecutionData
       if (process.env.BYBIT_EXEC_DEBUG === '1') {
         process.stdout.write(JSON.stringify({ _debug: 'bybit.execution', symbol: d.symbol, execType: d.execType, execTime: d.execTime, execFee: d.execFee }) + '\n')
       }
-      if (d.execType !== 'Funding') continue
-      const fundingTime = d.execTime ? parseInt(d.execTime, 10) : receivedAt
-      const fundingRate = d.feeRate ? parseFloat(d.feeRate) : 0
-      const fundingAmount = d.execFee ? parseFloat(d.execFee) : 0
-      const positionQty = d.execQty ? Math.abs(parseFloat(d.execQty)) : 0
-      fundingFees.push({
-        exchange,
-        symbol: d.symbol,
-        fundingTime,
-        fundingRate,
-        fundingAmount,
-        asset: d.feeCurrency ?? 'USDT',
-        positionQty,
-        receivedAt,
-      })
+      if (d.execType === 'Funding') {
+        const fundingTime = d.execTime ? parseInt(d.execTime, 10) : receivedAt
+        const fundingRate = d.feeRate ? parseFloat(d.feeRate) : 0
+        const fundingAmount = d.execFee ? parseFloat(d.execFee) : 0
+        const positionQty = d.execQty ? Math.abs(parseFloat(d.execQty)) : 0
+        fundingFees.push({
+          exchange,
+          symbol: d.symbol,
+          fundingTime,
+          fundingRate,
+          fundingAmount,
+          asset: d.feeCurrency ?? 'USDT',
+          positionQty,
+          receivedAt,
+        })
+      } else if (
+        ['Trade', 'AdlTrade', 'BustTrade', 'Settle'].includes(d.execType) &&
+        d.execId
+      ) {
+        fills.push({
+          exchange,
+          symbol: d.symbol,
+          clientOrderId: d.orderLinkId ?? '',
+          exchangeOrderId: d.orderId ?? '',
+          exchangeFillId: d.execId,
+          qty: parseFloat(d.execQty ?? '0'),
+          price: parseFloat(d.execPrice ?? '0'),
+          feeAsset: d.feeCurrency ?? 'USDT',
+          feeAmount: Math.abs(parseFloat(d.execFee ?? '0')),
+          isMaker: d.isMaker ?? false,
+          ts: d.execTime ? parseInt(d.execTime, 10) : receivedAt,
+          receivedAt,
+        })
+      }
     }
-    if (fundingFees.length > 0) return { fundingFees, eventType: 'execution.funding' }
-    return { eventType: 'execution' }
+    const result: ParsedWsMessage = { eventType: fundingFees.length > 0 ? 'execution.funding' : 'execution' }
+    if (fundingFees.length > 0) result.fundingFees = fundingFees
+    if (fills.length > 0) result.fills = fills
+    return result
   }
 
   if (topic === 'wallet') {

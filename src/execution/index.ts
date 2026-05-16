@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util'
 import { randomUUID } from 'node:crypto'
 
-import { loadEngineConfig } from './config/loader.js'
+import { loadEngineConfig, validateForLiveStart } from './config/loader.js'
 import { createEventBus } from './core/bus.js'
 import { createClock } from './core/clock.js'
 import { createIds } from './core/ids.js'
@@ -134,6 +134,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     filter && filter.length > 0 ? rawConfig.exchanges.filter(e => filter.includes(e.exchange)) : rawConfig.exchanges
 
   const config: EngineConfig = { ...rawConfig, exchanges: filteredExchanges }
+  validateForLiveStart(config)
 
   const bus = createEventBus()
   const clock = createClock()
@@ -273,6 +274,12 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
   let persistenceWriter: PersistenceWriterHandle | undefined
   let runId: string | undefined
   let recoveredInitialState: ExecutionManagerInitialState | undefined
+
+  if (config.mode === 'live' && !config.identity) {
+    throw new Error(
+      'config.identity is required in live mode — check registry entry for this exchange/strategy combination'
+    )
+  }
 
   const postgresUrl = config.persistence.postgresUrl
   if (postgresUrl) {
@@ -655,6 +662,10 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
       gitSha: config.gitSha,
       enabledExchanges,
       enabledStrategies,
+      strategy: config.identity?.strategy,
+      exchange: config.identity?.exchange,
+      subAccountId: config.identity?.subAccountId,
+      combinationId: config.identity?.combinationId,
       metricsPort: server.port,
       healthPort: healthServer.port,
       markets: Object.keys(marketCounts).length > 0 ? marketCounts : undefined,

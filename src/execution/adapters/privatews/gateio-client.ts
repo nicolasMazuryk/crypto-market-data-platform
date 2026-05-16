@@ -44,12 +44,36 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
           const maxTime = Math.max(...newEntries.map(e => e.time))
           lastFundingTime = maxTime
 
+          // Fetch funding rate for each unique contract so parseGateioMessage can stamp it.
+          const contractsToFetch = [...new Set(newEntries.map(e => e.contract).filter((c): c is string => Boolean(c)))]
+          const rateByContract: Record<string, number> = {}
+          for (const contract of contractsToFetch) {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+              const rates = await restClient.listFuturesFundingRateHistory({
+                settle: 'usdt',
+                contract,
+                limit: 5,
+              }) as Array<{ contract?: string; t?: number; r?: string }>
+              if (rates.length > 0) {
+                const r = parseFloat(rates[0]?.r ?? '0')
+                if (!isNaN(r)) rateByContract[contract] = r
+              }
+            } catch {
+              // ignore — rate stays 0 for this contract
+            }
+          }
+
           // Emit as a synthetic futures.account_book WS message so parseGateioMessage handles it.
           // REST API uses 'type' field; WS (and parseGateioMessage) expects 'change_type'.
           const message = {
             channel: 'futures.account_book',
             event: 'update',
-            result: newEntries.map((e: Record<string, unknown>) => ({ ...e, change_type: e['type'] })),
+            result: newEntries.map((e: Record<string, unknown>) => ({
+              ...e,
+              change_type: e['type'],
+              funding_rate: rateByContract[String(e['contract'] ?? '')] ?? 0,
+            })),
           }
           if (process.env.GATEIO_ACCTBOOK_DEBUG === '1') {
             process.stdout.write(JSON.stringify({ _debug: 'gateio.acctbook_poll', count: newEntries.length, entries: newEntries }) + '\n')
