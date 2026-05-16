@@ -9,6 +9,16 @@ exchanges:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
       buckets: []
+strategies:
+  - id: strategy_2
+    enabled: true
+    negativeFundingThresholdPercent: -0.1
+    entryOffsetSeconds: 3
+    retracementPct: 1
+    deadlineSeconds: 900
+    slMultiplier: 2
+    amountUsd: 20
+    leverage: 4
 observability:
   metricsPort: 9512
   healthPort: 9612

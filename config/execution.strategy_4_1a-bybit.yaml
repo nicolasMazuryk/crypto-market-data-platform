@@ -9,6 +9,19 @@ exchanges:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
       buckets: []
+strategies:
+  - id: strategy_4_1a
+    enabled: true
+    negativeFundingThresholdPercent: -0.1
+    entryOffsetSeconds: 3
+    ladderCount: 5
+    ladderTopMult: 0.7
+    ladderBottomMult: 1.8
+    takeProfitPct: 0.003
+    deadlineSeconds: 1800
+    slMultiplier: 2.5
+    amountUsd: 20
+    leverage: 4
 observability:
   metricsPort: 9508
   healthPort: 9608

@@ -9,6 +9,18 @@ exchanges:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
       buckets: []
+strategies:
+  - id: strategy_6
+    enabled: true
+    mainSide: long
+    funding_threshold: 0.1
+    entryOffsetSeconds: 3
+    fundingFeeTimeoutSeconds: 10
+    tpMultiplier: 1.5
+    slMultiplier: 1.5
+    deadlineSeconds: 1800
+    mainAmountUsd: 20
+    leverage: 5
 observability:
   metricsPort: 9514
   healthPort: 9614
