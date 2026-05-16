@@ -108,13 +108,6 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
   }
 
   async createApiKey(subAccountId: string, ipAllowList: string[]): Promise<CreatedApiKey> {
-    // Enable spot + futures products on first provision. margin_trade is NOT a valid value
-    // for this endpoint — margin must be enabled manually in the Bitget UI.
-    await this.client.privateUserPostV2UserModifyVirtualSubaccount({
-      subAccountUid: subAccountId,
-      status: 'normal',
-      permList: ['read', 'spot_trade', 'contract_trade'],
-    })
     const response = (await this.client.privateUserPostV2UserCreateVirtualSubaccountApikey({
       subAccountUid: subAccountId,
       label: `prov-${String(Date.now())}`,
