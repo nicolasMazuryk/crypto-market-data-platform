@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "skills": {
+    "assets": {
+      "source": "Kucoin/kucoin-skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/assets/SKILL.md",
+      "computedHash": "b8bce2066860a3e550ae5a1d369b70d2c308e1b4828587d3578c345b5bb5d074"
+    },
+    "convert": {
+      "source": "Kucoin/kucoin-skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/convert/SKILL.md",
+      "computedHash": "0bc50c95d4601d0649f8b7f12770082541879a3e459611e0f085c1390c06b609"
+    },
+    "futures-trading": {
+      "source": "Kucoin/kucoin-skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/futures-trading/SKILL.md",
+      "computedHash": "e0aaad864bf54f79a4b24e8b070c2cbb10e89e480c35f1029035ba6c3d4e8ffa"
+    },
+    "margin-trading": {
+      "source": "Kucoin/kucoin-skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/margin-trading/SKILL.md",
+      "computedHash": "1d19586b7246b2bb64ff2d9891e3e598e8215629b85c05589366f264a91fa28b"
+    },
+    "okx-cex-auth": {
+      "source": "okx/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-cex-auth/SKILL.md",
+      "computedHash": "5efdcddda00ab97fb77b5d971b01756943d3220645602b4fac6f13fe7ac787ce"
+    },
+    "okx-cex-market": {
+      "source": "okx/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-cex-market/SKILL.md",
+      "computedHash": "64ca03ceeca1a106697a3177692c8baf1f2c93ec72d5bfbb2f1e27a1db5119c0"
+    },
+    "okx-cex-portfolio": {
+      "source": "okx/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-cex-portfolio/SKILL.md",
+      "computedHash": "2edf0e6ef727f19273ebef3b473679eaa3279696550fd23da78780e8076de196"
+    },
+    "okx-cex-skill-mp": {
+      "source": "okx/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-cex-skill-mp/SKILL.md",
+      "computedHash": "dfe5ebf67dec87d966df0749c5095bd13b6badf52b2fc48e65fbbc6b31ef2e23"
+    },
+    "okx-cex-trade": {
+      "source": "okx/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/okx-cex-trade/SKILL.md",
+      "computedHash": "0a8bd28858cf28fbc9df5c789c599d6c4377b29ecc73abce589c20c96c981bea"
+    },
+    "spot": {
+      "source": "Kucoin/kucoin-skills-hub",
+      "sourceType": "github",
+      "skillPath": "skills/spot/SKILL.md",
+      "computedHash": "3bcf93e4c8d1954afaf96cbeac29f078c0eafeeca2d585e7631a9e816387dc56"
+    }
+  }
+}

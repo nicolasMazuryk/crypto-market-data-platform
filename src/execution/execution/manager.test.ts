@@ -24,7 +24,7 @@ function makeIntent(overrides: Partial<TradeIntent> = {}): TradeIntent {
     exchangeSymbol: 'BTCUSDT',
     side: 'long',
     amountUsd: 20,
-    leverage: 4,
+    leverage: 5,
     volume: 0,
     fundingRate: -0.006,
     fundingRatePercent: -0.6,

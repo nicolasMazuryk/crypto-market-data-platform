@@ -33,7 +33,7 @@ function makeIntent(symbol: string, strategy: 'strategy_1', ts: number): TradeIn
     exchangeSymbol: symbol,
     side: 'long',
     amountUsd: 20,
-    leverage: 4,
+    leverage: 5,
     volume: 0,
     fundingRate: -0.006,
     fundingRatePercent: -0.6,
@@ -85,7 +85,7 @@ describe('StrategyEvaluator', () => {
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
       amountUsd: 20,
-      leverage: 4,
+      leverage: 5,
     }
 
     const decided: TradeIntent[] = []
@@ -141,7 +141,7 @@ describe('StrategyEvaluator', () => {
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
       amountUsd: 20,
-      leverage: 4,
+      leverage: 5,
     }
 
     const evaluator = createStrategyEvaluator({
@@ -193,7 +193,7 @@ describe('StrategyEvaluator', () => {
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
       amountUsd: 20,
-      leverage: 4,
+      leverage: 5,
     }
 
     const decided: TradeIntent[] = []
@@ -240,7 +240,7 @@ describe('StrategyEvaluator', () => {
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
       amountUsd: 20,
-      leverage: 4,
+      leverage: 5,
     }
 
     const evaluator = createStrategyEvaluator({
@@ -309,7 +309,7 @@ describe('StrategyEvaluator', () => {
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
       amountUsd: 20,
-      leverage: 4,
+      leverage: 5,
     }
 
     const evaluator = createStrategyEvaluator({

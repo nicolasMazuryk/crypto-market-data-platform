@@ -42,7 +42,7 @@ function makeConfig(entryOffsetSeconds = 10): Map<StrategyId, StrategyConfig> {
         entryOffsetSeconds,
         exitOffsetSeconds: 2,
         amountUsd: 20,
-        leverage: 4,
+        leverage: 5,
       } satisfies StrategyConfig,
     ],
   ])
@@ -442,7 +442,7 @@ describe('FundingEventScheduler with fundingTimeOverrideMs', () => {
           entryOffsetSeconds: 10,
           exitOffsetSeconds: 2,
           amountUsd: 20,
-          leverage: 4,
+          leverage: 5,
         } satisfies StrategyConfig,
       ],
     ])

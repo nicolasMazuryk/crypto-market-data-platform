@@ -9,4 +9,4 @@ strategies:
     tpVariantBOffsetPercent: 0.3
     deadlineSeconds: 1800
     amountUsd: 20
-    leverage: 4
+    leverage: 5

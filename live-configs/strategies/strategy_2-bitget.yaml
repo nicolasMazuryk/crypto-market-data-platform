@@ -8,4 +8,4 @@ strategies:
     deadlineSeconds: 900
     slMultiplier: 2.0
     amountUsd: 20
-    leverage: 4
+    leverage: 5

@@ -48,7 +48,7 @@ const BASE_CONFIG: Strategy4_3aConfig = {
   takeProfitPct: 0.3,
   deadlineSeconds: 60,
   amountUsd: 20,
-  leverage: 4,
+  leverage: 5,
 }
 
 function makeCtx(overrides: Partial<EvalContext> = {}): EvalContext {

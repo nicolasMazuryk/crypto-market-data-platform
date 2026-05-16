@@ -49,7 +49,7 @@ const BASE_CONFIG_3A: Strategy3aConfig = {
   tpVariantBOffsetPercent: 0.4,
   deadlineSeconds: 300,
   amountUsd: 20,
-  leverage: 4,
+  leverage: 5,
 }
 
 const BASE_CONFIG_3B: Strategy3bConfig = {
@@ -63,7 +63,7 @@ const BASE_CONFIG_3B: Strategy3bConfig = {
   tpVariantBOffsetPercent: 0.4,
   deadlineSeconds: 300,
   amountUsd: 20,
-  leverage: 4,
+  leverage: 5,
 }
 
 function makeCtx(overrides: Partial<EvalContext> = {}): EvalContext {

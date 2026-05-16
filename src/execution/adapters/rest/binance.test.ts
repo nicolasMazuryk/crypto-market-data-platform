@@ -34,7 +34,7 @@ function makePositionRaw(overrides: Partial<CcxtPosition> = {}): CcxtPosition {
     contracts: 2,
     entryPrice: 50000,
     markPrice: 51000,
-    leverage: 4,
+    leverage: 5,
     unrealizedPnl: 2000,
     liquidationPrice: 40000,
     timestamp: 1000,
@@ -316,8 +316,8 @@ describe('BinanceRestAdapter', () => {
   it('setLeverage called once for repeated createOrders with same leverage', async () => {
     const { adapter, mockCcxt } = makeAdapter()
 
-    await adapter.createOrder({ ...defaultOrderReq, leverage: 4 })
-    await adapter.createOrder({ ...defaultOrderReq, leverage: 4 })
+    await adapter.createOrder({ ...defaultOrderReq, leverage: 5 })
+    await adapter.createOrder({ ...defaultOrderReq, leverage: 5 })
 
     expect(mockCcxt.setLeverage).toHaveBeenCalledTimes(1)
   })
@@ -325,7 +325,7 @@ describe('BinanceRestAdapter', () => {
   it('setLeverage called again when leverage changes', async () => {
     const { adapter, mockCcxt } = makeAdapter()
 
-    await adapter.createOrder({ ...defaultOrderReq, leverage: 4 })
+    await adapter.createOrder({ ...defaultOrderReq, leverage: 5 })
     await adapter.createOrder({ ...defaultOrderReq, leverage: 10 })
 
     expect(mockCcxt.setLeverage).toHaveBeenCalledTimes(2)

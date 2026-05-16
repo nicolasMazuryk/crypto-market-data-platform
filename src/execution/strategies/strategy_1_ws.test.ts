@@ -45,7 +45,7 @@ const BASE_CONFIG: Strategy1WsConfig = {
   entryOffsetSeconds: 10,
   fundingFeeTimeoutSeconds: 8,
   amountUsd: 20,
-  leverage: 4,
+  leverage: 5,
 }
 
 function makeCtx(overrides: Partial<EvalContext> = {}): EvalContext {

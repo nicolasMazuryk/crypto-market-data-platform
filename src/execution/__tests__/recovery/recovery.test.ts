@@ -210,7 +210,7 @@ describe('runRecovery', () => {
           symbol: 'ETHUSDT',
           qty: 0.1,
           side: 'long',
-          leverage: 4,
+          leverage: 5,
           updatedAt: Date.now(),
         },
       ]),

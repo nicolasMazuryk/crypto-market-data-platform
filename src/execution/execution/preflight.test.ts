@@ -18,7 +18,7 @@ function makeIntent(overrides: Partial<TradeIntent> = {}): TradeIntent {
     exchangeSymbol: 'BTCUSDT',
     side: 'long',
     amountUsd: 20,
-    leverage: 4,
+    leverage: 5,
     volume: 0,
     fundingRate: -0.006,
     fundingRatePercent: -0.6,
@@ -119,7 +119,7 @@ describe('preflight', () => {
   it('rejects when leverage exceeds market max', () => {
     const deps = makeDeps()
     vi.mocked(deps.markets.get).mockReturnValue(makeMarket({ maxLeverage: 2 }))
-    const result = preflight(makeIntent({ leverage: 4 }), 50000, deps)
+    const result = preflight(makeIntent({ leverage: 5 }), 50000, deps)
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.code).toBe('leverage_exceeded')
   })
@@ -138,7 +138,7 @@ describe('preflight', () => {
     vi.mocked(deps.state.balances).mockReturnValue([
       { exchange: 'binance', asset: 'USDT', available: 1, locked: 0, updatedAt: 0 },
     ])
-    const result = preflight(makeIntent({ amountUsd: 20, leverage: 4 }), 50000, deps)
+    const result = preflight(makeIntent({ amountUsd: 20, leverage: 5 }), 50000, deps)
     // margin = 20/4 = 5, available = 1
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.code).toBe('insufficient_balance')

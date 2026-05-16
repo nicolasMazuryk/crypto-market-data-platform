@@ -10,51 +10,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
 ```yaml
 # ── ORDER_LIFECYCLE ─────────────────────────────────────────────────────────
 
-- id: strategy_1.bybit.ORDER_LIFECYCLE.ENTRY_PLACED
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Scheduler fires at T_f - 5s. Preflight passes (balance, market, qty, kill-switch).
-    setLeverage succeeds. A market BUY order is placed via REST createOrder.
-    The order.placed event is logged with kind=entry, side=buy, orderType=market,
-    reduceOnly=false, and a valid exchangeOrderId echoed back by Bybit.
-  preconditions:
-    - fundingRatePercent < -negativeFundingThresholdPercent (default -0.4%)
-    - available USDT >= amountUsd / leverage
-    - kill switch inactive
-    - market status = trading
-  trigger_sequence:
-    - scheduler: evaluator fires at entryAt = nextFundingTimestamp - entryOffsetSeconds * 1000
-    - manager.submit() called with strategy_1 TradeIntent
-  expected_behavior:
-    - intent.created logged (status=decided)
-    - intent.submitted logged (entryKind=market)
-    - order.placed logged (kind=entry, side=buy, orderType=market, reduceOnly=false)
-    - status transitions decided → submitted → acked → working
-    - entry clientOrderId registered in byEntryOrderId map
-  observability_contract:
-    - log: 'intent.created' {strategy: "strategy_1", exchange: "bybit"}
-    - log: 'intent.submitted' {entryKind: "market"}
-    - log: 'order.placed' {kind: "entry", side: "buy", orderType: "market", reduceOnly: false}
-    - db:orders row {kind: "entry", orderType: "market", reduceOnly: false, status: "pending"}
-    - db:intentLifecycleEvents transitions decided→submitted→acked→working
-  code_refs:
-    - src/execution/execution/manager.ts:1984 (submit)
-    - src/execution/execution/manager.ts:2081 (transition submitted)
-    - src/execution/execution/manager.ts:2655 (market entry path)
-    - src/execution/execution/manager.ts:2697 (createOrder call)
-    - src/execution/execution/manager.ts:2755 (order.placed emit/log)
-    - src/execution/adapters/privatews/bybit-mapping.ts:78 (parseBybitMessage entry point)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (Execution Flow step 1)
-  status: ⏳
-  natural_occurrence: routine
-  notes: >
-    Bybit REST createOrder returns exchangeOrderId in the ACK. The clientOrderId
-    (orderLinkId in Bybit terminology) is registered in byEntryOrderId before the REST
-    call so that any concurrent WS fill event is not lost. No dash-stripping applied
-    on Bybit — clientOrderId is used as-is.
-
 - id: strategy_1.bybit.ORDER_LIFECYCLE.ENTRY_FILLED_WS
   category: ORDER_LIFECYCLE
   severity: critical
@@ -259,37 +214,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
 
 # ── TIMING ──────────────────────────────────────────────────────────────────
 
-- id: strategy_1.bybit.TIMING.ENTRY_AT_CORRECT_OFFSET
-  category: TIMING
-  severity: high
-  description: >
-    Entry order is placed at approximately T_f - 5s (configurable entryOffsetSeconds).
-    The scheduler fires the evaluator, strategy_1.evaluate() returns the intent with
-    entryAt = nextFundingTimestamp - 5000. The elapsed time from entryAt to order.placed
-    should be within a few hundred milliseconds (REST latency + leverage set).
-  preconditions:
-    - scheduler running and synced to exchange clock
-    - strategy condition met
-  trigger_sequence:
-    - scheduler: fires evaluate() at entryAt
-  expected_behavior:
-    - intent.submitted timestamp within ≤1000ms after entryAt
-    - order.placed timestamp within ≤2000ms after entryAt (REST call included)
-  observability_contract:
-    - log: 'intent.submitted' timestamp ≤ entryAt + 1000ms
-    - log: 'order.placed' {kind: "entry"} timestamp ≤ entryAt + 2000ms
-    - db:orders {kind: "entry"} createdAt within [entryAt, entryAt + 2000ms]
-  code_refs:
-    - src/execution/strategies/strategy_1.ts:51 (entryAt = nextFundingTimestamp - entryOffsetSeconds*1000)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (Entry offset T_entry = T_funding − 5s)
-  status: ⏳
-  natural_occurrence: routine
-  notes: >
-    Bybit exchange clock skew (skewMs) is accounted for in monitor.ts but NOT in
-    scheduler timing — if clock skew is significant, entry may land slightly before or
-    after the target. Monitor's skewMs affects exit timer only.
-
 - id: strategy_1.bybit.TIMING.TIMED_EXIT_FIRES_AT_CORRECT_OFFSET
   category: TIMING
   severity: critical
@@ -434,42 +358,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
     stored as fundingTime directly from parseInt). Distinct from order fills which use
     execType='Trade'. For strategy_1 the funding fee event is informational only;
     the timed exit is what drives closure.
-
-- id: strategy_1.bybit.WEBSOCKET.CLOSE_FILL_REST_POLL_FALLBACK
-  category: WEBSOCKET
-  severity: high
-  description: >
-    After timed exit is triggered, the market close order is placed. The WS fill event
-    for the close order does not arrive (e.g. WS gap). The REST poll fallback
-    (pollForCloseFill, 20 polls × 1s) detects the fill (order status=filled) or
-    position flat (position qty=0), and transitions intent to exited.
-  preconditions:
-    - intent in status=exiting
-    - close order placed (kind=timed)
-    - WS fill event not received
-  trigger_sequence:
-    - pollForCloseFill loop: getOrder returns status=filled OR position qty=0
-  expected_behavior:
-    - intent.exited.complete logged (REST poll path emits this — WS path does not)
-    - status transitions exiting → exited
-    - sweepReduceOnlyOrders called
-  observability_contract:
-    - log: 'intent.exited.complete' {exitReason: "timed"} (only on poll path)
-    - db:orders {kind: "timed", status: "filled"}
-    - db:intentLifecycleEvents exiting→exited
-  code_refs:
-    - src/execution/execution/manager.ts:1235 (pollForCloseFill)
-    - src/execution/execution/manager.ts:1251 (fill detected via getOrder)
-    - src/execution/execution/manager.ts:1255 (transition exited + intent.exited.complete log)
-    - src/execution/execution/manager.ts:1669 (pollForCloseFill started after close placed)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (no poll fallback in spec)
-  status: ⏳
-  natural_occurrence: occasional
-  notes: >
-    The 'intent.exited.complete' log is the distinguishing signal for the REST poll path.
-    If the WS path succeeds, this log does NOT appear (WS handler at line 1914 does not
-    emit it). So its presence indicates the poll fallback ran.
 
 # ── RECOVERY ────────────────────────────────────────────────────────────────
 

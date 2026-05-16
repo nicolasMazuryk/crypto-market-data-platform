@@ -71,7 +71,7 @@ function makeMockIntent(): TradeIntent {
     exchangeSymbol: 'BTCUSDT',
     side: 'short',
     amountUsd: 20,
-    leverage: 4,
+    leverage: 5,
     volume: 0.0005,
     fundingRate: -0.0005,
     fundingRatePercent: -0.05,

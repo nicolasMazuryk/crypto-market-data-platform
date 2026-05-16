@@ -190,7 +190,7 @@ export function runRestAdapterConformance(fixtures: RestConformanceFixtures): vo
             contracts: 2,
             entryPrice: 50000,
             markPrice: 51000,
-            leverage: 4,
+            leverage: 5,
             unrealizedPnl: 2000,
             liquidationPrice: 40000,
             timestamp: 1000,
@@ -226,7 +226,7 @@ export function runRestAdapterConformance(fixtures: RestConformanceFixtures): vo
         side: 'buy' as const,
         type: 'market' as const,
         qty: 0.001,
-        leverage: 4,
+        leverage: 5,
       }
       await adapter.createOrder(req)
       await adapter.createOrder(req)

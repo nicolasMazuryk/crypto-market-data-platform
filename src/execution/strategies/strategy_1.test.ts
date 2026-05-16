@@ -45,7 +45,7 @@ const BASE_CONFIG: Strategy1Config = {
   entryOffsetSeconds: 10,
   exitOffsetSeconds: 2,
   amountUsd: 20,
-  leverage: 4,
+  leverage: 5,
 }
 
 function makeCtx(overrides: Partial<EvalContext> = {}): EvalContext {

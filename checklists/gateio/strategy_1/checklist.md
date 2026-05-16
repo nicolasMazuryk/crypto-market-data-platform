@@ -136,42 +136,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
   notes: >
     GateIO WS is generally reliable for market orders. REST poll is safety net.
 
-- id: strategy_1.gateio.ORDER_LIFECYCLE.CLOSE_MARKET_PLACED
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Monitor fires at exitAt = T_f + exitOffsetSeconds*1000. handleMonitorExit places
-    a market SELL reduce-only close via REST createOrder. GateIO close order is a
-    market sell with reduceOnly=true. Close fill detected via WS or pollForCloseFill.
-  preconditions:
-    - intent in status=monitoring
-    - timed monitor fires at exitAt
-  trigger_sequence:
-    - setTimeout fires at exitAt - skewMs
-    - monitor.settle('timed') → handleMonitorExit
-    - REST createOrder {side: "sell", type: "market", reduceOnly: true}
-  expected_behavior:
-    - monitor.settle {reason: "timed"} logged
-    - intent.exiting.start {reason: "timed"} logged
-    - order.placed {kind: "timed", side: "sell", orderType: "market", reduceOnly: true}
-    - close fill detected → intent.exited.complete or db transition exiting→exited
-  observability_contract:
-    - log: 'monitor.settle' {reason: "timed"}
-    - log: 'intent.exiting.start' {reason: "timed"}
-    - log: 'order.placed' {kind: "timed", side: "sell", orderType: "market", reduceOnly: true}
-    - db:intentLifecycleEvents monitoring→exiting→exited
-  code_refs:
-    - src/execution/execution/monitor.ts:97 (timed arm — setTimeout at exitAt - skewMs)
-    - src/execution/execution/monitor.ts:47 (monitor.exit_requested log)
-    - src/execution/execution/monitor.ts:93 (monitor.settle log)
-    - src/execution/execution/manager.ts:1479 (intent.exiting.start)
-    - src/execution/execution/manager.ts:1585 (closeKind='timed')
-    - src/execution/execution/manager.ts:1660 (order.placed close)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (Exit at T_f + exitOffsetSeconds)
-  status: ⏳
-  natural_occurrence: routine
-
 # ── TIMING ──────────────────────────────────────────────────────────────────
 
 - id: strategy_1.gateio.TIMING.ENTRY_AT_CORRECT_OFFSET
@@ -195,32 +159,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
     - src/execution/strategies/strategy_1.ts:47 (entryAt = nextFundingTimestamp - entryOffsetSeconds*1000)
   spec_refs:
     - docs-strategy/strategies/strategy_1.md (Entry offset T_entry = T_funding − 5s)
-  status: ⏳
-  natural_occurrence: routine
-
-- id: strategy_1.gateio.TIMING.TIMED_EXIT_AT_CORRECT_OFFSET
-  category: TIMING
-  severity: critical
-  description: >
-    Monitor fires at exitAt = T_f + exitOffsetSeconds*1000 (default +7s after T_f).
-    The close market sell is placed promptly after the timer fires. skewMs is subtracted
-    from the delay to account for timer imprecision.
-  preconditions:
-    - intent in status=monitoring
-  trigger_sequence:
-    - setTimeout fires at exitAt - skewMs
-    - monitor.settle('timed')
-  expected_behavior:
-    - monitor fires within a few ms of exitAt
-    - close order placed within 500ms of exitAt
-  observability_contract:
-    - log: 'monitor.settle' {reason: "timed"} timestamp ≈ exitAt
-    - log: 'order.placed' {kind: "timed"} timestamp ≈ exitAt + <REST latency>
-  code_refs:
-    - src/execution/execution/monitor.ts:97 (setTimeout at exitAt - skewMs)
-    - src/execution/execution/monitor.ts:99 (settleTime = exitAt, reason = 'timed')
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (Exit at T_f + 7s)
   status: ⏳
   natural_occurrence: routine
 

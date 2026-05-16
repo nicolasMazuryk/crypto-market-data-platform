@@ -48,7 +48,7 @@ const BASE_CONFIG: Strategy2Config = {
   slMultiplier: 1.0,
   fundingFeeTimeoutSeconds: 8,
   amountUsd: 20,
-  leverage: 4,
+  leverage: 5,
 }
 
 function makeCtx(overrides: Partial<EvalContext> = {}): EvalContext {
