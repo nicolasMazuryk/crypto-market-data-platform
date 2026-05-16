@@ -1,0 +1,82 @@
+---
+- name: Read provisioned volume device from Terraform
+  ansible.builtin.command:
+    cmd: terraform output -raw volume_linux_device
+    chdir: "{{ playbook_dir }}/../../terraform"
+  delegate_to: localhost
+  become: false
+  register: terraform_volume_device
+  changed_when: false
+  run_once: true
+
+- name: Install base packages
+  ansible.builtin.apt:
+    name:
+      - acl
+      - ca-certificates
+      - curl
+      - git
+      - gnupg
+      - rsync
+      - ufw
+    state: present
+    update_cache: true
+
+- name: Set server timezone
+  ansible.builtin.command:
+    cmd: timedatectl set-timezone {{ timezone }}
+  changed_when: false
+
+- name: Ensure application directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default(item.owner | default('root')) }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ data_dir }}"
+      mode: "0755"
+    - path: "{{ app_dir }}"
+      owner: nicolas
+      group: nicolas
+      mode: "0755"
+    - path: "{{ repo_dir }}"
+      owner: nicolas
+      group: nicolas
+      mode: "0755"
+
+- name: Read UUID for persistent data volume
+  ansible.builtin.command:
+    cmd: blkid -o value -s UUID {{ terraform_volume_device.stdout }}
+  register: persistent_volume_uuid
+  changed_when: false
+
+- name: Persist data volume mount in fstab
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^UUID={{ persistent_volume_uuid.stdout }}\s+{{ data_dir }}\s+ext4\s+defaults,nofail\s+0\s+2$'
+    line: "UUID={{ persistent_volume_uuid.stdout }} {{ data_dir }} ext4 defaults,nofail 0 2"
+
+- name: Mount persistent data volume
+  ansible.builtin.command:
+    cmd: mount {{ data_dir }}
+  changed_when: false
+  failed_when: false
+
+- name: Ensure mounted data subdirectories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ clickhouse_data_dir }}"
+      owner: "101"
+      group: "101"
+      mode: "0755"
+    - path: "{{ data_dir }}/downloads"
+      owner: nicolas
+      group: nicolas
+      mode: "0775"

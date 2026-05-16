@@ -1,0 +1,16 @@
+---
+- name: Allow SSH through UFW
+  ansible.builtin.command:
+    cmd: ufw allow 22/tcp
+  changed_when: false
+
+- name: Enable UFW
+  ansible.builtin.command:
+    cmd: ufw --force enable
+  changed_when: false
+
+- name: Ensure unattended upgrades are enabled
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    enabled: true
+    state: started
