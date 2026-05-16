@@ -45,6 +45,7 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
           lastFundingTime = maxTime
 
           // Fetch funding rate for each unique contract so parseGateioMessage can stamp it.
+          // Augment entries with funding rate fetched from REST history (listFuturesFundingRateHistory).
           const contractsToFetch = [...new Set(newEntries.map(e => e.contract).filter((c): c is string => Boolean(c)))]
           const rateByContract: Record<string, number> = {}
           for (const contract of contractsToFetch) {

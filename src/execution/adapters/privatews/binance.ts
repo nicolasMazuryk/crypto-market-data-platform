@@ -51,6 +51,7 @@ export function createBinancePrivateWsAdapter(opts: BinancePrivateWsAdapterOptio
   const parseBinanceMessage = (raw: BinanceRaw, receivedAt: number, seq: number) => {
     // Binance USDM user data stream may push MARK_PRICE_UPDATE events for held positions.
     // Cache the funding rate for stamping on subsequent FUNDING_FEE ACCOUNT_UPDATE events.
+    // These carry 'r' (funding rate) and 'T' (next funding time); cache them for stamping.
     if (raw.e === 'MARK_PRICE_UPDATE') {
       const symbol = String(raw['s'] ?? '')
       const rate = parseFloat(String(raw['r'] ?? '0'))
