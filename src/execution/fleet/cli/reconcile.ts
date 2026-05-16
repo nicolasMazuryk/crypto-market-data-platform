@@ -18,16 +18,16 @@ import type { FleetEntry } from '../schema.js'
 import type { RegistryEntry } from '../../provisioning/registry/schema.js'
 
 const args = process.argv.slice(2)
-const fleetPath = args[args.indexOf('--fleet') + 1] ?? 'live-configs/fleet.yaml'
-const registryPath = args[args.indexOf('--registry') + 1] ?? 'live-configs/registry.yaml'
-const basePath = args[args.indexOf('--base') + 1] ?? 'config/execution.base.yaml'
-const configOutDir = args[args.indexOf('--config-dir') + 1] ?? 'config'
-const sshTarget = args[args.indexOf('--ssh') + 1] ?? 'nicolas@203.0.113.10'
-const sshKeyPath = args[args.indexOf('--ssh-key') + 1] ?? '~/.ssh/nicolas'
-const concurrency = parseInt(args[args.indexOf('--concurrency') + 1] ?? '5', 10)
+const fleetPath = args.includes('--fleet') ? args[args.indexOf('--fleet') + 1] : 'live-configs/fleet.yaml'
+const registryPath = args.includes('--registry') ? args[args.indexOf('--registry') + 1] : 'live-configs/registry.yaml'
+const basePath = args.includes('--base') ? args[args.indexOf('--base') + 1] : 'config/execution.base.yaml'
+const configOutDir = args.includes('--config-dir') ? args[args.indexOf('--config-dir') + 1] : 'config'
+const sshTarget = args.includes('--ssh') ? args[args.indexOf('--ssh') + 1] : 'nicolas@203.0.113.10'
+const sshKeyPath = args.includes('--ssh-key') ? args[args.indexOf('--ssh-key') + 1] : '~/.ssh/nicolas'
+const concurrency = parseInt(args.includes('--concurrency') ? args[args.indexOf('--concurrency') + 1] : '5', 10)
 const dryRun = args.includes('--dry-run') || args.includes('-n')
 
-const onlyArg = args[args.indexOf('--only') + 1]
+const onlyArg = args.includes('--only') ? args[args.indexOf('--only') + 1] : undefined
 const onlyFilter = onlyArg ? new Set(onlyArg.split(',').map(s => s.trim())) : null
 
 async function confirm(question: string): Promise<boolean> {

@@ -28,7 +28,7 @@
 
 - name: "Write per-instance secrets env file for {{ combo_entry.id }}"
   ansible.builtin.template:
-    src: instance.env.j2
+    src: "{{ playbook_dir }}/../roles/execution-engine/templates/instance.env.j2"
     dest: "{{ execution_secrets_dir }}/{{ combo_entry.id }}.env"
     owner: root
     group: root

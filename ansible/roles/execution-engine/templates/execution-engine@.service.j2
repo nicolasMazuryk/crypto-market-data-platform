@@ -15,8 +15,10 @@ ExecStart=/usr/bin/docker run \
   --network host \
   --env-file {{ app_dir }}/.env \
   --env-file {{ execution_secrets_dir }}/%i.env \
+  --env NODE_OPTIONS=--dns-result-order=ipv4first \
   --volume {{ execution_wal_dir }}:/data/execution \
   --volume {{ execution_config_dir }}:/opt/arbinet/config:ro \
+  --volume /etc/gai.conf:/etc/gai.conf:ro \
   {{ app_name }}:{{ execution_image_tag }} \
   node dist/execution/index.js \
   --config /opt/arbinet/config/execution.%i.yaml
