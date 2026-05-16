@@ -12,7 +12,6 @@ import type {
 function sanitizeBitgetSubName(label: string): string {
   const letters = label.replace(/[^a-zA-Z]/g, '')
   if (letters.length >= 8) return letters.slice(0, 8)
-  // Pad to 8 with 'x' if label is too short after stripping non-letters
   return letters.padEnd(8, 'x')
 }
 
@@ -140,7 +139,7 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
   }
 
   private requiredApiKeyPerms(): string[] {
-    return ['spot_trade', 'margin_trade', 'contract_trade', 'transfer']
+    return ['spot_trade', 'contract_trade', 'transfer']
   }
 
   async ensureApiKeyPermissions(
@@ -180,6 +179,7 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
       passphrase,
       label: `prov-${String(Date.now())}`.slice(0, 20),
       ipList: ipAllowList,
+      permType: 'read_and_write',
       permList: requiredPerms,
     })
   }
@@ -235,7 +235,6 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
   async renameSubAccount(subAccountId: string, _newLabel: string): Promise<void> {
     await this.client.privateUserPostV2UserModifyVirtualSubaccount({
       subAccountUid: subAccountId,
-      permList: ['read', 'spot_trade', 'contract_trade'],
       status: 'normal',
     })
   }
@@ -245,8 +244,8 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
     const isMasterToSub = direction === 'master_to_sub'
 
     const response = (await this.client.privateSpotPostV2SpotWalletSubaccountTransfer({
-      fromType: isMasterToSub ? 'p2p' : 'usdt_futures',
-      toType: isMasterToSub ? 'usdt_futures' : 'p2p',
+      fromType: isMasterToSub ? 'spot' : 'usdt_futures',
+      toType: isMasterToSub ? 'usdt_futures' : 'spot',
       fromUserId: isMasterToSub ? masterUid : subAccountId,
       toUserId: isMasterToSub ? subAccountId : masterUid,
       amount: String(amountUsdt),
