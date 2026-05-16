@@ -94,9 +94,9 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/node": "^22.10.2",
-    "@types/ws": "^8.5.14",
     "@types/pg": "^8.11.10",
     "@types/unzipper": "^0.10.11",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.18.1",
     "@typescript-eslint/parser": "^8.18.1",
     "@vitest/coverage-v8": "^2.1.9",
@@ -121,7 +121,6 @@
     "@opentelemetry/sdk-trace-node": "^2.7.0",
     "@types/proper-lockfile": "^4.1.4",
     "binance": "^3.5.8",
-    "ws": "^8.18.2",
     "bitget-api": "^3.1.7",
     "bybit-api": "^4.6.2",
     "ccxt": "^4.5.36",
@@ -137,6 +136,7 @@
     "pino": "^10.3.0",
     "proper-lockfile": "^4.1.2",
     "unzipper": "^0.12.3",
+    "ws": "^8.18.2",
     "xlsx": "^0.18.5",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"

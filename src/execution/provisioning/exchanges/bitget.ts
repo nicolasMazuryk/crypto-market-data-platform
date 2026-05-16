@@ -51,14 +51,12 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
 
   private readonly client: BitgetClient
   private readonly subName: string
-  private readonly label: string
   private readonly apiPassphrase: string
   private masterUid: string | undefined
 
   constructor(creds: MasterCredentials, label: string) {
     this.client = buildBitgetClient(creds)
     this.subName = sanitizeBitgetSubName(label)
-    this.label = label
     this.apiPassphrase = creds.apiPassphrase ?? ''
   }
 
