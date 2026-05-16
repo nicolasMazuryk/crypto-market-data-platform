@@ -27,31 +27,47 @@ DRY_RUN="${DRY_RUN:-}"
 # Hardcoded active pairs (confirmed from registry.yaml at script write-time).
 # Update when assignments change.
 PAIRS=(
-  # "binance strategy_1"
-  # "binance strategy_2"
-  "binance strategy_3a"
-  # "binance strategy_4_1a"
-  # "bybit strategy_1"
-  # "bybit strategy_2"
-  # "bybit strategy_4_1a"
-  # "okx strategy_1"
-  # "okx strategy_2"
-  # "okx strategy_4_1a"
-  # "gateio strategy_1"
-  # "gateio strategy_2"
-  "gateio strategy_3a"
-  # "gateio strategy_4_1a"
-  # "kucoin strategy_1"
-  # "kucoin strategy_2"
-  # "bitget strategy_1"
-  # "bitget strategy_2"
-  # "bitget strategy_4_1a"
-)
+    "binance strategy_1"
+    "binance strategy_1_ws"
+    "binance strategy_2"
+    "binance strategy_4_1a"
+    "binance strategy_6"
+    "bybit strategy_1"
+    "bybit strategy_1_ws"
+    "bybit strategy_2"
+    "bybit strategy_4_1a"
+    "bybit strategy_6"
+    "okx strategy_1"
+    "okx strategy_1_ws"
+    "okx strategy_2"
+    "okx strategy_4_1a"
+    "okx strategy_6"
+    "bitget strategy_1"
+    "bitget strategy_1_ws"
+    "bitget strategy_2"
+    "bitget strategy_4_1a"
+    "bitget strategy_6"
+    "gateio strategy_1"
+    "gateio strategy_1_ws"
+    "gateio strategy_2"
+    "gateio strategy_4_1a"
+    "gateio strategy_6"
+    "kucoin strategy_1"
+    "kucoin strategy_1_ws"
+    "kucoin strategy_2"
+    "kucoin strategy_4_1a"
+    "kucoin strategy_6"
+  )
 
 # Override pair list from file if provided.
 if [[ -n "${PAIRS_FILE:-}" ]]; then
   [[ -f "$PAIRS_FILE" ]] || { echo "PAIRS_FILE not found: $PAIRS_FILE" >&2; exit 2; }
-  mapfile -t PAIRS <"$PAIRS_FILE"
+  # bash 3.2 compat (macOS default): use while-read instead of mapfile
+  PAIRS=()
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" ]] && continue
+    PAIRS+=("$line")
+  done < "$PAIRS_FILE"
 fi
 
 [[ -f "$PROMPT_FILE" ]] || { echo "missing $PROMPT_FILE" >&2; exit 2; }

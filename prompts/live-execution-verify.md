@@ -13,6 +13,24 @@ Read **only** these files, in order:
 1. `checklists/<exchange>/<strategy>/checklist.md` — items to verify.
 2. `src/execution/docs/verification-data-sources.md` — category → data-source contract.
 3. `live-configs/registry.yaml` — find row where `exchange == $1 AND assigned_strategy == $2 AND status == active`. Extract `sub_account_id`, `api_key`, `api_secret`, `api_passphrase`, `allocated_capital_usdt`. Derive `combo_id` as `<exchange>-<strategy>-<sub_account_short>` where `sub_account_short` is the first segment of `sub_account_id` before `@` (or the full id if no `@`). Resolve the exact unit name by running `ssh -i ~/.ssh/nicolas nicolas@203.0.113.10 'systemctl list-units "execution-engine@*" --no-legend'` and matching the combo_id substring. If multiple active rows, pick highest `last_assigned_at`. If none active, **abort with a 1-line "no active combo" report** and stop — no cursor update, no file edits.
+
+   **Credential bootstrap (mandatory before any exchange-skill or CLI call):**
+   Run immediately after registry lookup:
+   ```bash
+   source <(bash scripts/exchange-subkey.sh <exchange> <strategy>)
+   ```
+   This exports the correct env vars for the exchange's skill/CLI into the current shell — safe for parallel runs because each `claude -p` subprocess has an isolated env.
+   Do **not** use `--profile`, `binance-cli profile create`, `okx config init`, or any command that writes to a shared config file — those will race when multiple agents run simultaneously.
+
+   Env vars set per exchange:
+   | Exchange | Vars exported |
+   |---|---|
+   | `gateio` | `GATE_API_KEY`, `GATE_API_SECRET` |
+   | `binance` | `BINANCE_API_KEY`, `BINANCE_SECRET_KEY` |
+   | `bybit` | `BYBIT_API_KEY`, `BYBIT_API_SECRET` |
+   | `okx` | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE` |
+   | `bitget` | `BITGET_API_KEY`, `BITGET_API_SECRET`, `BITGET_API_PASSPHRASE` |
+   | `kucoin` | `KUCOIN_API_KEY`, `KUCOIN_API_SECRET`, `KUCOIN_API_PASSPHRASE` |
 4. `checklists/_cursors.yaml` — read `last_checked_utc` for key `<exchange>__<strategy>`. If absent or file missing, use `last_assigned_at` from the matched registry row as the window start (the moment the combo became active — everything since activation is in scope). Set `window = [last_checked_utc, now_utc]`. Do **not** assume a fixed funding interval; the prompt runs ad hoc and the window can span hours, days, or longer.
 5. Strategy spec **only when needed** for a specific checklist item: `docs-strategy/strategies/strategy_<N>.md`.
 6. Strategy code **only when needed**: `src/execution/strategies/strategy_<N>.ts`, `src/execution/execution/manager.ts`, `src/execution/execution/monitor.ts`. The checklist's `code_refs` point to exact lines — read only those.
@@ -117,9 +135,17 @@ ssh -i ~/.ssh/nicolas nicolas@203.0.113.10 \
 
 ### Exchange-side cross-check (skill)
 
-Use the exchange-specific skill **only** when intents exist in the window. Pass the API credentials from the registry row. Fetch orders, fills, and funding fees for the symbols that traded — do **not** fetch full account history.
+Use the exchange-specific skill **only** when intents exist in the window. Credentials are already in env (loaded in Step 1 bootstrap) — skills and CLIs pick them up automatically. Fetch orders, fills, and funding fees for the symbols that traded — do **not** fetch full account history.
 
-Skills: `binance` (Binance), `gate-exchange-futures` (GateIO), `okx` (OKX), `bitget` (Bitget), `kucoin` (KuCoin), `bybit` (Bybit).
+Skill / CLI mapping (credentials flow from env vars set in Step 1):
+| Exchange | Skill / CLI | Notes |
+|---|---|---|
+| `gateio` | `gate-exchange-futures` skill | Reads `GATE_API_KEY`/`GATE_API_SECRET`; also accepts `gate-cli --api-key`/`--api-secret` flags |
+| `binance` | `binance` skill → `binance-cli` | Reads `BINANCE_API_KEY`/`BINANCE_SECRET_KEY` |
+| `bybit` | `bybit-trading` skill | Reads `BYBIT_API_KEY`/`BYBIT_API_SECRET` (curl-based, no CLI binary) |
+| `okx` | `okx-cex-trade` + `okx-cex-portfolio` skills → `okx` CLI | Reads `OKX_API_KEY`/`OKX_SECRET_KEY`/`OKX_PASSPHRASE` |
+| `bitget` | No installed skill — **skip exchange-skill step, note in report** | No CLI available |
+| `kucoin` | No installed skill — **skip exchange-skill step, note in report** | No CLI available |
 
 Skip the exchange-skill call when Postgres + journald already disagree — the divergence is the issue; record it in the report and move on.
 

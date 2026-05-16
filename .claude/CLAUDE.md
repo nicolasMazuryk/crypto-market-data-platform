@@ -305,6 +305,50 @@ Configured in `src/config/index.ts`:
 - Active markets: fetch from CCXT, then merge with delisted markets.
 - Delisted markets: load from JSON and reconcile symbols with active data.
 
+## Sub-Account API Access (all exchanges)
+
+All sub-account API keys live in `live-configs/registry.yaml` (one row per exchange+strategy combo).
+
+**Universal loader** — works for all 6 exchanges, parallel-safe:
+
+```bash
+source <(bash scripts/exchange-subkey.sh <exchange> <strategy>)
+```
+
+Examples:
+```bash
+source <(bash scripts/exchange-subkey.sh gateio strategy_1)
+gate-cli cex futures account get              # uses GATE_API_KEY/GATE_API_SECRET
+
+source <(bash scripts/exchange-subkey.sh binance strategy_2)
+binance-cli futures-usds account info         # uses BINANCE_API_KEY/BINANCE_SECRET_KEY
+
+source <(bash scripts/exchange-subkey.sh okx strategy_1_ws)
+okx account balance                           # uses OKX_API_KEY/OKX_SECRET_KEY/OKX_PASSPHRASE
+
+source <(bash scripts/exchange-subkey.sh bybit strategy_1)
+# BYBIT_API_KEY/BYBIT_API_SECRET set for bybit-trading skill (curl-based)
+```
+
+Env vars emitted per exchange:
+| Exchange | Vars |
+|---|---|
+| `gateio` | `GATE_API_KEY`, `GATE_API_SECRET` |
+| `binance` | `BINANCE_API_KEY`, `BINANCE_SECRET_KEY` |
+| `bybit` | `BYBIT_API_KEY`, `BYBIT_API_SECRET` |
+| `okx` | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE` |
+| `bitget` | `BITGET_API_KEY`, `BITGET_API_SECRET`, `BITGET_API_PASSPHRASE` |
+| `kucoin` | `KUCOIN_API_KEY`, `KUCOIN_API_SECRET`, `KUCOIN_API_PASSPHRASE` |
+
+**Parallel safety**: each `claude -p` subprocess spawned by `run-live-verification.sh` has its own env — env vars set in one agent never leak to another. Safe to run 30 agents simultaneously.
+
+**Never use `--profile`, `binance-cli profile create`, or `okx config init` in parallel contexts** — those write to shared config files and will race. Always use env vars.
+
+**Never hardcode keys. Always source from registry via the script.**
+
+Available strategies per exchange (active — verify in registry.yaml):
+- `strategy_1`, `strategy_1_ws`, `strategy_2`, `strategy_4_1a`, `strategy_6`
+
 ## Development Notes
 
 Progress tracked in GitHub Issues. See `RUNBOOK.md` for operational procedures.
