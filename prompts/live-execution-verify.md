@@ -138,14 +138,14 @@ ssh -i ~/.ssh/nicolas nicolas@203.0.113.10 \
 Use the exchange-specific skill **only** when intents exist in the window. Credentials are already in env (loaded in Step 1 bootstrap) — skills and CLIs pick them up automatically. Fetch orders, fills, and funding fees for the symbols that traded — do **not** fetch full account history.
 
 Skill / CLI mapping (credentials flow from env vars set in Step 1):
-| Exchange | Skill / CLI | Notes |
+| Exchange | Skill / CLI | Auth mechanism |
 |---|---|---|
-| `gateio` | `gate-exchange-futures` skill | Reads `GATE_API_KEY`/`GATE_API_SECRET`; also accepts `gate-cli --api-key`/`--api-secret` flags |
-| `binance` | `binance` skill → `binance-cli` | Reads `BINANCE_API_KEY`/`BINANCE_SECRET_KEY` |
-| `bybit` | `bybit-trading` skill | Reads `BYBIT_API_KEY`/`BYBIT_API_SECRET` (curl-based, no CLI binary) |
-| `okx` | `okx-cex-trade` + `okx-cex-portfolio` skills → `okx` CLI | Reads `OKX_API_KEY`/`OKX_SECRET_KEY`/`OKX_PASSPHRASE` |
-| `bitget` | No installed skill — **skip exchange-skill step, note in report** | No CLI available |
-| `kucoin` | No installed skill — **skip exchange-skill step, note in report** | No CLI available |
+| `gateio` | `gate-exchange-futures` skill → `gate-cli` | `GATE_API_KEY`/`GATE_API_SECRET` env; also `--api-key`/`--api-secret` flags |
+| `binance` | `binance` skill → `binance-cli` | `BINANCE_API_KEY`/`BINANCE_SECRET_KEY` env |
+| `bybit` | `bybit-trading` skill | `BYBIT_API_KEY`/`BYBIT_API_SECRET` env (curl/HMAC, no CLI) |
+| `okx` | `okx-cex-trade` + `okx-cex-portfolio` skills → `okx` CLI | `OKX_API_KEY`/`OKX_SECRET_KEY`/`OKX_PASSPHRASE` env |
+| `bitget` | `bitget-skill` (global at `~/.claude/skills/bitget-skill/`) → `bgc` CLI | `BITGET_API_KEY`/`BITGET_SECRET_KEY`/`BITGET_PASSPHRASE` env |
+| `kucoin` | `futures-trading` skill (at `.claude/skills/futures-trading/`) | Direct curl with HMAC — no CLI, no env vars. Agent uses `api_key`/`api_secret`/`api_passphrase` values already extracted from registry in Step 1 to build signed requests |
 
 Skip the exchange-skill call when Postgres + journald already disagree — the divergence is the issue; record it in the report and move on.
 

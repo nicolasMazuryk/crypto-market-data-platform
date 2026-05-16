@@ -91,9 +91,10 @@ case "$EXCHANGE" in
     printf 'export OKX_PASSPHRASE=%s\n' "$api_passphrase"
     ;;
   bitget)
+    # bgc CLI reads: BITGET_API_KEY, BITGET_SECRET_KEY, BITGET_PASSPHRASE
     printf 'export BITGET_API_KEY=%s\n' "$api_key"
-    printf 'export BITGET_API_SECRET=%s\n' "$api_secret"
-    printf 'export BITGET_API_PASSPHRASE=%s\n' "$api_passphrase"
+    printf 'export BITGET_SECRET_KEY=%s\n' "$api_secret"
+    printf 'export BITGET_PASSPHRASE=%s\n' "$api_passphrase"
     ;;
   gateio)
     printf 'export GATE_API_KEY=%s\n' "$api_key"

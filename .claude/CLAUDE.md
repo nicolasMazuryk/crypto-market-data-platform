@@ -337,8 +337,8 @@ Env vars emitted per exchange:
 | `binance` | `BINANCE_API_KEY`, `BINANCE_SECRET_KEY` |
 | `bybit` | `BYBIT_API_KEY`, `BYBIT_API_SECRET` |
 | `okx` | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE` |
-| `bitget` | `BITGET_API_KEY`, `BITGET_API_SECRET`, `BITGET_API_PASSPHRASE` |
-| `kucoin` | `KUCOIN_API_KEY`, `KUCOIN_API_SECRET`, `KUCOIN_API_PASSPHRASE` |
+| `bitget` | `BITGET_API_KEY`, `BITGET_SECRET_KEY`, `BITGET_PASSPHRASE` |
+| `kucoin` | `KUCOIN_API_KEY`, `KUCOIN_API_SECRET`, `KUCOIN_API_PASSPHRASE` (agent uses values directly from registry for curl HMAC signing; no CLI) |
 
 **Parallel safety**: each `claude -p` subprocess spawned by `run-live-verification.sh` has its own env — env vars set in one agent never leak to another. Safe to run 30 agents simultaneously.
 
