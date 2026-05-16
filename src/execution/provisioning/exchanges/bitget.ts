@@ -179,7 +179,6 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
       passphrase,
       label: `prov-${String(Date.now())}`.slice(0, 20),
       ipList: ipAllowList,
-      permType: 'read_and_write',
       permList: requiredPerms,
     })
   }
@@ -236,6 +235,7 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
     await this.client.privateUserPostV2UserModifyVirtualSubaccount({
       subAccountUid: subAccountId,
       status: 'normal',
+      permList: ['read', 'spot_trade', 'contract_trade', 'margin_trade'],
     })
   }
 
