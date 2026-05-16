@@ -1,0 +1,17 @@
+mode: live
+exchanges:
+  - exchange: bybit
+    enabled: true
+    credentialsEnvPrefix: BYBIT
+    marketRefreshMs: 60000
+    fundingPullMs: 10000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+observability:
+  metricsPort: 9509
+  healthPort: 9609
+risk:
+  globalMaxConcurrentIntents: 200
+  globalMaxNotionalUsd: 50000

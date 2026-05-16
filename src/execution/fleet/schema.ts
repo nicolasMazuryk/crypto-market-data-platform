@@ -3,12 +3,14 @@ import { z } from 'zod'
 const ExchangeNameEnum = z.enum(['binance', 'bybit', 'okx', 'mexc', 'bitget', 'gateio', 'kucoin'])
 const StrategyNameEnum = z.enum([
   'strategy_1',
+  'strategy_1_ws',
   'strategy_2',
   'strategy_3a',
   'strategy_3b',
   'strategy_4_1a',
   'strategy_4_2a',
   'strategy_4_3a',
+  'strategy_6',
 ])
 
 export const METRICS_PORT_RANGE = { min: 9500, max: 9599 } as const

@@ -1,0 +1,11 @@
+# Strategy 4.3a: Limit LONG with SL/TP - No Funding Applied
+
+strategy_id: "strategy_4_3a"
+direction: "long"
+funding_threshold: 0.001      # 1.5%
+entry_offset_seconds: 3       # Enter at T_funding - 1s (capture cleaner entry)
+entry_mult: 1.1               # Limit at P * (1 - F * 1.1)
+sl_mult: 2.5                # SL at P * (1 - F * 1.101)
+take_profit: 0.004            # 0.6%
+deadline_seconds: 1800         # Max hold after T_funding (10 minutes)
+funding_applied_on_same_second: false
