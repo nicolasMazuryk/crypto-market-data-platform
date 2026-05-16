@@ -108,7 +108,13 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
   }
 
   async createApiKey(subAccountId: string, ipAllowList: string[]): Promise<CreatedApiKey> {
-    await this.renameSubAccount(subAccountId, this.label)
+    // Enable spot + futures products on first provision. margin_trade is NOT a valid value
+    // for this endpoint — margin must be enabled manually in the Bitget UI.
+    await this.client.privateUserPostV2UserModifyVirtualSubaccount({
+      subAccountUid: subAccountId,
+      status: 'normal',
+      permList: ['read', 'spot_trade', 'contract_trade'],
+    })
     const response = (await this.client.privateUserPostV2UserCreateVirtualSubaccountApikey({
       subAccountUid: subAccountId,
       label: `prov-${String(Date.now())}`,
@@ -139,7 +145,13 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
   }
 
   private requiredApiKeyPerms(): string[] {
-    return ['spot_trade', 'contract_trade', 'transfer']
+    // margin_trade is NOT accepted by ModifyVirtualSubaccountApikey — include it for
+    // CreateVirtualSubaccountApikey only; strip it before any modify call.
+    return ['spot_trade', 'contract_trade', 'transfer', 'margin_trade']
+  }
+
+  private modifiableApiKeyPerms(): string[] {
+    return this.requiredApiKeyPerms().filter(p => p !== 'margin_trade')
   }
 
   async ensureApiKeyPermissions(
@@ -148,7 +160,7 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
     apiPassphrase: string | null,
     ipAllowList: string[]
   ): Promise<void> {
-    const requiredPerms = this.requiredApiKeyPerms()
+    const requiredPerms = this.modifiableApiKeyPerms()
     const keyListResponse = (await this.client.privateUserGetV2UserVirtualSubaccountApikeyList({
       subAccountUid: subAccountId,
     })) as {
@@ -232,10 +244,11 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
   }
 
   async renameSubAccount(subAccountId: string, _newLabel: string): Promise<void> {
+    // No permList here — omitting it leaves existing product permissions unchanged,
+    // which preserves margin trading that the user enabled in the Bitget UI.
     await this.client.privateUserPostV2UserModifyVirtualSubaccount({
       subAccountUid: subAccountId,
       status: 'normal',
-      permList: ['read', 'spot_trade', 'contract_trade', 'margin_trade'],
     })
   }
 
