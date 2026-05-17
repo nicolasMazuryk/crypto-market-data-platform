@@ -42,7 +42,7 @@ import { createKillSwitch } from './risk/killSwitch.js'
 import { createAlertDispatcher } from './observability/alerts.js'
 import { registerPrivateWsMetrics, registerStateMetrics } from './observability/metrics.js'
 import { createPositionMonitor } from './execution/monitor.js'
-import type { PositionMonitorHandle } from './execution/monitor.js'
+import type { PositionMonitorHandle, RestFundingFeePoller } from './execution/monitor.js'
 import { createExecutionManager } from './execution/manager.js'
 import type { ExecutionManagerHandle, ExecutionManagerInitialState } from './execution/manager.js'
 import { createStrategyRegistry } from './strategies/registry.js'
@@ -431,11 +431,35 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
 
   const execMetrics = registerExecutionMetrics(registry)
 
+  // Build REST funding-fee poller for exchanges that don't push ACCOUNT_UPDATE FUNDING_FEE via WS.
+  // Currently needed for Binance: their user data stream omits this event for sub-accounts.
+  let restFundingFeePoller: RestFundingFeePoller | undefined
+  const binanceAdapter = restAdapters.get('binance')
+  if (binanceAdapter?.fetchFundingFeeIncome) {
+    const fetchIncome = binanceAdapter.fetchFundingFeeIncome.bind(binanceAdapter)
+    restFundingFeePoller = async ({ exchange, symbol, fundingTs }) => {
+      if (exchange !== 'binance') return null
+      const record = await fetchIncome(symbol, fundingTs)
+      if (!record) return null
+      return {
+        exchange: 'binance',
+        symbol: record.symbol,
+        fundingTime: record.fundingTime,
+        fundingRate: 0,
+        fundingAmount: record.fundingAmount,
+        asset: record.asset,
+        positionQty: 0,
+        receivedAt: Date.now(),
+      }
+    }
+  }
+
   const positionMonitor = createPositionMonitor({
     bus,
     clock,
     logger: logger.childFor('monitor'),
     metrics: execMetrics,
+    ...(restFundingFeePoller !== undefined ? { restFundingFeePoller } : {}),
   })
 
   const killSwitch = createKillSwitch(logger, config.mode)

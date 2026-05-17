@@ -53,34 +53,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
   status: ⏳
   natural_occurrence: routine
 
-- id: strategy_4_1a.bybit.ORDER_LIFECYCLE.PRE_FUNDING_FILL_WARNING
-  category: ORDER_LIFECYCLE
-  severity: medium
-  description: >
-    A rung fills before T_funding. Bybit WS 'order' channel emits fill for rung
-    (μs timestamp, adapter ÷1000, clientOrderId echoed). Manager routes via
-    byEntryOrderId, marks rung.filled=true, logs 'ladder.pre_funding_fill' at warn.
-  preconditions:
-    - intent in working, rung limitPrice hit before T_funding
-  trigger_sequence:
-    - Bybit WS: order {clientOrderId: <rungId>, orderStatus: "Filled", updatedTime: <μs>}
-    - adapter ÷1000; byEntryOrderId lookup → pre_funding_fill warn
-  expected_behavior:
-    - 'ladder.pre_funding_fill' warn logged
-    - rung.filled=true, filledQty aggregated
-    - db:fills createdAt in ms range
-    - status working → partially_filled
-  observability_contract:
-    - log: 'ladder.pre_funding_fill' {intentId, clientOrderId: "<rung id>"}  # warn
-    - db:fills createdAt in valid ms range
-    - db:intentLifecycleEvents → partially_filled
-  code_refs:
-    - src/execution/adapters/privatews/bybit.ts (updatedTime / 1000)
-    - src/execution/execution/manager.ts:1078 (ladder.pre_funding_fill warn)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md
-  status: ⏳
-  natural_occurrence: rare
 
 - id: strategy_4_1a.bybit.ORDER_LIFECYCLE.T_FUNDING_TIMER_RESOLVES
   category: ORDER_LIFECYCLE
@@ -112,28 +84,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
   status: ⏳
   natural_occurrence: routine
 
-- id: strategy_4_1a.bybit.ORDER_LIFECYCLE.LADDER_NO_FILLS
-  category: ORDER_LIFECYCLE
-  severity: high
-  description: >
-    T_funding fires but no rungs filled. 'ladder.no_fills' warn logged. setError.
-  preconditions:
-    - intent in working, no rungs filled before T_funding
-  trigger_sequence:
-    - T_funding timer: filledQty === 0 → setError('ladder_no_fills')
-  expected_behavior:
-    - 'ladder.no_fills' warn logged
-    - intent.error {code: "ladder_no_fills"}
-  observability_contract:
-    - log: 'ladder.no_fills' {intentId}
-    - log: 'intent.error' {code: "ladder_no_fills"}
-    - db:intentLifecycleEvents working→error
-  code_refs:
-    - src/execution/execution/manager.ts:2520 (filledQty === 0 check)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md
-  status: ⏳
-  natural_occurrence: occasional
 
 # ── TIMING ──────────────────────────────────────────────────────────────────
 

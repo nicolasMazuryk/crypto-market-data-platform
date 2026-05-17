@@ -35,13 +35,21 @@ export function createOkxOrderWsAdapter(opts: OkxOrderWsAdapterOptions): Exchang
     exchange: 'okx',
 
     async connect(): Promise<void> {
+      if (!opts.credentials?.apiKey || !opts.credentials?.apiSecret) {
+        throw new Error('OKX order WS adapter: missing credentials (apiKey/apiSecret required)')
+      }
       const { WebsocketAPIClient } = await import('okx-api')
       const market = opts.wsBaseUrl?.includes('demo') ? 'demoTrading' : 'prod'
-      const clientOpts: Record<string, unknown> = { market, attachEventListeners: false }
-      if (opts.credentials) {
-        clientOpts.apiKey = opts.credentials.apiKey
-        clientOpts.apiSecret = opts.credentials.apiSecret
-        clientOpts.apiPassphrase = opts.credentials.apiPassphrase ?? ''
+      const clientOpts: Record<string, unknown> = {
+        market,
+        attachEventListeners: false,
+        accounts: [
+          {
+            apiKey: opts.credentials.apiKey,
+            apiSecret: opts.credentials.apiSecret,
+            apiPass: opts.credentials.apiPassphrase ?? '',
+          },
+        ],
       }
       sdkClient = new WebsocketAPIClient(clientOpts as never)
     },

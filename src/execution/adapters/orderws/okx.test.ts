@@ -5,14 +5,15 @@ const mockSubmitNewOrder = vi.fn()
 const mockCancelOrder = vi.fn()
 const mockAmendOrder = vi.fn()
 const mockCloseAll = vi.fn()
+const MockWebsocketAPIClient = vi.fn().mockImplementation(() => ({
+  submitNewOrder: mockSubmitNewOrder,
+  cancelOrder: mockCancelOrder,
+  amendOrder: mockAmendOrder,
+  getWSClient: () => ({ closeAll: mockCloseAll }),
+}))
 
 vi.mock('okx-api', () => ({
-  WebsocketAPIClient: vi.fn().mockImplementation(() => ({
-    submitNewOrder: mockSubmitNewOrder,
-    cancelOrder: mockCancelOrder,
-    amendOrder: mockAmendOrder,
-    getWSClient: () => ({ closeAll: mockCloseAll }),
-  })),
+  WebsocketAPIClient: MockWebsocketAPIClient,
 }))
 
 describe('createOkxOrderWsAdapter', () => {
@@ -27,6 +28,19 @@ describe('createOkxOrderWsAdapter', () => {
 
   afterEach(async () => {
     await adapter.disconnect()
+  })
+
+  it('connect passes credentials as accounts array with apiPass', async () => {
+    expect(MockWebsocketAPIClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accounts: [{ apiKey: 'key', apiSecret: 'secret', apiPass: 'pass' }],
+      })
+    )
+  })
+
+  it('connect throws if credentials are missing', async () => {
+    const noCredsAdapter = createOkxOrderWsAdapter({})
+    await expect(noCredsAdapter.connect()).rejects.toThrow('missing credentials')
   })
 
   it('createOrder → accepted when sCode=0', async () => {

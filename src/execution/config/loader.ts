@@ -74,12 +74,17 @@ function injectCredentials(
   exchanges: ExchangeConfig[],
   mode: 'live' | 'dry_run',
   env: NodeJS.ProcessEnv,
-  registry?: Registry
+  registry?: Registry,
+  activeStrategyId?: string
 ): (ExchangeConfig & { credentials?: { apiKey: string; apiSecret: string; apiPassphrase?: string } })[] {
   return exchanges.map(ec => {
-    // Registry takes priority. TODO: filter by assigned_strategy once the engine carries strategy identity here.
     if (registry) {
-      const registryEntry = registry.combinations.find(c => c.exchange === ec.exchange && c.status === 'active')
+      const registryEntry = registry.combinations.find(
+        c =>
+          c.exchange === ec.exchange &&
+          c.status === 'active' &&
+          (!activeStrategyId || c.assigned_strategy === activeStrategyId)
+      )
       if (registryEntry) {
         const creds: { apiKey: string; apiSecret: string; apiPassphrase?: string } = {
           apiKey: registryEntry.api_key,
@@ -174,7 +179,8 @@ export function loadEngineConfig(options: LoadEngineConfigOptions): EngineConfig
   const parsed = parseEngineConfig(merged)
   validateForLiveStart(parsed)
   const registry = options.registryPath ? loadRegistry(options.registryPath) : undefined
-  const exchanges = injectCredentials(parsed.exchanges, parsed.mode, env, registry)
+  const activeStrategyId = parsed.strategies.find(s => s.enabled)?.id
+  const exchanges = injectCredentials(parsed.exchanges, parsed.mode, env, registry, activeStrategyId)
 
   const postgresUrlOverride = env.EXECUTION_POSTGRES_URL
   const persistence = postgresUrlOverride

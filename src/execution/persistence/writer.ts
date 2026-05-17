@@ -171,15 +171,19 @@ export async function writeRowToDb(
       if (row.terminalAt) updateSet.terminalAt = toDate(row.terminalAt)
       if (row.firstFillAt) updateSet.firstFillAt = sql`COALESCE(orders.first_fill_at, ${toDate(row.firstFillAt)})`
       if (row.workingAt) updateSet.workingAt = sql`COALESCE(orders.working_at, ${toDate(row.workingAt)})`
+      const exchange = (row as { exchange: string }).exchange
+      const clientOrderId = (row as { clientOrderId: string }).clientOrderId
+      const exchangeOrderId = row.exchangeOrderId as string | null | undefined
+      // Primary: match by clientOrderId. Fallback to exchangeOrderId when CCXT broker-prefixes
+      // the clientOrderId before submission (e.g. Binance adds 'x-r1wQQsTn' prefix), causing the
+      // REST/WS response clientOrderId to differ from what we stored.
+      const whereClause = exchangeOrderId
+        ? and(eq(orders.exchange, exchange), or(eq(orders.clientOrderId, clientOrderId), eq(orders.exchangeOrderId, exchangeOrderId)))
+        : and(eq(orders.exchange, exchange), eq(orders.clientOrderId, clientOrderId))
       await db
         .update(orders)
         .set(updateSet as Parameters<ReturnType<typeof db.update>['set']>[0])
-        .where(
-          and(
-            eq(orders.exchange, (row as { exchange: string }).exchange),
-            eq(orders.clientOrderId, (row as { clientOrderId: string }).clientOrderId)
-          )
-        )
+        .where(whereClause)
       break
     }
 

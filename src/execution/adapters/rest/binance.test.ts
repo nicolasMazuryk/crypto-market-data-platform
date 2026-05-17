@@ -331,6 +331,29 @@ describe('BinanceRestAdapter', () => {
     expect(mockCcxt.setLeverage).toHaveBeenCalledTimes(2)
   })
 
+  it('fetchFundingFeeIncome normalizes Binance string timestamps to numbers', async () => {
+    const { adapter } = makeAdapter({
+      fapiPrivateGetIncome: vi.fn().mockResolvedValue([
+        {
+          symbol: 'IRYSUSDT',
+          income: '-0.00000320',
+          asset: 'USDT',
+          time: '1779019203000',
+          incomeType: 'FUNDING_FEE',
+        },
+      ]),
+    } as Partial<CcxtExchange>)
+
+    const record = await adapter.fetchFundingFeeIncome?.('IRYSUSDT', 1779019200000)
+
+    expect(record).toEqual({
+      symbol: 'IRYSUSDT',
+      fundingTime: 1779019203000,
+      fundingAmount: -0.0000032,
+      asset: 'USDT',
+    })
+  })
+
   it('setLeverage: -4046 code means already set, treats as success', async () => {
     const alreadySetErr = new Error('binanceusdm -4046 No need to change margin type')
     alreadySetErr.name = 'ExchangeError'

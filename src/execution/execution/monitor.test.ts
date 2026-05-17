@@ -500,6 +500,37 @@ describe('PositionMonitor', () => {
       expect(exits).toHaveLength(1)
       expect(exits[0]?.reason).toBe('funding_fee')
     })
+
+    it('marks funding fee exits from the REST poller with rest_poll source', async () => {
+      const bus = createEventBus()
+      const clock = createClock()
+      const timers: { cb: () => void }[] = []
+      const now = Date.now()
+      const state = makeFundingFeeState('i1', now)
+      const fundingTs = (state.intent.exitPolicy as { fundingTs: number }).fundingTs
+      const monitor = createPositionMonitor({
+        bus,
+        clock,
+        logger: createExecutionLogger(),
+        metrics: makeMetrics(),
+        setTimeoutFn: cb => {
+          timers.push({ cb })
+          return timers.length - 1
+        },
+        clearTimeoutFn: () => {},
+        restFundingFeePoller: async () => makeFundingEvent(now, 'binance', 'BTCUSDT', fundingTs),
+      })
+      const triggered: Array<{ reason: ExitReason; source: string }> = []
+      bus.on('exit.triggered', event => {
+        triggered.push({ reason: event.reason, source: event.source })
+      })
+
+      monitor.arm(state)
+      timers[0]!.cb()
+      await Promise.resolve()
+
+      expect(triggered).toEqual([{ reason: 'funding_fee', source: 'rest_poll' }])
+    })
   })
 
   describe('sl_tp_deadline: exchangeOrderId matching (GateIO stop_market fills)', () => {

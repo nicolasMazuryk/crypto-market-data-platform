@@ -1,5 +1,6 @@
 import { ccxtIdMap } from '../../markets/ccxtIdMap.js'
 import type { OrderRequest, OrderRef } from './types.js'
+import type { CcxtExchange } from '../../../exchanges/types.js'
 import { createCcxtRestAdapter, type CcxtAdapterSpec, type BaseRestAdapterOptions } from './ccxt-base.js'
 
 const binanceSpec: CcxtAdapterSpec = {
@@ -43,6 +44,29 @@ const binanceSpec: CcxtAdapterSpec = {
   buildAmendOrderParams: (ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>) => ({
     origClientOrderId: ref.clientOrderId,
   }),
+
+  buildExtras(ccxtEx: CcxtExchange) {
+    return {
+      async fetchFundingFeeIncome(symbol: string, fundingTs: number) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+        const rows: Array<{ symbol: string; income: string; asset: string; time: number; incomeType: string }> = await (ccxtEx as any).fapiPrivateGetIncome({
+          symbol,
+          incomeType: 'FUNDING_FEE',
+          startTime: fundingTs - 10_000,
+          endTime: fundingTs + 60_000,
+          limit: 10,
+        })
+        const match = rows?.find(r => r.incomeType === 'FUNDING_FEE')
+        if (!match) return null
+        return {
+          symbol: match.symbol,
+          fundingTime: Number(match.time),
+          fundingAmount: parseFloat(match.income),
+          asset: match.asset,
+        }
+      },
+    }
+  },
 }
 
 export type BinanceRestAdapterOptions = BaseRestAdapterOptions
