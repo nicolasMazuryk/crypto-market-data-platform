@@ -10,49 +10,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
 ```yaml
 # ── ORDER_LIFECYCLE ─────────────────────────────────────────────────────────
 
-- id: strategy_1.binance.ORDER_LIFECYCLE.ENTRY_PLACED
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Scheduler fires at T_f - 5s. Preflight passes (balance, market, qty, kill-switch).
-    setLeverage succeeds. A market BUY order is placed via REST createOrder.
-    The order.placed event is logged with kind=entry, side=buy, orderType=market,
-    reduceOnly=false, and a valid exchangeOrderId echoed back by Binance.
-  preconditions:
-    - fundingRatePercent < -negativeFundingThresholdPercent (default -0.4%)
-    - available USDT >= amountUsd / leverage
-    - kill switch inactive
-    - market status = trading
-  trigger_sequence:
-    - scheduler: evaluator fires at entryAt = nextFundingTimestamp - entryOffsetSeconds * 1000
-    - manager.submit() called with strategy_1 TradeIntent
-  expected_behavior:
-    - intent.created logged (status=decided)
-    - intent.submitted logged (entryKind=market)
-    - order.placed logged (kind=entry, side=buy, orderType=market, reduceOnly=false)
-    - status transitions decided → submitted → acked → working
-    - entry clientOrderId registered in byEntryOrderId map
-  observability_contract:
-    - log: 'intent.created' {strategy: "strategy_1", exchange: "binance"}
-    - log: 'intent.submitted' {entryKind: "market"}
-    - log: 'order.placed' {kind: "entry", side: "buy", orderType: "market", reduceOnly: false}
-    - db:orders row {kind: "entry", orderType: "market", reduceOnly: false, status: "pending"}
-    - db:intentLifecycleEvents transitions decided→submitted→acked→working
-  code_refs:
-    - src/execution/execution/manager.ts:1984 (submit)
-    - src/execution/execution/manager.ts:2081 (transition submitted)
-    - src/execution/execution/manager.ts:2655 (market entry path)
-    - src/execution/execution/manager.ts:2697 (createOrder call)
-    - src/execution/execution/manager.ts:2755 (order.placed emit/log)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (Execution Flow step 1)
-  status: ⏳
-  natural_occurrence: routine
-  notes: >
-    Binance REST createOrder returns exchangeOrderId in the ACK. The canonical clientOrderId
-    (no transformation on Binance) is registered in byEntryOrderId before the REST call
-    so that any concurrent WS fill event arriving during the HTTP call is not lost.
-
 - id: strategy_1.binance.ORDER_LIFECYCLE.ENTRY_FILLED_WS
   category: ORDER_LIFECYCLE
   severity: critical

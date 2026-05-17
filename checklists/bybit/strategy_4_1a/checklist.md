@@ -137,27 +137,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
 
 # ── TIMING ──────────────────────────────────────────────────────────────────
 
-- id: strategy_4_1a.bybit.TIMING.SL_TP_PLACED_AT_T_FUNDING
-  category: TIMING
-  severity: critical
-  description: >
-    SL and TP placed only at T_funding timer fire, not at rung fill time.
-    During [entryAt, T_funding], position is unprotected if a rung fills early.
-  preconditions:
-    - at least one rung filled before T_funding
-  trigger_sequence:
-    - T_funding fires → SL + TP placed
-  expected_behavior:
-    - SL/TP timestamps ≥ nextFundingTimestamp
-  observability_contract:
-    - log: 'order.placed' {kind: "sl"} and {kind: "tp"} timestamps ≥ nextFundingTimestamp
-  code_refs:
-    - src/execution/execution/manager.ts:2540 (handleEntryFilled from T_funding)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md
-  status: ⏳
-  natural_occurrence: routine
-
 # ── OCO ─────────────────────────────────────────────────────────────────────
 
 - id: strategy_4_1a.bybit.OCO.SL_FILLS_TP_CANCELED
@@ -292,27 +271,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
   natural_occurrence: occasional
 
 # ── SPEC_DIVERGENCE ──────────────────────────────────────────────────────────
-
-- id: strategy_4_1a.bybit.SPEC_DIVERGENCE.BYBIT_MICROSECOND_TIMESTAMPS
-  category: SPEC_DIVERGENCE
-  severity: critical
-  description: >
-    Bybit WS order events carry `updatedTime` in μs. Adapter ÷1000 mandatory.
-    Affects rung fill timestamps (pre-funding), SL fill, TP fill.
-  preconditions:
-    - any Bybit WS order fill event processed
-  trigger_sequence:
-    - Bybit WS: order {updatedTime: <μs>} → adapter / 1000 → ms
-  expected_behavior:
-    - db:fills createdAt in ms range for all bybit rows
-  observability_contract:
-    - db:fills createdAt in valid ms range (not μs range)
-  code_refs:
-    - src/execution/adapters/privatews/bybit.ts (updatedTime / 1000)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md
-  status: ⏳
-  natural_occurrence: routine
 
 - id: strategy_4_1a.bybit.SPEC_DIVERGENCE.KILL_SWITCH_BLOCKS_ENTRY
   category: SPEC_DIVERGENCE

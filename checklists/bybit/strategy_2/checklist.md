@@ -19,78 +19,6 @@ Code: `src/execution/strategies/strategy_2.ts`, `src/execution/execution/manager
 ```yaml
 # ── ORDER_LIFECYCLE ─────────────────────────────────────────────────────────
 
-- id: strategy_2.bybit.ORDER_LIFECYCLE.ENTRY_PLACED_VIA_WS
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Scheduler fires at T_f - 5s. Preflight passes. orderClient() resolves to WS
-    adapter. Market BUY placed via WS adapter. Bybit echoes clientOrderId in WS
-    fill events → WS routing is primary. pollForEntryFill started as backup.
-    wallet/position listener registered for fundingGateOpen. spawnRetracementTracker
-    started.
-  preconditions:
-    - fundingRatePercent < -negativeFundingThresholdPercent
-    - available USDT >= amountUsd / leverage
-    - kill switch inactive
-    - WS order adapter available for bybit
-  trigger_sequence:
-    - scheduler fires at entryAt → manager.submit() → WS adapter createOrder
-    - pollForEntryFill started (backup)
-    - spawnRetracementTracker started
-  expected_behavior:
-    - intent.created logged (strategy=strategy_2, exchange=bybit)
-    - order.placed (kind=entry, side=buy, orderType=market) logged
-    - status decided → submitted → acked → working
-  observability_contract:
-    - log: 'intent.created' {strategy: "strategy_2", exchange: "bybit"}
-    - log: 'order.placed' {kind: "entry", side: "buy", orderType: "market"}
-    - db:orders {kind: "entry", status: "pending"}
-    - db:intentLifecycleEvents decided→submitted→acked→working
-  code_refs:
-    - src/execution/execution/manager.ts:90 (requiresWsOrderAdapter)
-    - src/execution/execution/manager.ts:96 (orderClient → WS adapter)
-  spec_refs:
-    - docs-strategy/strategies/strategy_2.md
-  status: ⏳
-  natural_occurrence: routine
-
-- id: strategy_2.bybit.ORDER_LIFECYCLE.ENTRY_FILLED_WS
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Bybit WS order fill event arrives with clientOrderId (μs timestamp, adapter ÷1000).
-    byEntryOrderId lookup succeeds. handleEntryFilled → position.opened (long). SL
-    (stop_market, sell, reduceOnly) placed immediately. spawnRetracementTracker active.
-    TERMINAL guard prevents double-processing if pollForEntryFill also fires.
-  preconditions:
-    - entry order placed (working), Bybit WS connected
-  trigger_sequence:
-    - Bybit WS: order {clientOrderId: <id>, orderStatus: "Filled", updatedTime: <μs>}
-    - adapter: updatedTime / 1000 → ms
-    - byEntryOrderId lookup → handleEntryFilled
-  expected_behavior:
-    - order.filled logged (filledQty, avgFillPrice, ms timestamps)
-    - position.opened logged (side=long)
-    - order.placed {kind: "sl", side: "sell", orderType: "stop_market"} logged
-    - status working → filled → monitoring
-  observability_contract:
-    - log: 'order.filled' {exchange: "bybit", filledQty: ">0"}
-    - log: 'position.opened' {side: "long"}
-    - log: 'order.placed' {kind: "sl"}
-    - db:fills createdAt in valid ms range (not μs range)
-    - db:intentLifecycleEvents filled→monitoring
-  code_refs:
-    - src/execution/adapters/privatews/bybit.ts (updatedTime / 1000)
-    - src/execution/execution/manager.ts:1140 (handleEntryOrderEvent)
-    - src/execution/execution/manager.ts:406 (handleEntryFilled SL placement)
-  spec_refs:
-    - docs-strategy/strategies/strategy_2.md
-  status: ⏳
-  natural_occurrence: routine
-  notes: >
-    Bybit WS timestamps in microseconds. adapter ÷ 1000 converts to ms.
-    db:fills.createdAt must be in ms range (> 1700000000000), not μs range.
-
 - id: strategy_2.bybit.ORDER_LIFECYCLE.RETRACEMENT_EXIT_AFTER_FUNDING
   category: ORDER_LIFECYCLE
   severity: critical
@@ -183,56 +111,7 @@ Code: `src/execution/strategies/strategy_2.ts`, `src/execution/execution/manager
 
 # ── TIMING ──────────────────────────────────────────────────────────────────
 
-- id: strategy_2.bybit.TIMING.FUNDING_GATE_OPENS_VIA_WALLET_EVENT
-  category: TIMING
-  severity: critical
-  description: >
-    At T_f, Bybit emits a wallet/position WS event indicating funding fee received.
-    fundingGateOpen set true. Retracement tracker now armed to fire on first qualifying
-    price level.
-  preconditions:
-    - intent in monitoring, Bybit funding event received at T_f
-  trigger_sequence:
-    - Bybit WS: funding event → fundingGateOpen=true
-  expected_behavior:
-    - funding gate opens; retracement exit can now fire
-  observability_contract:
-    - log: event='intent.funding_gate_opened' {intentId: "<id>", openedAt: ">0", fundingTs: ">0"}
-    - retracement.exit fires only after gate opens
-  code_refs:
-    - src/execution/adapters/privatews/bybit.ts (funding event handler)
-    - src/execution/strategies/strategy_2.ts (fundingGateOpen logic)
-  spec_refs:
-    - docs-strategy/strategies/strategy_2.md
-  status: ⏳
-  natural_occurrence: routine
-
 # ── WEBSOCKET ────────────────────────────────────────────────────────────────
-
-- id: strategy_2.bybit.WEBSOCKET.BYBIT_MICROSECOND_TIMESTAMPS
-  category: WEBSOCKET
-  severity: critical
-  description: >
-    Bybit private WS order events carry `updatedTime` in microseconds (μs).
-    Adapter must divide by 1000 for ms before emitting. If not converted, all
-    db:fills timestamps will be in μs range (too large by factor 1000) causing
-    timestamp consistency failures.
-  preconditions:
-    - Bybit WS order fill events processed (entry, SL, TP fills)
-  trigger_sequence:
-    - Bybit WS: order {updatedTime: <μs value>}
-    - adapter: updatedTime / 1000 → ms
-  expected_behavior:
-    - db:fills createdAt in valid ms range (> 1700000000000, < 2000000000000)
-    - NOT in μs range (> 1700000000000000)
-  observability_contract:
-    - db:fills createdAt > 1700000000000 AND < 2000000000000 for all bybit rows
-  code_refs:
-    - src/execution/adapters/privatews/bybit.ts (updatedTime / 1000)
-  spec_refs:
-    - docs-strategy/strategies/strategy_2.md
-  status: ⏳
-  natural_occurrence: routine
 
 - id: strategy_2.bybit.WEBSOCKET.RECONNECT_TRIGGERS_RECONCILE
   category: WEBSOCKET
@@ -294,29 +173,6 @@ Code: `src/execution/strategies/strategy_2.ts`, `src/execution/execution/manager
     automatic exit; SL WS fill can still fire.
 
 # ── SPEC_DIVERGENCE ──────────────────────────────────────────────────────────
-
-- id: strategy_2.bybit.SPEC_DIVERGENCE.BYBIT_MICROSECOND_TIMESTAMPS
-  category: SPEC_DIVERGENCE
-  severity: critical
-  description: >
-    Spec and internal timestamps are in ms. Bybit WS events carry μs timestamps.
-    Adapter divide-by-1000 is mandatory. Without it, all fill timestamps will be
-    1000× too large, corrupting db:fills and invalidating time-based comparisons.
-  preconditions:
-    - any Bybit WS order fill event processed
-  trigger_sequence:
-    - Bybit WS: order {updatedTime: <μs>}
-    - adapter: updatedTime / 1000 → ms
-  expected_behavior:
-    - all timestamps stored as ms throughout
-  observability_contract:
-    - db:fills createdAt in ms range for all bybit rows
-  code_refs:
-    - src/execution/adapters/privatews/bybit.ts (updatedTime / 1000)
-  spec_refs:
-    - docs-strategy/strategies/strategy_2.md
-  status: ⏳
-  natural_occurrence: routine
 
 - id: strategy_2.bybit.SPEC_DIVERGENCE.KILL_SWITCH_BLOCKS_PREFLIGHT
   category: SPEC_DIVERGENCE

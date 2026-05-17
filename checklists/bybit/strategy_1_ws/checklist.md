@@ -10,45 +10,6 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
 ```yaml
 # ── ORDER_LIFECYCLE ─────────────────────────────────────────────────────────
 
-- id: strategy_1_ws.bybit.ORDER_LIFECYCLE.ENTRY_PLACED_VIA_WS
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Scheduler fires at T_f - 5s. Preflight passes. orderClient() resolves to the WS
-    order adapter (requiresWsOrderAdapter('strategy_1_ws')=true). A market BUY is placed
-    via the WS adapter. order.placed is logged with kind=entry, side=buy, orderType=market,
-    reduceOnly=false.
-  preconditions:
-    - fundingRatePercent < -negativeFundingThresholdPercent (default -0.4%)
-    - available USDT >= amountUsd / leverage
-    - kill switch inactive
-    - market status = trading
-    - WS order adapter connected for bybit
-  trigger_sequence:
-    - scheduler: fires evaluate() at entryAt = nextFundingTimestamp - entryOffsetSeconds*1000
-    - manager.submit() called with strategy_1_ws TradeIntent
-  expected_behavior:
-    - intent.created logged (strategy=strategy_1_ws, exchange=bybit)
-    - intent.submitted logged (entryKind=market)
-    - WS adapter createOrder called (NOT REST)
-    - order.placed logged (kind=entry, side=buy, orderType=market, reduceOnly=false)
-    - status transitions decided → submitted → acked → working
-  observability_contract:
-    - log: 'intent.created' {strategy: "strategy_1_ws", exchange: "bybit"}
-    - log: 'intent.submitted' {entryKind: "market"}
-    - log: 'order.placed' {kind: "entry", side: "buy", orderType: "market", reduceOnly: false}
-    - db:orders row {kind: "entry", orderType: "market", reduceOnly: false, status: "pending"}
-    - db:intentLifecycleEvents transitions decided→submitted→acked→working
-  code_refs:
-    - src/execution/execution/manager.ts:90 (requiresWsOrderAdapter)
-    - src/execution/execution/manager.ts:96 (orderClient — returns WS adapter)
-    - src/execution/execution/manager.ts:2008 (intent.created log)
-    - src/execution/execution/manager.ts:2095 (intent.submitted log)
-    - src/execution/execution/manager.ts:2755 (order.placed log)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1_ws.md (Entry: WS order adapter required)
-  status: ⏳
-  natural_occurrence: routine
 
 - id: strategy_1_ws.bybit.ORDER_LIFECYCLE.ENTRY_FILLED_WS
   category: ORDER_LIFECYCLE
@@ -179,97 +140,8 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
 
 # ── TIMING ──────────────────────────────────────────────────────────────────
 
-- id: strategy_1_ws.bybit.TIMING.ENTRY_AT_CORRECT_OFFSET
-  category: TIMING
-  severity: high
-  description: >
-    Entry placed at T_f - 5s via WS adapter. WS placement is lower latency than REST.
-  preconditions:
-    - scheduler running
-    - strategy condition met
-  trigger_sequence:
-    - scheduler fires at entryAt = nextFundingTimestamp - entryOffsetSeconds*1000
-  expected_behavior:
-    - order.placed (kind=entry) within ≤1500ms after entryAt
-  observability_contract:
-    - log: 'order.placed' {kind: "entry"} timestamp ≤ entryAt + 1500ms
-    - db:orders {kind: "entry"} createdAt within [entryAt, entryAt + 1500ms]
-  code_refs:
-    - src/execution/strategies/strategy_1_ws.ts:51 (entryAt computation)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1_ws.md
-  status: ⏳
-  natural_occurrence: routine
 
-- id: strategy_1_ws.bybit.TIMING.FUNDING_FEE_EVENT_EXIT
-  category: TIMING
-  severity: critical
-  description: >
-    At T_f, Bybit emits an 'execution' topic event with execType='Funding' on the
-    private WS. The mapping produces a FundingFeeEvent (symbol from d.symbol,
-    fundingTime from d.execTime parsed as ms — execTime is in ms on Bybit, not μs).
-    The monitor bus listener matches exchange, symbol, and ±5s tolerance on fundingTs.
-    settle('funding_fee', {source:'ws'}) fires. Close order placed.
-  preconditions:
-    - intent in status=monitoring
-    - Bybit emits execution event with execType=Funding at T_f
-  trigger_sequence:
-    - Bybit WS: {topic: "execution", data: [{symbol: <sym>, execType: "Funding", execTime: <ms>, execFee: <amt>}]}
-    - bus: 'ws.funding_fee' {exchange: "bybit", symbol: <sym>, fundingTime: <ms>}
-    - monitor listener matches → settle('funding_fee', {source: 'ws'})
-  expected_behavior:
-    - monitor.exit_requested logged (reason=funding_fee)
-    - monitor.settle logged (reason=funding_fee, source=ws, latencyMs)
-    - intent.exiting.start logged (reason=funding_fee)
-    - order.placed (kind=close)
-  observability_contract:
-    - log: 'monitor.exit_requested' {reason: "funding_fee"}
-    - log: 'monitor.settle' {reason: "funding_fee", source: "ws", latencyMs: "<5000"}
-    - log: 'intent.exiting.start' {reason: "funding_fee"}
-    - log: 'order.placed' {kind: "close", side: "sell", orderType: "market", reduceOnly: true}
-    - db:intentLifecycleEvents monitoring→exiting→exited
-  code_refs:
-    - src/execution/adapters/privatews/bybit-mapping.ts:143 (topic=execution handler)
-    - src/execution/adapters/privatews/bybit-mapping.ts:151 (execType='Funding' check)
-    - src/execution/adapters/privatews/bybit-mapping.ts:152 (fundingTime from execTime — ms)
-    - src/execution/execution/monitor.ts:198 (bus.on 'ws.funding_fee')
-    - src/execution/execution/monitor.ts:200 (±5000ms tolerance)
-    - src/execution/execution/monitor.ts:202 (settle 'funding_fee')
-  spec_refs:
-    - docs-strategy/strategies/strategy_1_ws.md
-  status: ⏳
-  natural_occurrence: routine
-  notes: >
-    Bybit execTime in execution topic is already in ms (not μs). The mapping at
-    bybit-mapping.ts:152 uses parseInt(d.execTime, 10) directly as fundingTime.
-    execType must equal exactly 'Funding' (capital F) to be recognized.
 
-- id: strategy_1_ws.bybit.TIMING.FUNDING_FEE_TIMEOUT
-  category: TIMING
-  severity: high
-  description: >
-    ws.funding_fee event not received before timeoutAt. Timeout timer fires.
-    settle('funding_fee_timeout', {source:'timer'}) runs. Close order placed.
-  preconditions:
-    - intent in monitoring
-    - ws.funding_fee not received before timeoutAt
-  trigger_sequence:
-    - setTimeout fires at timeoutAt = nextFundingTimestamp + fundingFeeTimeoutSeconds*1000
-  expected_behavior:
-    - monitor.settle (reason=funding_fee_timeout, source=timer)
-    - intent.exiting.start (reason=funding_fee_timeout)
-    - order.placed (kind=close)
-  observability_contract:
-    - log: 'monitor.settle' {reason: "funding_fee_timeout", source: "timer"}
-    - log: 'intent.exiting.start' {reason: "funding_fee_timeout"}
-    - log: 'order.placed' {kind: "close", reduceOnly: true}
-  code_refs:
-    - src/execution/execution/monitor.ts:188 (timeout timer)
-    - src/execution/execution/monitor.ts:190 (settle funding_fee_timeout)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1_ws.md
-  status: ⏳
-  natural_occurrence: occasional
 
 - id: strategy_1_ws.bybit.TIMING.ENTRY_FILL_REST_POLL_FALLBACK
   category: TIMING
@@ -355,32 +227,6 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
   status: ⏳
   natural_occurrence: occasional
 
-- id: strategy_1_ws.bybit.WEBSOCKET.CLOSE_WS_REJECTED_REST_FALLBACK
-  category: WEBSOCKET
-  severity: high
-  description: >
-    WS adapter rejects close order for bybit. REST fallback executes close.
-    Mirrors ORDER_LIFECYCLE.CLOSE_WS_REJECTED_REST_FALLBACK.
-  preconditions:
-    - intent in status=exiting
-    - WS adapter rejects close order
-  trigger_sequence:
-    - WS adapter createOrder → {status: 'rejected'}
-    - manager: close.ws_rejected → REST fallback
-  expected_behavior:
-    - close.ws_rejected logged
-    - REST close placed successfully
-  observability_contract:
-    - log: 'close.ws_rejected' {rejectReason}
-    - log: 'order.placed' {kind: "close"}
-  code_refs:
-    - src/execution/execution/manager.ts:1620 (ws_rejected check)
-    - src/execution/execution/manager.ts:1622 (close.ws_rejected log)
-    - src/execution/execution/manager.ts:1625 (REST fallback)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1_ws.md
-  status: ⏳
-  natural_occurrence: occasional
 
 # ── RECOVERY ────────────────────────────────────────────────────────────────
 
@@ -461,31 +307,6 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
   status: ⏳
   natural_occurrence: rare
 
-- id: strategy_1_ws.bybit.STRATEGY_SPECIFIC.FUNDING_FEE_EVENT_MATCHED_CORRECTLY
-  category: STRATEGY_SPECIFIC
-  severity: critical
-  description: >
-    Monitor matches Bybit ws.funding_fee only when exchange=bybit, symbol matches,
-    and fundingTime is within ±5000ms of fundingTs. Bybit execTime is in ms.
-    All three conditions must pass.
-  preconditions:
-    - intent monitoring for (bybit, symbolX, fundingTs=T)
-  trigger_sequence:
-    - bus: 'ws.funding_fee' {exchange: "bybit", symbol: "symbolX", fundingTime: T ± 3000ms}
-  expected_behavior:
-    - settle('funding_fee', {source: 'ws', latencyMs})
-  observability_contract:
-    - log: 'monitor.settle' {reason: "funding_fee", source: "ws"}
-  code_refs:
-    - src/execution/adapters/privatews/bybit-mapping.ts:151 (execType=Funding check)
-    - src/execution/adapters/privatews/bybit-mapping.ts:152 (fundingTime from execTime ms)
-    - src/execution/execution/monitor.ts:199 (exchange filter)
-    - src/execution/execution/monitor.ts:200 (symbol filter)
-    - src/execution/execution/monitor.ts:201 (±5000ms tolerance)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1_ws.md
-  status: ⏳
-  natural_occurrence: routine
 
 # ── SPEC_DIVERGENCE ──────────────────────────────────────────────────────────
 

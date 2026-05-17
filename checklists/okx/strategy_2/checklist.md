@@ -168,29 +168,6 @@ Code: `src/execution/strategies/strategy_2.ts`, `src/execution/execution/manager
 
 # ── TIMING ──────────────────────────────────────────────────────────────────
 
-- id: strategy_2.okx.TIMING.ENTRY_AT_CORRECT_OFFSET
-  category: TIMING
-  severity: high
-  description: >
-    Entry order is placed at approximately T_f - entryOffsetSeconds (5s by default).
-    WS adapter adds negligible latency. OKX timestamps in events are ms.
-  preconditions:
-    - scheduler running, strategy condition met
-  trigger_sequence:
-    - scheduler fires evaluate() at entryAt = nextFundingTimestamp - entryOffsetSeconds*1000
-  expected_behavior:
-    - intent.submitted timestamp <= entryAt + 1000ms
-    - order.placed timestamp <= entryAt + 2000ms
-  observability_contract:
-    - log: 'intent.submitted' timestamp <= entryAt + 1000ms
-    - log: 'order.placed' {kind: "entry"} timestamp <= entryAt + 2000ms
-  code_refs:
-    - src/execution/strategies/strategy_2.ts:59 (entryAt computation)
-  spec_refs:
-    - docs-strategy/strategies/strategy_2.md (Entry at T_f - 5s)
-  status: ⏳
-  natural_occurrence: routine
-
 - id: strategy_2.okx.TIMING.FUNDING_FEE_EVENT_OPENS_GATE
   category: TIMING
   severity: critical

@@ -460,35 +460,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
 
 # ── SPEC_DIVERGENCE ──────────────────────────────────────────────────────────
 
-- id: strategy_4_1a.okx.SPEC_DIVERGENCE.OKX_DASH_STRIP_ALL_RUNG_IDS
-  category: SPEC_DIVERGENCE
-  severity: high
-  description: >
-    All N rung clientOrderIds are dash-stripped by canonicalize() for OKX. The stripped
-    IDs are used in byEntryOrderId registration, REST createOrder, and T_funding timer
-    cancelOrder calls. Recovery also applies canonicalize(). This is OKX-specific and
-    not in the strategy spec.
-  preconditions:
-    - strategy_4_1a intent submitted for okx
-  trigger_sequence:
-    - ladder_limit branch: for each rung i, canonicalize('okx', ids.forIntent(intent.id, i)) → stripped
-    - stripped IDs registered in byEntryOrderId
-    - OKX fill events carry stripped clOrdId
-  expected_behavior:
-    - all OKX rung orders use dash-free IDs
-    - WS fill events from OKX match byEntryOrderId correctly
-    - no 'rung not found in byEntryOrderId' errors
-  observability_contract:
-    - db:orders clientOrderId column: no dashes for all rung rows (okx only)
-    - log: 'ladder.rung_placed' x N with dash-free IDs
-  code_refs:
-    - src/execution/execution/manager.ts:130 (canonicalize)
-    - src/execution/recovery/index.ts:132 (canonicalize in recovery)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md (no mention of OKX ID constraints)
-  status: ⏳
-  natural_occurrence: routine
-
 - id: strategy_4_1a.okx.SPEC_DIVERGENCE.KILL_SWITCH_BLOCKS_ENTRY
   category: SPEC_DIVERGENCE
   severity: high

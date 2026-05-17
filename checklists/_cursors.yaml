@@ -1,8 +1,20 @@
-binance__strategy_1: 2026-05-16T13:11:23Z  # ISO-8601 UTC
-binance__strategy_6: 2026-05-16T15:56:36Z  # ISO-8601 UTC
-bybit__strategy_1: 2026-05-16T13:11:15Z  # ISO-8601 UTC
-bitget__strategy_1: 2026-05-16T13:11:41Z  # ISO-8601 UTC
-gateio__strategy_1: 2026-05-16T13:11:20Z  # ISO-8601 UTC
-gateio__strategy_2: 2026-05-16T12:04:12Z  # ISO-8601 UTC
-kucoin__strategy_1: 2026-05-16T13:11:24Z  # ISO-8601 UTC
-okx__strategy_1: 2026-05-16T13:11:18Z  # ISO-8601 UTC
+binance__strategy_1: 2026-05-16T20:13:05Z
+binance__strategy_2: 2026-05-16T20:12:51Z
+binance__strategy_1_ws: 2026-05-16T20:12:56Z
+binance__strategy_4_1a: 2026-05-16T20:12:47Z
+binance__strategy_6: 2026-05-16T20:12:56Z
+bybit__strategy_1: 2026-05-16T20:12:47Z
+bybit__strategy_2: 2026-05-16T20:18:11Z
+bybit__strategy_4_1a: 2026-05-16T20:22:05Z
+bybit__strategy_6: 2026-05-16T20:24:44Z
+bybit__strategy_1_ws: 2026-05-16T20:16:53Z
+okx__strategy_1: 2026-05-16T20:35:00Z
+okx__strategy_6: 2026-05-16T20:34:13Z
+okx__strategy_1_ws: 2026-05-16T20:28:20Z
+bitget__strategy_1_ws: 2026-05-16T20:34:40Z
+bitget__strategy_2: 2026-05-16T20:40:00Z
+bitget__strategy_4_1a: 2026-05-16T20:36:00Z
+bitget__strategy_1: 2026-05-16T20:35:12Z
+bitget__strategy_6: 2026-05-16T20:36:28Z
+okx__strategy_2: 2026-05-16T21:00:00Z
+okx__strategy_4_1a: 2026-05-16T20:32:33Z

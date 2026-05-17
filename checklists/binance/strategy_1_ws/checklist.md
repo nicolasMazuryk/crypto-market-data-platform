@@ -276,40 +276,6 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
     symbol from raw.a.P[0].s. The mapping.ts mapFundingFee returns null if m != FUNDING_FEE
     or if P[0]/B[0] are absent.
 
-- id: strategy_1_ws.binance.TIMING.FUNDING_FEE_TIMEOUT
-  category: TIMING
-  severity: high
-  description: >
-    ws.funding_fee event does not arrive within fundingFeeTimeoutSeconds after T_f.
-    The timeout timer (set at monitor arm time) fires and calls settle('funding_fee_timeout',
-    {source:'timer'}). Manager places market close with reason=funding_fee_timeout.
-  preconditions:
-    - intent in status=monitoring
-    - ws.funding_fee not received before timeoutAt
-  trigger_sequence:
-    - setTimeout callback fires at timeoutAt = nextFundingTimestamp + fundingFeeTimeoutSeconds*1000
-  expected_behavior:
-    - monitor.settle logged (reason=funding_fee_timeout, source=timer, latencyMs measurable)
-    - intent.exiting.start logged (reason=funding_fee_timeout)
-    - order.placed (kind=close, side=sell, reduceOnly=true)
-    - intent exits normally
-  observability_contract:
-    - log: 'monitor.settle' {reason: "funding_fee_timeout", source: "timer"}
-    - log: 'intent.exiting.start' {reason: "funding_fee_timeout"}
-    - log: 'order.placed' {kind: "close", side: "sell", orderType: "market", reduceOnly: true}
-    - db:intentLifecycleEvents monitoring→exiting→exited
-  code_refs:
-    - src/execution/execution/monitor.ts:188 (timeout timer setup)
-    - src/execution/execution/monitor.ts:190 (settle funding_fee_timeout)
-    - src/execution/execution/manager.ts:1487 (intent.exiting.start log)
-    - src/execution/execution/manager.ts:1585 (closeKind='close' for funding_fee_timeout)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1_ws.md (Timeout fallback)
-  status: ⏳
-  natural_occurrence: occasional
-  notes: >
-    Normal operation — WS is usually fast but network delays can cause timeouts.
-    The timeout is the safety net ensuring position is closed even if the WS event is missed.
 
 - id: strategy_1_ws.binance.TIMING.ENTRY_FILL_REST_POLL_FALLBACK
   category: TIMING

@@ -228,35 +228,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
   natural_occurrence: routine
   notes: OKX bills array may contain multiple entries; filter by bizType for FUND entries.
 
-- id: strategy_1.okx.WEBSOCKET.CLOSE_FILL_REST_POLL_FALLBACK
-  category: WEBSOCKET
-  severity: high
-  description: >
-    WS fill event for close order not received. pollForCloseFill (20×1s) detects
-    fill via getOrder or position=flat. Logs 'intent.exited.complete' (REST poll path).
-  preconditions:
-    - intent in exiting
-    - close order placed
-    - WS fill event missed
-  trigger_sequence:
-    - pollForCloseFill: getOrder returns filled OR position qty=0
-  expected_behavior:
-    - intent.exited.complete logged (REST poll path only)
-    - status exiting → exited
-  observability_contract:
-    - log: 'intent.exited.complete' {exitReason: "timed"}
-    - db:intentLifecycleEvents exiting→exited
-  code_refs:
-    - src/execution/execution/manager.ts:1235 (pollForCloseFill)
-    - src/execution/execution/manager.ts:1255 (exited.complete log)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md
-  status: ⏳
-  natural_occurrence: occasional
-  notes: >
-    Distinguishing signal: 'intent.exited.complete' appears only on REST poll path.
-    WS close fill handler at manager.ts:1914 does NOT emit this log.
-
 # ── RECOVERY ────────────────────────────────────────────────────────────────
 
 - id: strategy_1.okx.RECOVERY.RESTART_IN_MONITORING

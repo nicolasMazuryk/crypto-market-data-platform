@@ -127,39 +127,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
     is the observable signal. Bybit numeric error 110001 (order not found) may appear
     in cancel scenarios but not here.
 
-- id: strategy_1.bybit.ORDER_LIFECYCLE.ENTRY_CREATE_ORDER_FAILED
-  category: ORDER_LIFECYCLE
-  severity: high
-  description: >
-    REST createOrder throws (e.g. Bybit returns HTTP 429 rate-limit or network timeout).
-    Manager catches the error, transitions intent to error with code=create_order_failed,
-    cleans up byEntryOrderId map entry.
-  preconditions:
-    - preflight passes, setLeverage passes
-    - REST call to createOrder throws (network error, rate limit)
-  trigger_sequence:
-    - rest.createOrder() rejects with error
-  expected_behavior:
-    - intent.error logged with code=create_order_failed
-    - no WS fill event expected
-    - status transitions submitted → error
-    - byEntryOrderId entry removed
-  observability_contract:
-    - log: 'intent.error' {code: "create_order_failed", exchange: "bybit"}
-    - db:intentLifecycleEvents submitted→error
-    - db:orders entry may exist (durability write runs before createOrder call)
-  code_refs:
-    - src/execution/execution/manager.ts:2707 (createOrder catch)
-    - src/execution/execution/manager.ts:2709 (setError create_order_failed)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (no error handling in spec)
-  status: ⏳
-  natural_occurrence: occasional
-  notes: >
-    Bybit rate-limit or connection drops during funding-event bursts are realistic.
-    The durability write (beforeCreateOrder) runs before createOrder, so the DB may
-    have an 'entry' row in status=pending even though no order was placed.
-
 - id: strategy_1.bybit.ORDER_LIFECYCLE.TIMED_CLOSE_PLACED_AND_FILLED
   category: ORDER_LIFECYCLE
   severity: critical
