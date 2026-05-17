@@ -1,6 +1,6 @@
 import type { Exchange } from '../types/exchange.js'
 import type { ExecutionIds } from '../core/ids.js'
-import { computeOrderQty, lotStep } from './shared/sizing.js'
+import { computeOrderQty, lotStep, meetsMinNotional, alignToLotStep } from './shared/sizing.js'
 import type { EvalContext, StrategyRule, TradeIntent } from './types.js'
 
 /**
@@ -63,6 +63,14 @@ export function createStrategy4_1aRule(opts: {
         const priceOffsetPct = n === 1 ? topOffset : topOffset + (i * (bottomOffset - topOffset)) / (n - 1)
         return { priceOffsetPct, qtyFraction: rungQty / qty }
       })
+
+      // Skip symbol if even the largest rung at the highest (most favourable) limit price
+      // would fall below minNotional — all rungs would be rejected at submission.
+      if (rungs[0] !== undefined) {
+        const topLimitPrice = price * (1 - rungs[0].priceOffsetPct / 100)
+        const maxRungQty = alignToLotStep(qty * rungs[0].qtyFraction, market)
+        if (!meetsMinNotional(maxRungQty, topLimitPrice, market)) return []
+      }
 
       return [
         {

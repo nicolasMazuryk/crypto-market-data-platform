@@ -512,6 +512,9 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     ...(orderWsAdapters.size > 0 ? { orderWsAdapters } : {}),
     ...(recoveredInitialState ? { initialState: recoveredInitialState } : {}),
     ...(persistenceWriter ? { beforeCreateOrder: params => persistenceWriter.writeOrderSync(params) } : {}),
+    // Stagger concurrent entry createOrder calls per exchange to prevent rate-limit exhaustion
+    // when multiple intents evaluate at the same T_funding. Single-symbol cycles unaffected.
+    submissionStaggerMs: { bybit: 150, binance: 100 },
   })
   execManager.start()
 

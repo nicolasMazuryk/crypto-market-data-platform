@@ -7,11 +7,18 @@ export function lotStep(precision: number): number {
 }
 
 function roundDownToStep(value: number, step: number): number {
-  return Math.floor(value / step) * step
+  const count = Math.floor(value / step)
+  if (step >= 1) return count * step
+  // Avoid IEEE 754 artifacts for fractional steps (e.g. 132 * 0.1 = 13.200000000000001)
+  const dp = Math.round(-Math.log10(step))
+  return parseFloat((count * step).toFixed(dp))
 }
 
 function roundUpToStep(value: number, step: number): number {
-  return Math.ceil(value / step) * step
+  const count = Math.ceil(value / step)
+  if (step >= 1) return count * step
+  const dp = Math.round(-Math.log10(step))
+  return parseFloat((count * step).toFixed(dp))
 }
 
 /**
@@ -63,4 +70,22 @@ export function computeOrderQty(
   if (market.minCost !== undefined && qty * contractSize * price < market.minCost) return null
 
   return qty
+}
+
+/**
+ * Snap a raw rung qty down to the market's lot step, cleaning up IEEE 754 artifacts.
+ * Use this instead of ad-hoc Math.round(qty * 1e8) / 1e8 in the ladder path.
+ */
+export function alignToLotStep(qty: number, market: MarketMetadata): number {
+  return roundDownToStep(qty, lotStep(market.amountPrecision))
+}
+
+/**
+ * Returns false if qty * contractSize * price falls below market.minCost.
+ * Use as a pre-submission notional guard.
+ */
+export function meetsMinNotional(qty: number, price: number, market: MarketMetadata): boolean {
+  if (market.minCost === undefined) return true
+  const contractSize = market.contractSize > 0 ? market.contractSize : 1
+  return qty * contractSize * price >= market.minCost
 }

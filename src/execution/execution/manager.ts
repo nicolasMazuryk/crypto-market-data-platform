@@ -32,6 +32,7 @@ import type {
 import type { PreflightResult } from './preflight.js'
 import type { RiskConfig } from '../config/types.js'
 import { logFundingGateClosed, logFundingGateOpened } from '../observability/log-events.js'
+import { alignToLotStep, meetsMinNotional } from '../strategies/shared/sizing.js'
 
 const TERMINAL: ReadonlySet<IntentStatus> = new Set(['exited', 'error', 'cancelled'])
 
@@ -77,6 +78,10 @@ export interface ExecutionManagerOptions {
   beforeCreateOrder?: (params: BeforeCreateOrderParams) => Promise<void>
   /** WS order adapters keyed by exchange — used for strategy_1_ws instead of REST. */
   orderWsAdapters?: Map<Exchange, ExchangeOrderWsAdapter>
+  /** Minimum gap (ms) between consecutive entry createOrder calls per exchange.
+   *  Prevents rate-limit exhaustion when multiple intents evaluate at the same T_funding.
+   *  Single-symbol cycles are unaffected (no prior submission to wait for). */
+  submissionStaggerMs?: Partial<Record<Exchange, number>>
 }
 
 export interface ExecutionManagerHandle extends ExecutionManager {
@@ -125,6 +130,35 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
   const busUnsubs: Unsubscribe[] = []
   // Track entry fill timestamps per intentId for exit latency metric
   const entryFilledAt = new Map<string, number>()
+
+  // Per-exchange promise chain for serialising concurrent entry createOrder calls.
+  // Prevents rate-limit exhaustion when multiple intents evaluate at the same T_funding.
+  // Single-symbol cycles acquire immediately (no predecessor in the chain).
+  const submissionTails = new Map<Exchange, Promise<void>>()
+
+  function withSubmissionGate<T>(exchange: Exchange, fn: () => Promise<T>): Promise<T> {
+    const staggerMs = opts.submissionStaggerMs?.[exchange] ?? 0
+    if (staggerMs <= 0) return fn()
+
+    // Read and set tail synchronously — JS single-threaded guarantee ensures concurrent
+    // callers from separate async tasks chain correctly between microtask boundaries.
+    const prev = submissionTails.get(exchange) ?? Promise.resolve()
+    let releaseGate!: () => void
+    const gate = new Promise<void>(r => {
+      releaseGate = r
+    })
+    submissionTails.set(exchange, gate)
+
+    // Chain fn after prev completes. Errors in prev don't block us.
+    const p = prev.catch(() => {}).then(() => fn())
+    // Hold gate for staggerMs after fn settles so next submission waits the full gap.
+    void p.then(() => {
+      setTimeout(releaseGate, staggerMs)
+    }).catch(() => {
+      releaseGate()
+    })
+    return p
+  }
 
   // Canonicalize a clientOrderId for the given exchange (e.g. OKX strips dashes).
   // WS events arrive with the canonical form, so lookup maps must use canonical keys.
@@ -1109,11 +1143,85 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     setTimeout(() => void tick(), delayMs)
   }
 
+  async function placeLadderPostErrorProtectiveClose(
+    s: IntentState,
+    order: { clientOrderId: string; filledQty: number }
+  ): Promise<void> {
+    const rest = restAdapters.get(s.intent.exchange)
+    if (!rest) return
+    const closeSide: OrderSide = s.intent.side === 'long' ? 'sell' : 'buy'
+    const clientOrderId = createHash('sha256')
+      .update(`post_error_close|${s.intent.id}|${order.clientOrderId}`)
+      .digest('hex')
+      .slice(0, 28)
+    logger.warn(
+      {
+        event: 'ladder.post_error_fill',
+        intentId: s.intent.id,
+        exchange: s.intent.exchange,
+        symbol: s.intent.symbol,
+        filledQty: order.filledQty,
+        closeClientOrderId: clientOrderId,
+      },
+      'ladder.post_error_fill: rung filled after error — placing protective close'
+    )
+    if (opts.beforeCreateOrder) {
+      await opts
+        .beforeCreateOrder({
+          intentId: s.intent.id,
+          clientOrderId,
+          exchange: s.intent.exchange,
+          symbol: s.intent.exchangeSymbol,
+          side: closeSide,
+          kind: 'close',
+          orderType: 'market',
+          qty: order.filledQty,
+          reduceOnly: true,
+        })
+        .catch((err: unknown) => {
+          logger.warn({ intentId: s.intent.id, err }, 'manager: durability write failed for post-error close')
+        })
+    }
+    try {
+      await rest.createOrder({
+        intentId: s.intent.id,
+        clientOrderId,
+        exchange: s.intent.exchange,
+        symbol: s.intent.exchangeSymbol,
+        side: closeSide,
+        type: 'market',
+        qty: order.filledQty,
+        reduceOnly: true,
+      })
+      logger.warn(
+        { event: 'ladder.post_error_close_placed', intentId: s.intent.id, clientOrderId, filledQty: order.filledQty },
+        'ladder.post_error_close_placed'
+      )
+    } catch (err) {
+      logger.error(
+        { event: 'ladder.post_error_close_failed', intentId: s.intent.id, err },
+        'ladder.post_error_close_failed'
+      )
+    }
+  }
+
   function handleEntryOrderEvent(
     s: IntentState,
     order: { clientOrderId: string; exchangeOrderId?: string; status: string; filledQty: number; avgFillPrice?: number }
   ): void {
-    if (TERMINAL.has(s.status)) return
+    if (TERMINAL.has(s.status)) {
+      // Ladder rung filled after ladder_no_fills error (cancel didn't propagate before fill).
+      // Place protective close immediately to avoid untracked open position.
+      if (
+        s.status === 'error' &&
+        s.intent.entryPolicy?.kind === 'ladder_limit' &&
+        (order.status === 'filled' || order.status === 'partially_filled') &&
+        order.filledQty > 0
+      ) {
+        void placeLadderPostErrorProtectiveClose(s, order)
+      }
+      return
+    }
 
     // Ladder intents track per-rung fills separately; the T_funding timer drives handleEntryFilled.
     if (s.intent.entryPolicy?.kind === 'ladder_limit' && s.ladderRungs) {
@@ -1840,6 +1948,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         if (closeAck.exchangeOrderId) {
           byCloseExchangeOrderId.set(closeAck.exchangeOrderId, intent.id)
           s.exitOrderRefs = { close: { clientOrderId: closeId, exchangeOrderId: closeAck.exchangeOrderId } }
+          // Post-ACK emit to persist exchange_order_id in DB (pre-ACK emit had ackPending=true, no exchangeOrderId).
+          bus.emit('order.placed', { ...closePlacedPre, exchangeOrderId: closeAck.exchangeOrderId, ackPending: false })
         }
         logger.info(
           {
@@ -2015,6 +2125,57 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     }
   }
 
+  async function cancelStaleReduceOnlyOrders(
+    rest: ExchangeRestAdapter,
+    exchange: Exchange,
+    exchangeSymbol: string,
+    intentId: string
+  ): Promise<void> {
+    let openOrders: Awaited<ReturnType<typeof rest.getOpenOrders>>
+    try {
+      openOrders = await rest.getOpenOrders(exchangeSymbol)
+    } catch {
+      return
+    }
+    const canonicalize = (id: string): string => rest.canonicalizeClientOrderId?.(id) ?? id
+    const stale = openOrders.filter(o => {
+      if (!o.reduceOnly) return false
+      const canonical = canonicalize(o.clientOrderId)
+      return (
+        !byCloseOrderId.has(canonical) &&
+        !(o.exchangeOrderId && byCloseExchangeOrderId.has(o.exchangeOrderId))
+      )
+    })
+    if (stale.length === 0) return
+    logger.warn(
+      {
+        event: 'pre_entry.stale_reduce_only_sweep',
+        intentId,
+        exchange,
+        symbol: exchangeSymbol,
+        count: stale.length,
+        orderIds: stale.map(o => o.clientOrderId),
+      },
+      'pre_entry.stale_reduce_only_sweep: cancelling stale reduce-only orders before new entry'
+    )
+    await Promise.allSettled(
+      stale.map(o =>
+        rest
+          .cancelOrder({
+            symbol: exchangeSymbol,
+            ...(o.clientOrderId ? { clientOrderId: o.clientOrderId } : {}),
+            ...(o.exchangeOrderId ? { exchangeOrderId: o.exchangeOrderId } : {}),
+          })
+          .catch((err: unknown) => {
+            logger.warn(
+              { intentId, exchange, clientOrderId: o.clientOrderId, err },
+              'pre_entry.stale_reduce_only_sweep: cancel failed'
+            )
+          })
+      )
+    )
+  }
+
   async function flattenOrphanPosition(
     exchange: Exchange,
     details: { symbol: string; localQty: number; restQty: number; restSide?: 'long' | 'short' | 'flat' }
@@ -2072,6 +2233,23 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       'orphan_flatten: closing surplus position detected by reconciler'
     )
     try {
+      if (opts.beforeCreateOrder) {
+        await opts
+          .beforeCreateOrder({
+            intentId: `orphan_flatten:${exchange}:${normalized}`,
+            clientOrderId,
+            exchange,
+            symbol: desyncSymbol,
+            side: flattenSide,
+            kind: 'close',
+            orderType: 'market',
+            qty: surplus,
+            reduceOnly: true,
+          })
+          .catch((err: unknown) => {
+            logger.warn({ exchange, symbol: desyncSymbol, err }, 'manager: durability write failed for orphan_flatten')
+          })
+      }
       await rest.createOrder({
         intentId: `orphan_flatten:${exchange}:${normalized}`,
         clientOrderId,
@@ -2293,6 +2471,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         return s
       }
 
+      // Market is guaranteed present — preflight already verified it.
+      const market = opts.markets.get(intent.exchange, intent.symbol)!
+
       const rest = restAdapters.get(intent.exchange)
       if (!rest) {
         setError(s, 'no_adapter', `no rest adapter for ${intent.exchange}`)
@@ -2330,6 +2511,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const entryPolicy = intent.entryPolicy ?? { kind: 'market' }
       const entrySide: 'buy' | 'sell' = intent.side === 'long' ? 'buy' : 'sell'
 
+      // Sweep stale reduce-only orders from prior cycles before placing entry.
+      // Prevents cross-cycle fills where an unconfirmed-cancelled SL/TP fills against the new position.
+      await cancelStaleReduceOnlyOrders(rest, intent.exchange, intent.exchangeSymbol, intent.id)
+
       transition(s, 'submitted')
       // If the intent was preempted while ensureLeverage was in-flight, transition()
       // was a no-op (TERMINAL guard) and s.status is still 'cancelled' — bail early.
@@ -2359,6 +2544,17 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         const preFundingSide: OrderSide = entryPolicy.preFundingSide === 'long' ? 'buy' : 'sell'
         const mainSide: OrderSide = entryPolicy.mainSide === 'long' ? 'buy' : 'sell'
         const toleranceMs = 5_000
+
+        // Guard: pre-funding qty computed at evaluation time using a stale price may violate
+        // minNotional by submission time. Abort early before any side-effects are set up.
+        if (!meetsMinNotional(entryPolicy.preFundingVolume, price, market)) {
+          setError(
+            s,
+            'min_notional',
+            `pre-funding notional ${entryPolicy.preFundingVolume * price} below minCost ${market.minCost}`
+          )
+          return s
+        }
 
         const preFundingId = ids.forIntent(intent.id, 90)
         const canonPreFundingId = canonicalize(intent.exchange, preFundingId)
@@ -2599,16 +2795,18 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
         let preFundingAck
         try {
-          preFundingAck = await orderClient(intent.exchange, intent.strategy).createOrder({
-            intentId: intent.id,
-            clientOrderId: preFundingId,
-            exchange: intent.exchange,
-            symbol: intent.exchangeSymbol,
-            side: preFundingSide,
-            type: 'market',
-            qty: entryPolicy.preFundingVolume,
-            leverage: intent.leverage,
-          })
+          preFundingAck = await withSubmissionGate(intent.exchange, () =>
+            orderClient(intent.exchange, intent.strategy).createOrder({
+              intentId: intent.id,
+              clientOrderId: preFundingId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              side: preFundingSide,
+              type: 'market',
+              qty: entryPolicy.preFundingVolume,
+              leverage: intent.leverage,
+            })
+          )
         } catch (err) {
           fundingFeeUnsub()
           clearTimeout(timeoutHandle)
@@ -2683,11 +2881,18 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             rungs.map((rung, i) => {
               const rungState = ladderRungState[i]
               if (!rungState) return Promise.resolve()
-              const rungQty = Math.round(check.qty * rung.qtyFraction * 1e8) / 1e8
+              const rungQty = alignToLotStep(check.qty * rung.qtyFraction, market)
               const limitPrice =
                 intent.side === 'long'
                   ? price * (1 - rung.priceOffsetPct / 100)
                   : price * (1 + rung.priceOffsetPct / 100)
+              if (rungQty <= 0 || !meetsMinNotional(rungQty, limitPrice, market)) {
+                logger.warn(
+                  { intentId: intent.id, rungIdx: i, rungQty, limitPrice, minCost: market.minCost },
+                  'ladder.rung_below_min_notional'
+                )
+                return Promise.resolve()
+              }
               return beforeCreate({
                 intentId: intent.id,
                 clientOrderId: rungState.clientOrderId,
@@ -2719,14 +2924,23 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         if (s.status === 'submitted') transition(s, 'acked')
         if (s.status === 'acked') transition(s, 'working')
 
-        // Place all limit orders in parallel.
-        await Promise.allSettled(
-          rungs.map(async (rung, i) => {
+        // Place all limit orders in parallel, gated so concurrent intents don't burst.
+        await withSubmissionGate(intent.exchange, () =>
+          Promise.allSettled(
+            rungs.map(async (rung, i) => {
             const rungState = ladderRungState[i]
             if (!rungState) return
-            const rungQty = Math.round(check.qty * rung.qtyFraction * 1e8) / 1e8
+            const rungQty = alignToLotStep(check.qty * rung.qtyFraction, market)
             const limitPrice =
               intent.side === 'long' ? price * (1 - rung.priceOffsetPct / 100) : price * (1 + rung.priceOffsetPct / 100)
+            if (rungQty <= 0 || !meetsMinNotional(rungQty, limitPrice, market)) {
+              byEntryOrderId.delete(rungState.canonicalId)
+              logger.warn(
+                { intentId: intent.id, rungIdx: i, rungQty, limitPrice, minCost: market.minCost },
+                'ladder.rung_below_min_notional'
+              )
+              return
+            }
             try {
               const ack = await rest.createOrder({
                 intentId: intent.id,
@@ -2767,7 +2981,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               byEntryOrderId.delete(rungState.canonicalId)
               logger.warn({ intentId: intent.id, rungIdx: i, err }, 'ladder rung placement failed')
             }
-          })
+            })
+          )
         )
 
         // Set a timer at T_funding: cancel unfilled rungs, arm SL/TP from weighted avg fills.
@@ -2776,18 +2991,50 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           void (async () => {
             if (TERMINAL.has(s.status)) return
 
-            // Cancel all unfilled rungs.
-            await Promise.allSettled(
+            // Cancel all unfilled rungs and collect confirmed-cancelled ones.
+            const cancelSettled = await Promise.allSettled(
               (s.ladderRungs ?? [])
                 .filter(r => !r.filled)
                 .map(r =>
-                  rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId: r.clientOrderId }).catch(() => {
-                    /* best effort */
-                  })
+                  rest
+                    .cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId: r.clientOrderId })
+                    .then(() => r)
+                    .catch((err: unknown) => {
+                      logger.warn({ intentId: intent.id, clientOrderId: r.clientOrderId, err }, 'manager: ladder rung cancel failed')
+                      throw err
+                    })
                 )
             )
 
+            // Emit synthetic ws.order cancelled events so the persistence writer marks DB rows as cancelled.
+            const cancelNow = clock.now()
+            for (const result of cancelSettled) {
+              if (result.status === 'fulfilled') {
+                const rung = result.value
+                bus.emit('ws.order', {
+                  exchange: intent.exchange,
+                  seq: 0,
+                  receivedAt: cancelNow,
+                  order: {
+                    exchange: intent.exchange,
+                    symbol: intent.exchangeSymbol,
+                    clientOrderId: rung.clientOrderId,
+                    exchangeOrderId: '',
+                    side: entrySide,
+                    type: 'limit',
+                    qty: 0,
+                    filledQty: 0,
+                    reduceOnly: false,
+                    status: 'cancelled',
+                    submittedAt: cancelNow,
+                    updatedAt: cancelNow,
+                  },
+                })
+              }
+            }
+
             if (s.filledQty <= 0) {
+              logger.warn({ event: 'ladder.no_fills', intentId: intent.id }, 'ladder.no_fills')
               setError(s, 'ladder_no_fills', 'no ladder rungs filled before T_funding')
               return
             }
@@ -2855,17 +3102,19 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
         let ack
         try {
-          ack = await rest.createOrder({
-            intentId: intent.id,
-            clientOrderId,
-            exchange: intent.exchange,
-            symbol: intent.exchangeSymbol,
-            side: entrySide,
-            type: 'limit',
-            qty: check.qty,
-            price: limitPrice,
-            leverage: intent.leverage,
-          })
+          ack = await withSubmissionGate(intent.exchange, () =>
+            rest.createOrder({
+              intentId: intent.id,
+              clientOrderId,
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              side: entrySide,
+              type: 'limit',
+              qty: check.qty,
+              price: limitPrice,
+              leverage: intent.leverage,
+            })
+          )
         } catch (err) {
           byEntryOrderId.delete(canonEntryId)
           setError(s, 'create_order_failed', String(err))
@@ -2999,16 +3248,18 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       let ack
       try {
-        ack = await orderClient(intent.exchange, intent.strategy).createOrder({
-          intentId: intent.id,
-          clientOrderId,
-          exchange: intent.exchange,
-          symbol: intent.exchangeSymbol,
-          side: entrySide,
-          type: 'market',
-          qty: check.qty,
-          leverage: intent.leverage,
-        })
+        ack = await withSubmissionGate(intent.exchange, () =>
+          orderClient(intent.exchange, intent.strategy).createOrder({
+            intentId: intent.id,
+            clientOrderId,
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
+            side: entrySide,
+            type: 'market',
+            qty: check.qty,
+            leverage: intent.leverage,
+          })
+        )
       } catch (err) {
         byEntryOrderId.delete(canonEntryId)
         setError(s, 'create_order_failed', String(err))
@@ -3050,6 +3301,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (ack.exchangeOrderId) {
         s.entryExchangeOrderId = ack.exchangeOrderId
         byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
+        // Post-ACK emit to persist exchange_order_id in DB. The pre-ACK order.placed (above)
+        // had no exchangeOrderId; this upsert sets it so ws.fill lookups by exchangeOrderId work
+        // for exchanges (e.g. Binance) that may send empty clientOrderId in ORDER_TRADE_UPDATE.
+        bus.emit('order.placed', { ...entryPlacedPre, exchangeOrderId: ack.exchangeOrderId, ackPending: false })
       }
       // Log the ACK with latency breakdown: placement_latency_ms (submit→placed) and ack_latency_ms (placed→acked).
       logger.info(

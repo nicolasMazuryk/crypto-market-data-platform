@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { MarketMetadata } from '../../markets/types.js'
-import { computeOrderQty, lotStep } from './sizing.js'
+import { alignToLotStep, computeMinOrderQty, computeOrderQty, lotStep, meetsMinNotional } from './sizing.js'
 
 function makeMarket(overrides: Partial<MarketMetadata> = {}): MarketMetadata {
   return {
@@ -101,6 +101,88 @@ describe('computeOrderQty', () => {
     // maxAmount clamps qty to 5, but minAmount = 10
     const market = makeMarket({ amountPrecision: 1, maxAmount: 5, minAmount: 10 })
     expect(computeOrderQty(20, 0.0001, 4, market)).toBeNull()
+  })
+})
+
+describe('computeOrderQty — float precision', () => {
+  it('returns clean float without IEEE 754 artifact (132 * 0.1 = 13.200000000000001 without fix)', () => {
+    // Confirm artifact exists in raw JS
+    expect(String(132 * 0.1)).toBe('13.200000000000001')
+    // computeOrderQty should produce clean 13.2 via toFixed-based rounding
+    const market = makeMarket({ amountPrecision: 0.1, minAmount: 0.1 })
+    // amountUsd=1320, price=100, step=0.1 → rawQty=13.2 → count=132 via float
+    // Without fix: 132*0.1 = 13.200000000000001; with fix: toFixed(1) → 13.2
+    const qty = computeOrderQty(1320, 100, 1, market)
+    expect(qty).not.toBeNull()
+    expect(String(qty)).not.toBe('13.200000000000001')
+  })
+
+  it('returns clean float for step 0.001', () => {
+    const market = makeMarket({ amountPrecision: 0.001 })
+    // 100 / 77 = 1.2987... → floor to step 0.001 = 1.298
+    const qty = computeOrderQty(100, 77, 1, market)
+    expect(qty).toBe(1.298)
+    expect(String(qty)).not.toMatch(/000000/)
+  })
+})
+
+describe('alignToLotStep', () => {
+  it('floors fractional-step rung qty to lot step (ladder path fix)', () => {
+    // Old code: Math.round(10 * (1/3) * 1e8) / 1e8 = 3.33333333 (not on step=1 boundary)
+    // alignToLotStep correctly floors to 3
+    const market = makeMarket({ amountPrecision: 1 })
+    expect(alignToLotStep(10 * (1 / 3), market)).toBe(3)
+  })
+
+  it('removes IEEE 754 artifact from prior multiplication (e.g. 132 * 0.1)', () => {
+    // 132 * 0.1 = 13.200000000000001 in JS; aligning to step 0.1 cleans it
+    const market = makeMarket({ amountPrecision: 0.1 })
+    const withArtifact = 132 * 0.1
+    expect(String(withArtifact)).toBe('13.200000000000001')
+    const aligned = alignToLotStep(withArtifact, market)
+    expect(aligned).toBe(13.2)
+    expect(String(aligned)).toBe('13.2')
+  })
+
+  it('floors to the step boundary', () => {
+    const market = makeMarket({ amountPrecision: 10 })
+    expect(alignToLotStep(37, market)).toBe(30)
+  })
+
+  it('works for integer step 1', () => {
+    const market = makeMarket({ amountPrecision: 1 })
+    expect(alignToLotStep(5.9, market)).toBe(5)
+  })
+})
+
+describe('meetsMinNotional', () => {
+  it('returns true when market has no minCost', () => {
+    const market = makeMarket()
+    expect(meetsMinNotional(1, 0.5, market)).toBe(true)
+  })
+
+  it('returns false when qty * price < minCost', () => {
+    const market = makeMarket({ minCost: 5 })
+    expect(meetsMinNotional(1, 0.5, market)).toBe(false)
+  })
+
+  it('returns true when qty * price >= minCost', () => {
+    const market = makeMarket({ minCost: 5 })
+    expect(meetsMinNotional(10, 0.5, market)).toBe(true)
+  })
+
+  it('returns true when notional equals minCost exactly', () => {
+    const market = makeMarket({ minCost: 5 })
+    expect(meetsMinNotional(10, 0.5, market)).toBe(true)
+  })
+
+  it('accounts for contractSize', () => {
+    // qty=1 contract, contractSize=10 BTC/contract, price=$50k → notional=$500k
+    const market = makeMarket({ contractSize: 10, minCost: 100 })
+    expect(meetsMinNotional(1, 50000, market)).toBe(true)
+    // qty=1 contract, contractSize=0.001 BTC/contract, price=$50k → notional=$50
+    const smallContract = makeMarket({ contractSize: 0.001, minCost: 100 })
+    expect(meetsMinNotional(1, 50000, smallContract)).toBe(false)
   })
 })
 

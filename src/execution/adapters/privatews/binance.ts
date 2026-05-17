@@ -75,7 +75,7 @@ export function createBinancePrivateWsAdapter(opts: BinancePrivateWsAdapterOptio
     if (raw.e === 'ACCOUNT_UPDATE') {
       const acctRaw = raw as unknown as BinanceAccountUpdateRaw
       const { balances, positions } = mapAccountUpdate(acctRaw, receivedAt, seq)
-      const fee = mapFundingFee(acctRaw, receivedAt, seq, 'binance', rateCache)
+      const fee = mapFundingFee(acctRaw, receivedAt, seq, 'binance', rateCache, opts.logger)
       return {
         balances,
         positions,

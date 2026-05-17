@@ -999,8 +999,8 @@ describe('Task 4 — FSM ordering, Binance routing, close partial fills', () => 
     const { manager, bus, ids } = makeManager({ restAdapter: rest })
     const intent = makeIntent()
 
-    const placedEvents: { ackPending?: boolean }[] = []
-    bus.on('order.placed', ev => placedEvents.push({ ackPending: ev.ackPending }))
+    const placedEvents: { ackPending?: boolean; exchangeOrderId?: string }[] = []
+    bus.on('order.placed', ev => placedEvents.push({ ackPending: ev.ackPending, exchangeOrderId: ev.exchangeOrderId }))
 
     const submitPromise = manager.submit(intent)
 
@@ -1016,8 +1016,10 @@ describe('Task 4 — FSM ordering, Binance routing, close partial fills', () => 
     resolveCreate!()
     await submitPromise
 
-    // Still only one order.placed (no second emit on ACK)
-    expect(placedEvents).toHaveLength(1)
+    // Second order.placed emitted after ACK with exchangeOrderId (persists exchange_order_id to DB)
+    expect(placedEvents).toHaveLength(2)
+    expect(placedEvents[1]!.ackPending).toBe(false)
+    expect(placedEvents[1]!.exchangeOrderId).toBe('eid')
     void ids
   })
 

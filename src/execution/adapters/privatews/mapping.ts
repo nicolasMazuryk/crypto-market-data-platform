@@ -132,7 +132,7 @@ export function mapFillFromOrderTradeUpdate(
   return {
     exchange,
     symbol: o.s,
-    clientOrderId: o.c,
+    clientOrderId: o.c || (o.C ?? ''),
     exchangeOrderId: String(o.i),
     exchangeFillId: String(o.t),
     qty: lastQty,
@@ -190,19 +190,27 @@ export function mapFundingFee(
   receivedAt: number,
   _seq: number,
   exchange: Exchange = 'binance',
-  rateCache?: FundingRateCache
+  rateCache?: FundingRateCache,
+  logger?: { warn: (obj: Record<string, unknown>, msg: string) => void }
 ): FundingFeeEvent | null {
   if (raw.a.m !== 'FUNDING_FEE') return null
   const firstPos = raw.a.P[0]
   const firstBal = raw.a.B[0]
-  if (!firstPos || !firstBal) return null
+  if (!firstPos) {
+    logger?.warn(
+      { event: 'funding_fee.missing_position', m: raw.a.m, P: raw.a.P, B: raw.a.B, T: raw.T },
+      'ACCOUNT_UPDATE FUNDING_FEE: a.P is empty — cannot determine symbol, dropping event'
+    )
+    return null
+  }
   return {
     exchange,
     symbol: firstPos.s,
     fundingTime: raw.T,
     fundingRate: rateCache?.get(firstPos.s, raw.T) ?? 0,
-    fundingAmount: parseFloat(firstBal.bc),
-    asset: firstBal.a,
+    // If B[0] is absent (unusual), emit with fundingAmount=0 so the monitor can still settle.
+    fundingAmount: firstBal ? parseFloat(firstBal.bc) : 0,
+    asset: firstBal?.a ?? 'USDT',
     positionQty: Math.abs(parseFloat(firstPos.pa)),
     receivedAt,
   }
