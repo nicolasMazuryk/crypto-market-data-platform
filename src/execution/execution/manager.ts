@@ -2233,23 +2233,6 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       'orphan_flatten: closing surplus position detected by reconciler'
     )
     try {
-      if (opts.beforeCreateOrder) {
-        await opts
-          .beforeCreateOrder({
-            intentId: `orphan_flatten:${exchange}:${normalized}`,
-            clientOrderId,
-            exchange,
-            symbol: desyncSymbol,
-            side: flattenSide,
-            kind: 'close',
-            orderType: 'market',
-            qty: surplus,
-            reduceOnly: true,
-          })
-          .catch((err: unknown) => {
-            logger.warn({ exchange, symbol: desyncSymbol, err }, 'manager: durability write failed for orphan_flatten')
-          })
-      }
       await rest.createOrder({
         intentId: `orphan_flatten:${exchange}:${normalized}`,
         clientOrderId,
