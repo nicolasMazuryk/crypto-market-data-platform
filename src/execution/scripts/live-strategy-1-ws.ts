@@ -80,6 +80,7 @@ async function main(): Promise<void> {
     args: process.argv.slice(2),
     options: {
       config: { type: 'string' },
+      registry: { type: 'string' },
       'metrics-port': { type: 'string' },
       'health-port': { type: 'string' },
       'timeout-minutes': { type: 'string' },
@@ -114,6 +115,7 @@ async function main(): Promise<void> {
 
   const handle = await startEngine({
     configPath,
+    ...(values.registry !== undefined ? { registryPath: values.registry } : {}),
     ...(values['metrics-port'] !== undefined ? { metricsPort: parseInt(values['metrics-port'], 10) } : {}),
     ...(values['health-port'] !== undefined ? { healthPort: parseInt(values['health-port'], 10) } : {}),
     ...(values['skip-recovery'] === true ? { skipRecovery: true } : {}),
@@ -238,6 +240,7 @@ async function main(): Promise<void> {
   function runPostRunAssertions(): void {
     const timeoutExits = settledReasons.filter(r => r.reason === 'funding_fee_timeout')
     const wsExits = settledReasons.filter(r => r.reason === 'funding_fee' && r.source === 'ws')
+    const restPollExits = settledReasons.filter(r => r.reason === 'funding_fee' && r.source === 'rest_poll')
     const allFundingFeeExits = settledReasons.filter(r => r.reason === 'funding_fee')
 
     log({
@@ -246,6 +249,7 @@ async function main(): Promise<void> {
       fundingFeeExits: allFundingFeeExits.length,
       timeoutExits: timeoutExits.length,
       wsSourceExits: wsExits.length,
+      restPollExits: restPollExits.length,
       totalFundingFeeEvents: fundingFeeEvents.length,
       at: new Date().toISOString(),
     })
@@ -253,11 +257,12 @@ async function main(): Promise<void> {
     const failures: string[] = []
 
     if (timeoutExits.length > 0) {
-      failures.push(`${String(timeoutExits.length)} intent(s) exited via funding_fee_timeout (expected ws event)`)
+      failures.push(`${String(timeoutExits.length)} intent(s) exited via funding_fee_timeout (expected ws or rest_poll)`)
     }
 
-    if (allFundingFeeExits.length > 0 && wsExits.length !== allFundingFeeExits.length) {
-      failures.push(`${String(allFundingFeeExits.length - wsExits.length)} funding_fee exit(s) did not have source=ws`)
+    const goodExits = wsExits.length + restPollExits.length
+    if (allFundingFeeExits.length > 0 && goodExits !== allFundingFeeExits.length) {
+      failures.push(`${String(allFundingFeeExits.length - goodExits)} funding_fee exit(s) did not have source=ws or source=rest_poll`)
     }
 
     if (failures.length > 0) {

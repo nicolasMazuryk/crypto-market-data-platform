@@ -85,6 +85,13 @@ export interface OrderAmendPatch {
   qty?: number
 }
 
+export interface FundingIncomeRecord {
+  symbol: string
+  fundingTime: number
+  fundingAmount: number
+  asset: string
+}
+
 export interface ExchangeRestAdapter {
   readonly exchange: Exchange
   canonicalizeClientOrderId?(id: string): string
@@ -100,4 +107,5 @@ export interface ExchangeRestAdapter {
   getPositions(symbol?: string): Promise<Position[]>
   getBalance(asset?: string): Promise<Balance[]>
   getServerTime(): Promise<number>
+  fetchFundingFeeIncome?(symbol: string, fundingTs: number): Promise<FundingIncomeRecord | null>
 }

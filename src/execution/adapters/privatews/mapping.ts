@@ -197,9 +197,12 @@ export function mapFundingFee(
   const firstPos = raw.a.P[0]
   const firstBal = raw.a.B[0]
   if (!firstPos) {
+    // P is empty — Binance omits position data in some sub-account configurations.
+    // Funding timestamps are shared by many symbols, so the rate cache cannot identify
+    // the fee's symbol safely.
     logger?.warn(
       { event: 'funding_fee.missing_position', m: raw.a.m, P: raw.a.P, B: raw.a.B, T: raw.T },
-      'ACCOUNT_UPDATE FUNDING_FEE: a.P is empty — cannot determine symbol, dropping event'
+      'ACCOUNT_UPDATE FUNDING_FEE: a.P empty — cannot determine symbol, dropping event'
     )
     return null
   }

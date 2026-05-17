@@ -2,8 +2,15 @@ import type { Logger } from 'pino'
 
 import type { Clock, EventBus, ExitTriggeredEvent } from '../core/types.js'
 import type { ExecutionMetrics } from '../observability/metrics.js'
-import type { Unsubscribe } from '../types/exchange.js'
+import type { Unsubscribe, Exchange } from '../types/exchange.js'
 import type { ExitReason, IntentState, PositionMonitor } from './types.js'
+import type { FundingFeeEvent } from '../adapters/privatews/types.js'
+
+export type RestFundingFeePoller = (params: {
+  exchange: Exchange
+  symbol: string
+  fundingTs: number
+}) => Promise<FundingFeeEvent | null>
 
 export interface PositionMonitorOptions {
   bus: EventBus
@@ -12,6 +19,7 @@ export interface PositionMonitorOptions {
   metrics: ExecutionMetrics
   setTimeoutFn?: (cb: () => void, ms: number) => unknown
   clearTimeoutFn?: (handle: unknown) => void
+  restFundingFeePoller?: RestFundingFeePoller
 }
 
 export interface PositionMonitorHandle extends PositionMonitor {
@@ -26,7 +34,7 @@ interface ArmedEntry {
 interface ExitTriggerContext {
   triggerPrice?: number
   triggerTs: number
-  source: 'ws' | 'timer'
+  source: 'ws' | 'timer' | 'rest_poll'
   exitOrderClientId?: string
   latencyMs?: number
 }
@@ -199,14 +207,6 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         const toleranceMs = 5_000
 
         const timeoutDelay = Math.max(0, timeoutAt - now - skewMs)
-        const timeoutHandle = setTOFn(() => {
-          settle('funding_fee_timeout', {
-            triggerTs: clock.now(),
-            source: 'timer',
-            latencyMs: Math.max(0, clock.now() - timeoutAt),
-          })
-        }, timeoutDelay)
-        entry.timers.push(timeoutHandle)
 
         const unsub = bus.on('ws.funding_fee', event => {
           if (event.exchange !== intent.exchange) return
@@ -220,7 +220,52 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         })
         entry.unsubs.push(unsub)
 
-        logger.debug({ intentId, timeoutDelay, fundingTs }, 'monitor.armed.funding_fee_event')
+        // REST fallback: poll REST 3s after funding boundary. Register BEFORE the timeout timer
+        // so that when both delays are 0 (late entry), the REST poll fires first in the event loop.
+        const REST_POLL_DELAY_MS = 3_000
+        // When monitoring starts after the funding boundary (late entry), both delays collapse to 0.
+        // Give REST poll a head-start by deferring the timeout by REST_POLL_GRACE_MS so the async
+        // REST call can complete before the timeout settles the intent.
+        const REST_POLL_GRACE_MS = 8_000
+        let restPollDelay: number | undefined
+        if (opts.restFundingFeePoller) {
+          restPollDelay = Math.max(0, fundingTs + REST_POLL_DELAY_MS - now - skewMs)
+          const restPollHandle = setTOFn(() => {
+            void opts.restFundingFeePoller!({ exchange: intent.exchange, symbol: intent.symbol, fundingTs })
+              .then(fee => {
+                if (fee) {
+                  logger.info({ intentId, symbol: intent.symbol, fundingTs, fundingAmount: fee.fundingAmount }, 'monitor.rest_funding_fee_poll.found')
+                  settle('funding_fee', {
+                    triggerTs: fee.receivedAt,
+                    source: 'rest_poll',
+                    latencyMs: fee.receivedAt - fee.fundingTime,
+                  })
+                  bus.emit('ws.funding_fee', fee)
+                } else {
+                  logger.warn({ intentId, symbol: intent.symbol, fundingTs }, 'monitor.rest_funding_fee_poll.not_found')
+                }
+              })
+              .catch((err: unknown) => {
+                logger.warn({ intentId, err }, 'monitor.rest_funding_fee_poll.error')
+              })
+          }, restPollDelay)
+          entry.timers.push(restPollHandle)
+        }
+
+        // If REST poller is active and timeout is already expired (late entry), add grace period
+        // so the REST poll has time to complete before the timeout fires.
+        const effectiveTimeoutDelay =
+          opts.restFundingFeePoller && timeoutDelay === 0 ? REST_POLL_GRACE_MS : timeoutDelay
+        const timeoutHandle = setTOFn(() => {
+          settle('funding_fee_timeout', {
+            triggerTs: clock.now(),
+            source: 'timer',
+            latencyMs: Math.max(0, clock.now() - timeoutAt),
+          })
+        }, effectiveTimeoutDelay)
+        entry.timers.push(timeoutHandle)
+
+        logger.debug({ intentId, timeoutDelay, effectiveTimeoutDelay, restPollDelay, fundingTs }, 'monitor.armed.funding_fee_event')
       }
     },
 

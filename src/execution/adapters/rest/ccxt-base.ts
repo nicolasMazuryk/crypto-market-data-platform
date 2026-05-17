@@ -47,6 +47,8 @@ export interface CcxtAdapterSpec {
   setPositionMode?(ccxtEx: CcxtExchange, hedged: boolean, unified?: string): Promise<void>
   /** Hook called once on the freshly-built CCXT instance, before any request. */
   postBuildCcxt?(ccxtEx: CcxtExchange): void
+  /** Optional extra methods to add to the returned adapter (e.g. exchange-specific APIs). */
+  buildExtras?(ccxtEx: CcxtExchange): Partial<ExchangeRestAdapter>
   /** Override the default fetchOrder-based lookup. Return undefined when the order is not found. */
   getOrder?(ccxtEx: CcxtExchange, ref: OrderRef, unified: string): Promise<CcxtOrder | undefined>
   defaultBalanceAsset?: string
@@ -619,5 +621,7 @@ export function createCcxtRestAdapter(
     async dispose(): Promise<void> {
       await ccxtExchange.close?.()
     },
+
+    ...spec.buildExtras?.(ccxtExchange),
   }
 }

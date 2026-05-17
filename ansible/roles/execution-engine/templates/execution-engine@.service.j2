@@ -12,6 +12,7 @@ ExecStartPre=-/usr/bin/docker rm -f arbinet-execution-%i
 ExecStart=/usr/bin/docker run \
   --rm \
   --name arbinet-execution-%i \
+  --log-driver journald \
   --network host \
   --env-file {{ app_dir }}/.env \
   --env-file {{ execution_secrets_dir }}/%i.env \

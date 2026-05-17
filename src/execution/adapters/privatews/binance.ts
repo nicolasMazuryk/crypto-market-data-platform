@@ -76,6 +76,19 @@ export function createBinancePrivateWsAdapter(opts: BinancePrivateWsAdapterOptio
       const acctRaw = raw as unknown as BinanceAccountUpdateRaw
       const { balances, positions } = mapAccountUpdate(acctRaw, receivedAt, seq)
       const fee = mapFundingFee(acctRaw, receivedAt, seq, 'binance', rateCache, opts.logger)
+      if (acctRaw.a.m === 'FUNDING_FEE') {
+        opts.logger?.warn(
+          {
+            event: 'ws.funding_fee.received',
+            T: acctRaw.T,
+            pCount: acctRaw.a.P.length,
+            bCount: acctRaw.a.B.length,
+            symbol: acctRaw.a.P[0]?.s,
+            produced: !!fee,
+          },
+          'ACCOUNT_UPDATE m=FUNDING_FEE received'
+        )
+      }
       return {
         balances,
         positions,

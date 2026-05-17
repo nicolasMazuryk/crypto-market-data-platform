@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { mapAccountUpdate, mapFundingFee, mapOrderTradeUpdate } from './mapping.js'
 import type { BinanceAccountUpdateRaw, BinanceOrderUpdateRaw } from './mapping.js'
+import { FundingRateCache } from './funding-rate-cache.js'
 
 const ORDER_UPDATE: BinanceOrderUpdateRaw = {
   e: 'ORDER_TRADE_UPDATE',
@@ -139,5 +140,51 @@ describe('mapFundingFee', () => {
 
   it('returns null for non-FUNDING_FEE events', () => {
     expect(mapFundingFee(ACCOUNT_UPDATE, 0, 1)).toBeNull()
+  })
+
+  it('returns null when a.P is empty even if rate cache has symbols at the same funding time', () => {
+    const emptyPEvent: BinanceAccountUpdateRaw = {
+      e: 'ACCOUNT_UPDATE',
+      E: 1700000002000,
+      T: 1700000002000,
+      a: {
+        m: 'FUNDING_FEE',
+        B: [{ a: 'USDT', wb: '9995.5', cw: '9495.5', bc: '-4.5' }],
+        P: [],
+      },
+    }
+    const cache = new FundingRateCache()
+    cache.set('ETHUSDT', 0.0001, 1700000002000)
+    cache.set('BTCUSDT', 0.0002, 1700000002000)
+    const warnFn = vi.fn()
+    const logger = { warn: warnFn }
+
+    const event = mapFundingFee(emptyPEvent, 1700000002100, 5, 'binance', cache, logger)
+    expect(event).toBeNull()
+    expect(warnFn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'funding_fee.missing_position' }),
+      expect.any(String)
+    )
+  })
+
+  it('returns null and warns when a.P empty and rate cache has no match', () => {
+    const emptyPEvent: BinanceAccountUpdateRaw = {
+      e: 'ACCOUNT_UPDATE',
+      E: 1700000002000,
+      T: 1700000002000,
+      a: {
+        m: 'FUNDING_FEE',
+        B: [{ a: 'USDT', wb: '9995.5', cw: '9495.5', bc: '-4.5' }],
+        P: [],
+      },
+    }
+    const warnFn = vi.fn()
+    const logger = { warn: warnFn }
+    const event = mapFundingFee(emptyPEvent, 1700000002100, 5, 'binance', undefined, logger)
+    expect(event).toBeNull()
+    expect(warnFn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'funding_fee.missing_position' }),
+      expect.any(String)
+    )
   })
 })
