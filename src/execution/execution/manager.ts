@@ -2958,6 +2958,27 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               }
               if (ack.status === 'rejected') {
                 logger.warn({ intentId: intent.id, rungIdx: i, reason: ack.rejectReason }, 'ladder rung rejected')
+                byEntryOrderId.delete(rungState.canonicalId)
+                const rejectNow = clock.now()
+                bus.emit('ws.order', {
+                  exchange: intent.exchange,
+                  seq: 0,
+                  receivedAt: rejectNow,
+                  order: {
+                    exchange: intent.exchange,
+                    symbol: intent.exchangeSymbol,
+                    clientOrderId: rungState.clientOrderId,
+                    exchangeOrderId: ack.exchangeOrderId ?? '',
+                    side: entrySide,
+                    type: 'limit',
+                    qty: rungQty,
+                    filledQty: 0,
+                    reduceOnly: false,
+                    status: 'rejected',
+                    submittedAt: rejectNow,
+                    updatedAt: rejectNow,
+                  },
+                })
                 return
               }
               bus.emit('order.placed', {
@@ -2980,6 +3001,26 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             } catch (err) {
               byEntryOrderId.delete(rungState.canonicalId)
               logger.warn({ intentId: intent.id, rungIdx: i, err }, 'ladder rung placement failed')
+              const failNow = clock.now()
+              bus.emit('ws.order', {
+                exchange: intent.exchange,
+                seq: 0,
+                receivedAt: failNow,
+                order: {
+                  exchange: intent.exchange,
+                  symbol: intent.exchangeSymbol,
+                  clientOrderId: rungState.clientOrderId,
+                  exchangeOrderId: '',
+                  side: entrySide,
+                  type: 'limit',
+                  qty: rungQty,
+                  filledQty: 0,
+                  reduceOnly: false,
+                  status: 'cancelled',
+                  submittedAt: failNow,
+                  updatedAt: failNow,
+                },
+              })
             }
             })
           )
