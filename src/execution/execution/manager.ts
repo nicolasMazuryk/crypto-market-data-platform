@@ -1382,7 +1382,36 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           ? { symbol: s.intent.exchangeSymbol, clientOrderId, exchangeOrderId }
           : { symbol: s.intent.exchangeSymbol, clientOrderId }
         const order = await withGetOrderTimeout(rest.getOrder(ref))
-        if (order) handleEntryOrderEvent(s, order)
+        if (order) {
+          handleEntryOrderEvent(s, order)
+          if (order.status === 'filled' || order.status === 'partially_filled') {
+            const effectiveCid = order.clientOrderId || clientOrderId
+            const effectiveEoid = order.exchangeOrderId || exchangeOrderId
+            const now = clock.now()
+            bus.emit('ws.order', {
+              exchange: s.intent.exchange,
+              seq: 0,
+              receivedAt: now,
+              order: { ...order, clientOrderId: effectiveCid, exchangeOrderId: effectiveEoid },
+            })
+            if (order.status === 'filled' && order.filledQty > 0) {
+              bus.emit('ws.fill', {
+                exchange: s.intent.exchange,
+                symbol: order.symbol,
+                clientOrderId: effectiveCid,
+                ...(effectiveEoid ? { exchangeOrderId: effectiveEoid } : {}),
+                exchangeFillId: `poll:${effectiveEoid || effectiveCid}`,
+                qty: order.filledQty,
+                price: order.avgFillPrice ?? 0,
+                feeAsset: 'USDT',
+                feeAmount: 0,
+                isMaker: false,
+                ts: order.updatedAt,
+                receivedAt: now,
+              })
+            }
+          }
+        }
         consecutiveErrors = 0
       } catch (err) {
         logger.warn({ intentId: s.intent.id, attempt: i + 1, err }, 'manager: entry poll failed')
@@ -1427,6 +1456,43 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           filledQty: pos.qty,
           ...(pos.entryPrice !== undefined ? { avgFillPrice: pos.entryPrice } : {}),
         })
+        const now = clock.now()
+        bus.emit('ws.order', {
+          exchange: s.intent.exchange,
+          seq: 0,
+          receivedAt: now,
+          order: {
+            exchange: s.intent.exchange,
+            symbol: s.intent.exchangeSymbol,
+            clientOrderId,
+            exchangeOrderId: exchangeOrderId ?? '',
+            side: s.intent.side === 'long' ? 'buy' : 'sell',
+            type: 'market',
+            qty: pos.qty,
+            filledQty: pos.qty,
+            reduceOnly: false,
+            status: 'filled',
+            submittedAt: now,
+            updatedAt: now,
+            ...(pos.entryPrice !== undefined ? { avgFillPrice: pos.entryPrice } : {}),
+          },
+        })
+        if (pos.qty > 0) {
+          bus.emit('ws.fill', {
+            exchange: s.intent.exchange,
+            symbol: s.intent.exchangeSymbol,
+            clientOrderId,
+            ...(exchangeOrderId ? { exchangeOrderId } : {}),
+            exchangeFillId: `poll:${exchangeOrderId || clientOrderId}`,
+            qty: pos.qty,
+            price: pos.entryPrice ?? 0,
+            feeAsset: 'USDT',
+            feeAmount: 0,
+            isMaker: false,
+            ts: now,
+            receivedAt: now,
+          })
+        }
       }
     } catch (err) {
       logger.warn({ intentId: s.intent.id, err }, 'manager: entry poll exhausted — position check failed')
@@ -1454,6 +1520,31 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           recordExitMetrics(s, s.exitReason ?? 'error')
           emitIntentExited(s)
           transition(s, 'exited')
+          const effectiveCid = order.clientOrderId || closeId
+          const effectiveEoid = order.exchangeOrderId || closeExchangeOrderId || ''
+          const now = clock.now()
+          bus.emit('ws.order', {
+            exchange: s.intent.exchange,
+            seq: 0,
+            receivedAt: now,
+            order: { ...order, clientOrderId: effectiveCid, exchangeOrderId: effectiveEoid },
+          })
+          if (order.filledQty > 0) {
+            bus.emit('ws.fill', {
+              exchange: s.intent.exchange,
+              symbol: order.symbol,
+              clientOrderId: effectiveCid,
+              ...(effectiveEoid ? { exchangeOrderId: effectiveEoid } : {}),
+              exchangeFillId: `poll:${effectiveEoid || effectiveCid}`,
+              qty: order.filledQty,
+              price: order.avgFillPrice ?? 0,
+              feeAsset: 'USDT',
+              feeAmount: 0,
+              isMaker: false,
+              ts: order.updatedAt,
+              receivedAt: now,
+            })
+          }
           logger.info(
             { event: 'intent.exited.complete', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, exitReason: s.exitReason },
             'intent.exited.complete'
@@ -1473,6 +1564,28 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             recordExitMetrics(s, s.exitReason ?? 'error')
             emitIntentExited(s)
             transition(s, 'exited')
+            const effectiveCid = order?.clientOrderId || closeId
+            const effectiveEoid = order?.exchangeOrderId || (closeExchangeOrderId ?? '')
+            const now = clock.now()
+            bus.emit('ws.order', {
+              exchange: s.intent.exchange,
+              seq: 0,
+              receivedAt: now,
+              order: {
+                exchange: s.intent.exchange,
+                symbol: s.intent.exchangeSymbol,
+                clientOrderId: effectiveCid,
+                exchangeOrderId: effectiveEoid,
+                side: s.intent.side === 'long' ? 'sell' : 'buy',
+                type: 'market',
+                qty: 0,
+                filledQty: 0,
+                reduceOnly: true,
+                status: 'filled',
+                submittedAt: now,
+                updatedAt: now,
+              },
+            })
             logger.info(
               { event: 'intent.exited.complete', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, exitReason: s.exitReason },
               'intent.exited.complete'
