@@ -1385,7 +1385,11 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         if (order) {
           handleEntryOrderEvent(s, order)
           if (order.status === 'filled' || order.status === 'partially_filled') {
-            const effectiveCid = order.clientOrderId || clientOrderId
+            // Prefer the locally-tracked clientOrderId over order.clientOrderId from REST:
+            // CCXT may prefix the clientOrderId (e.g. Binance adds 'x-r1wQQsTn') before
+            // submission, so the exchange response returns the prefixed/truncated string
+            // which wouldn't match what we stored in the DB.
+            const effectiveCid = clientOrderId || order.clientOrderId
             const effectiveEoid = order.exchangeOrderId || exchangeOrderId
             const now = clock.now()
             bus.emit('ws.order', {
@@ -1520,7 +1524,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           recordExitMetrics(s, s.exitReason ?? 'error')
           emitIntentExited(s)
           transition(s, 'exited')
-          const effectiveCid = order.clientOrderId || closeId
+          const effectiveCid = closeId || order.clientOrderId
           const effectiveEoid = order.exchangeOrderId || closeExchangeOrderId || ''
           const now = clock.now()
           bus.emit('ws.order', {
@@ -1564,7 +1568,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             recordExitMetrics(s, s.exitReason ?? 'error')
             emitIntentExited(s)
             transition(s, 'exited')
-            const effectiveCid = order?.clientOrderId || closeId
+            const effectiveCid = closeId || order?.clientOrderId || ''
             const effectiveEoid = order?.exchangeOrderId || (closeExchangeOrderId ?? '')
             const now = clock.now()
             bus.emit('ws.order', {
