@@ -154,6 +154,53 @@ describe('loadEngineConfig — registry credential resolution', () => {
     expect(bybit?.credentials?.apiKey).toBe('env-key')
   })
 
+  it('picks the registry entry matching the active strategy when multiple entries exist for the same exchange', () => {
+    const configPath = tmp()
+    const configWithStrategy = {
+      mode: 'dry_run',
+      exchanges: [{ exchange: 'bybit', enabled: true, credentialsEnvPrefix: 'BYBIT' }],
+      strategies: [
+        {
+          id: 'strategy_6',
+          enabled: true,
+          mainSide: 'long',
+          mainAmountUsd: 100,
+          leverage: 5,
+        },
+      ],
+    }
+    writeFileSync(configPath, YAML.stringify(configWithStrategy), 'utf8')
+
+    const registryPath = tmp()
+    const makeEntry = (assignedStrategy: string, apiKey: string) => ({
+      exchange: 'bybit',
+      sub_account_id: assignedStrategy,
+      sub_account_label: assignedStrategy,
+      assigned_strategy: assignedStrategy,
+      api_key: apiKey,
+      api_secret: `${apiKey}-secret`,
+      api_passphrase: null,
+      ip_allow_list: VALID_IP_LIST,
+      allocated_capital_usdt: 100,
+      provisioning_mode: 'full_api',
+      status: 'active',
+      created_at: '2026-05-09T12:00:00Z',
+      last_assigned_at: '2026-05-09T12:00:00Z',
+      notes: '',
+    })
+    const registry = {
+      combinations: [
+        makeEntry('strategy_1', 'strategy1-key'),
+        makeEntry('strategy_6', 'strategy6-key'),
+      ],
+    }
+    writeFileSync(registryPath, YAML.stringify(registry), 'utf8')
+
+    const config = loadEngineConfig({ configPath, basePath: '', env: {}, registryPath })
+    const bybit = config.exchanges.find(e => e.exchange === 'bybit') as ExchangeWithCredentials | undefined
+    expect(bybit?.credentials?.apiKey).toBe('strategy6-key')
+  })
+
   it('works without registryPath (backward compat)', () => {
     const configPath = tmp()
     writeFileSync(configPath, YAML.stringify(BASE_CONFIG), 'utf8')
