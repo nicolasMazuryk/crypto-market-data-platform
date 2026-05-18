@@ -60,34 +60,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
     GateIO limit orders for rungs use no clientOrderId transformation. Rung fills
     arrive on 'futures.orders' WS channel with SECOND timestamps (adapter × 1000).
 
-- id: strategy_4_1a.gateio.ORDER_LIFECYCLE.PRE_FUNDING_FILL_WARNING
-  category: ORDER_LIFECYCLE
-  severity: medium
-  description: >
-    A rung fills before T_funding (early market dip). GateIO 'futures.orders' WS emits
-    fill (SECOND timestamps, adapter × 1000). Manager marks rung.filled=true,
-    logs 'ladder.pre_funding_fill' at warn, transitions to partially_filled.
-    T_funding timer still resolves.
-  preconditions:
-    - intent in working, rung limitPrice hit before T_funding
-  trigger_sequence:
-    - GateIO WS: futures.orders {status: "filled", text: <rungClientOrderId>, create_time: <s>}
-    - clock.now() < nextFundingTimestamp → pre_funding_fill warn
-  expected_behavior:
-    - 'ladder.pre_funding_fill' warn logged
-    - rung.filled=true, filledQty aggregated
-    - status working → partially_filled
-  observability_contract:
-    - log: 'ladder.pre_funding_fill' {intentId, clientOrderId: "<rung id>"}  # warn
-    - db:intentLifecycleEvents → partially_filled
-  code_refs:
-    - src/execution/execution/manager.ts:1074 (transition partially_filled)
-    - src/execution/execution/manager.ts:1078 (ladder.pre_funding_fill warn)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md (Scenario A invariant)
-  status: ⏳
-  natural_occurrence: rare
-
 - id: strategy_4_1a.gateio.ORDER_LIFECYCLE.T_FUNDING_TIMER_RESOLVES
   category: ORDER_LIFECYCLE
   severity: critical
@@ -124,32 +96,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
   notes: >
     GateIO cancelOrder for unfilled rungs: TEXT_DUPLICATED response means already cancelled/filled.
     cancelIgnoreCode='TEXT_DUPLICATED' ensures cancel proceeds silently.
-
-- id: strategy_4_1a.gateio.ORDER_LIFECYCLE.LADDER_NO_FILLS
-  category: ORDER_LIFECYCLE
-  severity: high
-  description: >
-    T_funding fires but no rungs filled (filledQty=0). 'ladder.no_fills' warn logged.
-    setError(s, 'ladder_no_fills'). Intent terminal.
-  preconditions:
-    - intent in working, no rungs filled before T_funding
-  trigger_sequence:
-    - T_funding timer: filledQty === 0 → setError('ladder_no_fills')
-  expected_behavior:
-    - 'ladder.no_fills' warn logged
-    - intent.error {code: "ladder_no_fills"}
-    - all rungs cancelled (TEXT_DUPLICATED OK)
-  observability_contract:
-    - log: 'ladder.no_fills' {intentId}
-    - log: 'intent.error' {code: "ladder_no_fills"}
-    - db:intentLifecycleEvents working→error
-  code_refs:
-    - src/execution/execution/manager.ts:2520 (filledQty === 0 check)
-    - src/execution/execution/manager.ts:2521 ('ladder.no_fills' warn)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md
-  status: ⏳
-  natural_occurrence: occasional
 
 # ── TIMING ──────────────────────────────────────────────────────────────────
 

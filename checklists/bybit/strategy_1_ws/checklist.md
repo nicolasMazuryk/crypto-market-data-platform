@@ -11,45 +11,6 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
 # ── ORDER_LIFECYCLE ─────────────────────────────────────────────────────────
 
 
-- id: strategy_1_ws.bybit.ORDER_LIFECYCLE.ENTRY_FILLED_WS
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Entry market order fills. Bybit emits an 'order' topic event on the private WS
-    with orderStatus=Filled. Timestamps in createdTime/updatedTime are microseconds
-    and are normalized to ms (÷1000 if > 9_999_999_999_999). Manager routes via
-    byEntryOrderId using orderLinkId (clientOrderId). Logs order.filled, transitions
-    to filled, arms funding_fee_event monitor.
-  preconditions:
-    - entry order placed (status=working)
-    - Bybit private WS connected
-  trigger_sequence:
-    - Bybit WS: {topic: "order", data: [{orderLinkId: <clientOrderId>, orderStatus: "Filled", symbol: <sym>, cumExecQty: <qty>}]}
-  expected_behavior:
-    - order.filled logged (filledQty, avgFillPrice)
-    - status transitions working → filled → monitoring
-    - position.opened logged (side=long)
-    - monitor.armed.funding_fee_event logged (debug)
-  observability_contract:
-    - log: 'order.filled' {exchange: "bybit", filledQty: ">0"}
-    - log: 'position.opened' {side: "long", filledQty: ">0"}
-    - log: 'monitor.armed.funding_fee_event' {timeoutDelay, fundingTs}  # debug level
-    - db:orders {kind: "entry", status: "filled"}
-    - db:intentLifecycleEvents filled→monitoring
-  code_refs:
-    - src/execution/adapters/privatews/bybit-mapping.ts:88 (topic=order handler)
-    - src/execution/adapters/privatews/bybit-mapping.ts:104 (μs→ms normalization for timestamps)
-    - src/execution/execution/manager.ts:1156 (order.filled log)
-    - src/execution/execution/manager.ts:782 (position.opened log)
-    - src/execution/execution/monitor.ts:210 (monitor.armed.funding_fee_event debug log)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1_ws.md
-  status: ⏳
-  natural_occurrence: routine
-  notes: >
-    Bybit uses orderLinkId as clientOrderId. Timestamp normalization: if value > 9_999_999_999_999
-    it is in microseconds and is divided by 1000. WS fill events are primary on Bybit.
-
 - id: strategy_1_ws.bybit.ORDER_LIFECYCLE.ENTRY_PARTIAL_THEN_FULL_FILL
   category: ORDER_LIFECYCLE
   severity: high

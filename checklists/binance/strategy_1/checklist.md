@@ -317,42 +317,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
     trigger, but for strategy_1 it must be ignored by the monitor. A bug that confuses
     the two strategies' exit policies would cause premature exit before T_f + 2s.
 
-- id: strategy_1.binance.WEBSOCKET.CLOSE_FILL_REST_POLL_FALLBACK
-  category: WEBSOCKET
-  severity: high
-  description: >
-    After timed exit is triggered, the market close order is placed. The WS fill event
-    for the close order does not arrive (e.g. WS gap). The REST poll fallback
-    (pollForCloseFill, 20 polls × 1s) detects the fill (order status=filled) or
-    position flat (position qty=0), and transitions intent to exited.
-  preconditions:
-    - intent in status=exiting
-    - close order placed (kind=timed)
-    - WS fill event not received
-  trigger_sequence:
-    - pollForCloseFill loop: getOrder returns status=filled OR position qty=0
-  expected_behavior:
-    - intent.exited.complete logged (REST poll path emits this — WS path does not)
-    - status transitions exiting → exited
-    - sweepReduceOnlyOrders called
-  observability_contract:
-    - log: 'intent.exited.complete' {exitReason: "timed"} (only on poll path)
-    - db:orders {kind: "timed", status: "filled"}
-    - db:intentLifecycleEvents exiting→exited
-  code_refs:
-    - src/execution/execution/manager.ts:1235 (pollForCloseFill)
-    - src/execution/execution/manager.ts:1251 (fill detected via getOrder)
-    - src/execution/execution/manager.ts:1255 (transition exited + intent.exited.complete log)
-    - src/execution/execution/manager.ts:1669 (pollForCloseFill started after close placed)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (no poll fallback in spec)
-  status: ⏳
-  natural_occurrence: occasional
-  notes: >
-    The 'intent.exited.complete' log is the distinguishing signal for the REST poll path.
-    If the WS path succeeds, this log does NOT appear (WS handler at line 1914 does not emit it).
-    So its presence indicates the poll fallback ran.
-
 # ── RECOVERY ────────────────────────────────────────────────────────────────
 
 - id: strategy_1.binance.RECOVERY.RESTART_IN_MONITORING

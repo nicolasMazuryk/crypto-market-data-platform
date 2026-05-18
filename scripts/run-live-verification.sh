@@ -19,7 +19,7 @@ set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
 PROMPT_FILE="${PROMPT_FILE:-prompts/live-execution-verify.md}"
-MAX_PARALLEL="${MAX_PARALLEL:-6}"
+MAX_PARALLEL="${MAX_PARALLEL:-12}"
 RUN_ID="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 LOG_DIR="${LOG_DIR:-logs/live-verification}/$RUN_ID"
 DRY_RUN="${DRY_RUN:-}"

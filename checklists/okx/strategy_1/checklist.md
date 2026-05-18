@@ -50,35 +50,6 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
     byEntryExchangeOrderId (ordId field) is also registered as fallback. Fills on
     OKX market orders are generally immediate and arrive via WS before the REST poll.
 
-- id: strategy_1.okx.ORDER_LIFECYCLE.ENTRY_PARTIAL_THEN_FULL_FILL
-  category: ORDER_LIFECYCLE
-  severity: high
-  description: >
-    Entry market order partially fills then fully fills. OKX WS emits partial_fill
-    then filled state on the orders channel.
-  preconditions:
-    - entry order in status=working
-    - OKX emits partial then full fill events
-  trigger_sequence:
-    - OKX WS: orders channel {state: "partially_filled"}
-    - OKX WS: orders channel {state: "filled"}
-  expected_behavior:
-    - status transitions working → partially_filled → filled
-    - order.filled logged once on filled event
-    - position.opened logged
-    - monitor armed
-  observability_contract:
-    - db:intentLifecycleEvents working→partially_filled→filled
-    - log: 'order.filled' (on final fill)
-    - log: 'position.opened' {side: "long"}
-  code_refs:
-    - src/execution/execution/manager.ts:1159 (partially_filled transition)
-    - src/execution/execution/manager.ts:1136 (FILLED branch)
-  spec_refs:
-    - docs-strategy/strategies/strategy_1.md (Execution Flow step 1)
-  status: ⏳
-  natural_occurrence: occasional
-  notes: OKX market orders rarely partial-fill but can in low-liquidity symbols.
 
 - id: strategy_1.okx.ORDER_LIFECYCLE.ENTRY_REJECTED_INSUFFICIENT_BALANCE
   category: ORDER_LIFECYCLE

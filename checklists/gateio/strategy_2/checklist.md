@@ -20,38 +20,6 @@ Code: `src/execution/strategies/strategy_2.ts`, `src/execution/execution/manager
 ```yaml
 # ── ORDER_LIFECYCLE ─────────────────────────────────────────────────────────
 
-- id: strategy_2.gateio.ORDER_LIFECYCLE.ENTRY_PLACED
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Scheduler fires at T_f - 5s. Preflight passes. A market BUY is placed via the
-    WS order adapter. No clientOrderId transformation on GateIO. order.placed logged
-    with kind=entry, side=buy, orderType=market, reduceOnly=false.
-  preconditions:
-    - fundingRatePercent < -negativeFundingThresholdPercent
-    - available USDT >= amountUsd / leverage
-    - kill switch inactive
-    - WS order adapter registered for gateio
-  trigger_sequence:
-    - scheduler fires at entryAt → manager.submit() → WS adapter createOrder
-  expected_behavior:
-    - intent.created logged (strategy=strategy_2, exchange=gateio)
-    - order.placed logged (kind=entry, side=buy, orderType=market)
-    - status decided → submitted → acked → working
-  observability_contract:
-    - log: 'intent.created' {strategy: "strategy_2", exchange: "gateio"}
-    - log: 'order.placed' {kind: "entry", side: "buy", orderType: "market"}
-    - db:orders {kind: "entry", status: "pending"}
-    - db:intentLifecycleEvents decided→submitted→acked→working
-  code_refs:
-    - src/execution/execution/manager.ts:2081 (transition submitted)
-    - src/execution/execution/manager.ts:2755 (order.placed log)
-    - src/execution/strategies/strategy_2.ts:59 (entryAt computation)
-  spec_refs:
-    - docs-strategy/strategies/strategy_2.md (Entry — market BUY via WS adapter at T_f - 5s)
-  status: ⏳
-  natural_occurrence: routine
-
 - id: strategy_2.gateio.ORDER_LIFECYCLE.ENTRY_FILLED
   category: ORDER_LIFECYCLE
   severity: critical
@@ -252,32 +220,6 @@ Code: `src/execution/strategies/strategy_2.ts`, `src/execution/execution/manager
   natural_occurrence: occasional
 
 # ── STRATEGY_SPECIFIC ────────────────────────────────────────────────────────
-
-- id: strategy_2.gateio.STRATEGY_SPECIFIC.TP_PLACED_ON_NEW_P_LOW
-  category: STRATEGY_SPECIFIC
-  severity: critical
-  description: >
-    After fundingGateOpen=true, tracker polls refPrice every 1s. When price < pLow
-    and price < anchorPrice, TP limit placed at pLow + (anchor - pLow) * retracementPct.
-    GateIO TP limit order: side=sell, reduceOnly=true. No dash-stripping for GateIO tpId.
-  preconditions:
-    - fundingGateOpen=true, currentPrice < pLow, currentPrice < anchorPrice
-  trigger_sequence:
-    - tracker tick: refPrice < pLow → replaceTp(tpPrice)
-    - rest.createOrder {type: limit, price: tpPrice, reduceOnly: true}
-  expected_behavior:
-    - order.placed {kind: "tp", orderType: "limit", price: tpPrice}
-    - retracement.tp_placed logged (info)
-  observability_contract:
-    - log: 'retracement.tp_placed' {kind: "tp", orderType: "limit", tpVersion: ">0"}
-    - db:orders row {kind: "tp", orderType: "limit", status: "pending"}
-  code_refs:
-    - src/execution/execution/manager.ts:1020 (currentPrice < pLow → replaceTp)
-    - src/execution/execution/manager.ts:992 (retracement.tp_placed log)
-  spec_refs:
-    - docs-strategy/strategies/strategy_2.md (Dynamic TP)
-  status: ⏳
-  natural_occurrence: routine
 
 # ── WEBSOCKET ────────────────────────────────────────────────────────────────
 

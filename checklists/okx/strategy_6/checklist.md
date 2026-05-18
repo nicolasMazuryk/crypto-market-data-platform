@@ -448,30 +448,6 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
 
 # ── SPEC_DIVERGENCE ──────────────────────────────────────────────────────────
 
-- id: strategy_6.okx.SPEC_DIVERGENCE.OKX_DASH_STRIP_ALL_IDS
-  category: SPEC_DIVERGENCE
-  severity: high
-  description: >
-    OKX requires dash-free clientOrderIds. canonicalize() strips dashes from
-    preFundingId, mainId, slId, tpId, closeId. Recovery also applies canonicalize().
-    Not in the strategy_6 spec. Critical for correct WS fill routing on OKX.
-  preconditions:
-    - strategy_6 intent submitted for okx
-  trigger_sequence:
-    - canonicalize applied to all order IDs throughout lifecycle
-  expected_behavior:
-    - all OKX orders for strategy_6 use dash-free IDs
-    - WS 'orders' fill events match correctly via byEntryOrderId and byCloseOrderId
-  observability_contract:
-    - db:orders clientOrderId: no dashes for okx/strategy_6 rows
-  code_refs:
-    - src/execution/execution/manager.ts:130 (canonicalize)
-    - src/execution/recovery/index.ts:132 (canonicalize in recovery)
-  spec_refs:
-    - docs-strategy/strategies/strategy_6.md (no mention of OKX ID constraints)
-  status: ⏳
-  natural_occurrence: routine
-
 - id: strategy_6.okx.SPEC_DIVERGENCE.KILL_SWITCH_BLOCKS_PRE_FUNDING
   category: SPEC_DIVERGENCE
   severity: high

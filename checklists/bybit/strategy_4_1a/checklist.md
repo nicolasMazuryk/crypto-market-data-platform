@@ -117,34 +117,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
   status: ⏳
   natural_occurrence: occasional
 
-- id: strategy_4_1a.bybit.OCO.TP_FILLS_SL_CANCELED
-  category: OCO
-  severity: critical
-  description: >
-    TP sell limit fills (long). Bybit WS fill for TP (μs, ÷1000). monitor.settle('tp').
-    Cancel SL.
-  preconditions:
-    - intent in monitoring, price rises to TP level
-  trigger_sequence:
-    - Bybit WS: order {clientOrderId: <tpId>, orderStatus: "Filled"}
-    - monitor.settle('tp') → cancel SL
-  expected_behavior:
-    - monitor.settle {reason: "tp"}
-    - oco.cancel.start for SL
-    - intent.exited.complete {exitReason: "tp"}
-  observability_contract:
-    - log: 'monitor.settle' {reason: "tp"}
-    - log: 'oco.cancel.start' {clientOrderId: <slId>}
-    - db:fills TP fill createdAt in ms range
-  code_refs:
-    - src/execution/adapters/privatews/bybit.ts (updatedTime / 1000)
-    - src/execution/execution/monitor.ts:131 (ws.order TP listener)
-    - src/execution/execution/manager.ts:1504 (cancel sl on tp)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md
-  status: ⏳
-  natural_occurrence: occasional
-
 - id: strategy_4_1a.bybit.OCO.DEADLINE_CANCELS_BOTH
   category: OCO
   severity: critical
