@@ -9,6 +9,7 @@ import type { Exchange } from '../types/exchange.js'
 const DEFAULT_EVALUATE_LEAD_MS = 0 // 1500
 const HOUR_MS = 3_600_000
 const PREWARM_CONCURRENCY = 4
+const FUNDING_THRESHOLD_BUFFER_PERCENT = 0.1
 
 async function runWithConcurrency<T>(tasks: T[], fn: (t: T) => Promise<void> | void): Promise<void> {
   let i = 0
@@ -58,6 +59,22 @@ function nextWakeTime(now: number, wakeBeforeHourEndMs: number): number {
   return wake
 }
 
+function strategyThreshold(config: StrategyConfig): number {
+  if (config.id === 'strategy_6') return config.funding_threshold
+  return -Math.abs(config.negativeFundingThresholdPercent)
+}
+
+function isNearAnyEnabledThreshold(fundingRatePercent: number, configsByStrategy: Map<StrategyId, StrategyConfig>): boolean {
+  for (const cfg of configsByStrategy.values()) {
+    if (!cfg.enabled) continue
+    const threshold = strategyThreshold(cfg)
+    if (threshold === 0) return true
+    if (threshold < 0 && fundingRatePercent <= threshold + FUNDING_THRESHOLD_BUFFER_PERCENT) return true
+    if (threshold > 0 && fundingRatePercent >= threshold - FUNDING_THRESHOLD_BUFFER_PERCENT) return true
+  }
+  return false
+}
+
 export function createFundingEventScheduler(opts: FundingEventSchedulerOptions): FundingEventSchedulerHandle {
   const { clock, evaluator, funding, configsByStrategy, config, logger, symbolFilter } = opts
   const leadMs = opts.evaluateLeadMs ?? DEFAULT_EVALUATE_LEAD_MS
@@ -86,7 +103,7 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
     for (const exchange of exchanges) {
       // Collect and sort by fundingRate (most negative first) so the best opportunities
       // are evaluated — and therefore submitted — before the per-strategy cap is reached.
-      const snaps = Array.from(funding.latest(exchange).values())
+      const eligibleWindowSnaps = Array.from(funding.latest(exchange).values())
         .filter(snap => {
           if (symbolFilter && !symbolFilter.has(snap.symbol)) return false
           if (snap.timestamp < now - staleMaxAgeMs) {
@@ -98,7 +115,22 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
           }
           return snap.nextFundingTimestamp >= now && snap.nextFundingTimestamp <= windowEnd
         })
+
+      const snaps = eligibleWindowSnaps
+        .filter(snap => isNearAnyEnabledThreshold(snap.fundingRatePercent, configsByStrategy))
         .sort((a, b) => a.fundingRate - b.fundingRate) // most negative first
+
+      logger.info(
+        {
+          event: 'scheduler.candidate_filter',
+          exchange,
+          totalSnapshots: eligibleWindowSnaps.length,
+          scheduledCount: snaps.length,
+          skippedCount: eligibleWindowSnaps.length - snaps.length,
+          bufferPercent: FUNDING_THRESHOLD_BUFFER_PERCENT,
+        },
+        'scheduler.candidate_filter'
+      )
 
       for (const snap of snaps) {
         const { symbol, nextFundingTimestamp } = snap

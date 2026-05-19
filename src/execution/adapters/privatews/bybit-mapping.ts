@@ -173,10 +173,16 @@ export function parseBybitMessage(
         ['Trade', 'AdlTrade', 'BustTrade', 'Settle'].includes(d.execType) &&
         d.execId
       ) {
+        if (!d.orderLinkId) {
+          if (process.env.BYBIT_EXEC_DEBUG === '1') {
+            process.stdout.write(JSON.stringify({ _debug: 'bybit.execution.skipped_no_link_id', symbol: d.symbol, execId: d.execId }) + '\n')
+          }
+          continue
+        }
         fills.push({
           exchange,
           symbol: d.symbol,
-          clientOrderId: d.orderLinkId ?? '',
+          clientOrderId: d.orderLinkId,
           exchangeOrderId: d.orderId ?? '',
           exchangeFillId: d.execId,
           qty: parseFloat(d.execQty ?? '0'),

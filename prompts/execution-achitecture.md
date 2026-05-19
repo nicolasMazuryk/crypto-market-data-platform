@@ -100,7 +100,7 @@ export interface MarketMetadata {
 - Per-exchange config: API keys (from secrets manager/env, never source), endpoints, rate-limit profiles (YAML config).
 - Hot-reload where safe; otherwise explicit restart-required.
 - other configurable params (YAML):
-  - orderAmountUsd: 20  # in USDT, default order size
+  - orderAmountUsd: 10  # in USDT, default order size
   - leverage: 4  # leverage multiplier for trading
 
 # Non-Functional Requirements

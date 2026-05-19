@@ -142,7 +142,7 @@ describe('mapFundingFee', () => {
     expect(mapFundingFee(ACCOUNT_UPDATE, 0, 1)).toBeNull()
   })
 
-  it('returns null when a.P is empty even if rate cache has symbols at the same funding time', () => {
+  it('returns event with symbol="" when a.P is empty and B has balance data', () => {
     const emptyPEvent: BinanceAccountUpdateRaw = {
       e: 'ACCOUNT_UPDATE',
       E: 1700000002000,
@@ -156,18 +156,17 @@ describe('mapFundingFee', () => {
     const cache = new FundingRateCache()
     cache.set('ETHUSDT', 0.0001, 1700000002000)
     cache.set('BTCUSDT', 0.0002, 1700000002000)
-    const warnFn = vi.fn()
-    const logger = { warn: warnFn }
 
-    const event = mapFundingFee(emptyPEvent, 1700000002100, 5, 'binance', cache, logger)
-    expect(event).toBeNull()
-    expect(warnFn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'funding_fee.missing_position' }),
-      expect.any(String)
-    )
+    const event = mapFundingFee(emptyPEvent, 1700000002100, 5, 'binance', cache)
+    expect(event).not.toBeNull()
+    expect(event?.symbol).toBe('')
+    expect(event?.fundingAmount).toBe(-4.5)
+    expect(event?.asset).toBe('USDT')
+    expect(event?.fundingRate).toBe(0)
+    expect(event?.positionQty).toBe(0)
   })
 
-  it('returns null and warns when a.P empty and rate cache has no match', () => {
+  it('returns event with symbol="" when a.P empty and no rate cache', () => {
     const emptyPEvent: BinanceAccountUpdateRaw = {
       e: 'ACCOUNT_UPDATE',
       E: 1700000002000,
@@ -178,13 +177,9 @@ describe('mapFundingFee', () => {
         P: [],
       },
     }
-    const warnFn = vi.fn()
-    const logger = { warn: warnFn }
-    const event = mapFundingFee(emptyPEvent, 1700000002100, 5, 'binance', undefined, logger)
-    expect(event).toBeNull()
-    expect(warnFn).toHaveBeenCalledWith(
-      expect.objectContaining({ event: 'funding_fee.missing_position' }),
-      expect.any(String)
-    )
+    const event = mapFundingFee(emptyPEvent, 1700000002100, 5, 'binance', undefined)
+    expect(event).not.toBeNull()
+    expect(event?.symbol).toBe('')
+    expect(event?.fundingAmount).toBe(-4.5)
   })
 })

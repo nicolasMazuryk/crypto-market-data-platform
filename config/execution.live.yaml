@@ -19,7 +19,7 @@ strategies:
   #   negativeFundingThresholdPercent: -0.3   # % — live threshold is tighter than dry-run
   #   entryOffsetSeconds: 2                   # s
   #   exitOffsetSeconds: 1                    # s
-  #   amountUsd: 20                           # USD
+  #   amountUsd: 10                           # USD
   #   leverage: 4                             # x
 
   # strategy_3a and strategy_3b are mutually exclusive — enable at most one.
@@ -32,7 +32,7 @@ strategies:
     tpVariantAMultiplier: 1.8              # x
     tpVariantBOffsetPercent: 0.4           # % — unused in 3a
     deadlineSeconds: 3300                   # s — max position lifetime (55 minutes)
-    amountUsd: 20                           # USD
+    amountUsd: 10                           # USD
     leverage: 5                             # x
 
   #- id: strategy_3b
@@ -43,7 +43,7 @@ strategies:
   #  tpVariantAMultiplier: 1.5
   #  tpVariantBOffsetPercent: 0.4
   #  deadlineSeconds: 300
-  #  amountUsd: 20
+  #  amountUsd: 10
   #  leverage: 4
 
 # ── Risk limits ───────────────────────────────────────────────────────────────

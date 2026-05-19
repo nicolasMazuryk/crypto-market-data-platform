@@ -103,6 +103,7 @@ export interface DomainEvents {
   'state.desync': (event: DesyncEvent) => void
   'ops.event': (event: OpsEventPayload) => void
   'intent.funding_gate_opened': (event: { intentId: string }) => void
+  'intent.funding_gate_closed': (event: { intentId: string; reason: string }) => void
 }
 
 export type EventBus = TypedEventEmitter<DomainEvents>

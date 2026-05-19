@@ -44,7 +44,7 @@ const BASE_CONFIG: Strategy1WsConfig = {
   negativeFundingThresholdPercent: -0.5,
   entryOffsetSeconds: 10,
   fundingFeeTimeoutSeconds: 8,
-  amountUsd: 20,
+  amountUsd: 10,
   leverage: 5,
 }
 
@@ -75,8 +75,8 @@ describe('createStrategy1WsRule', () => {
     expect(intent?.side).toBe('long')
     expect(intent?.exchange).toBe('binance')
     expect(intent?.symbol).toBe('BTCUSDT')
-    expect(intent?.amountUsd).toBe(20)
-    expect(intent?.leverage).toBe(4)
+    expect(intent?.amountUsd).toBe(10)
+    expect(intent?.leverage).toBe(5)
     expect(intent?.entryAt).toBe(1_700_000_000_000 - 10_000)
     expect(intent?.volume).toBeGreaterThan(0)
   })

@@ -32,6 +32,7 @@ function makeMockCcxt(overrides: Partial<CcxtExchange> = {}): CcxtExchange & {
   editOrder: ReturnType<typeof vi.fn>
   fetchOrder: ReturnType<typeof vi.fn>
   fetchOpenOrders: ReturnType<typeof vi.fn>
+  fetchFundingHistory: ReturnType<typeof vi.fn>
   fetchPositions: ReturnType<typeof vi.fn>
   fetchBalance: ReturnType<typeof vi.fn>
   setLeverage: ReturnType<typeof vi.fn>
@@ -48,6 +49,7 @@ function makeMockCcxt(overrides: Partial<CcxtExchange> = {}): CcxtExchange & {
     editOrder: vi.fn().mockResolvedValue(makeOrderRaw({ type: 'limit', price: 45000 })),
     fetchOrder: vi.fn().mockResolvedValue(null),
     fetchOpenOrders: vi.fn().mockResolvedValue([]),
+    fetchFundingHistory: vi.fn().mockResolvedValue([]),
     fetchPositions: vi.fn().mockResolvedValue([]),
     fetchBalance: vi.fn().mockResolvedValue({ free: { USDT: 1000 }, used: { USDT: 50 } }),
     setLeverage: vi.fn().mockResolvedValue({}),
@@ -150,6 +152,7 @@ describe('okx stop_market params', () => {
       reduceOnly: true,
     })
     const call = vi.mocked(ccxt.createOrder).mock.calls[0]!
+    expect(call[1]).toBe('market')
     expect(call[2]).toBe('sell')
     const params = call[5] as Record<string, unknown>
     expect(params).toHaveProperty('stopPrice', 44000)
@@ -170,9 +173,36 @@ describe('okx stop_market params', () => {
       reduceOnly: true,
     })
     const call = vi.mocked(ccxt.createOrder).mock.calls[0]!
+    expect(call[1]).toBe('market')
     expect(call[2]).toBe('buy')
     const params = call[5] as Record<string, unknown>
     expect(params).toHaveProperty('stopPrice', 46000)
     expect(params).not.toHaveProperty('triggerDirection')
+  })
+
+  it('fetchFundingFeeIncome maps OKX funding history rows for the requested funding window', async () => {
+    const { adapter, ccxt } = makeAdapter()
+    vi.mocked(ccxt.fetchFundingHistory).mockResolvedValue([
+      {
+        symbol: 'BTC/USDT:USDT',
+        timestamp: 1_700_000_000_500,
+        amount: -0.25,
+        code: 'USDT',
+        info: { instId: 'BTC-USDT-SWAP' },
+      },
+    ])
+
+    const record = await adapter.fetchFundingFeeIncome?.('BTCUSDT', 1_700_000_000_000)
+
+    expect(record).toEqual({
+      symbol: 'BTCUSDT',
+      fundingTime: 1_700_000_000_500,
+      fundingAmount: -0.25,
+      asset: 'USDT',
+    })
+    expect(ccxt.fetchFundingHistory).toHaveBeenCalledWith('BTC/USDT:USDT', 1_699_999_940_000, 20, {
+      type: '8',
+      instType: 'SWAP',
+    })
   })
 })

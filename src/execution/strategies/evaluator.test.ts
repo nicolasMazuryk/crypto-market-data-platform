@@ -32,7 +32,7 @@ function makeIntent(symbol: string, strategy: 'strategy_1', ts: number): TradeIn
     symbol,
     exchangeSymbol: symbol,
     side: 'long',
-    amountUsd: 20,
+    amountUsd: 10,
     leverage: 5,
     volume: 0,
     fundingRate: -0.006,
@@ -84,7 +84,7 @@ describe('StrategyEvaluator', () => {
       negativeFundingThresholdPercent: 0.5,
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
-      amountUsd: 20,
+      amountUsd: 10,
       leverage: 5,
     }
 
@@ -140,7 +140,7 @@ describe('StrategyEvaluator', () => {
       negativeFundingThresholdPercent: 0.5,
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
-      amountUsd: 20,
+      amountUsd: 10,
       leverage: 5,
     }
 
@@ -192,7 +192,7 @@ describe('StrategyEvaluator', () => {
       negativeFundingThresholdPercent: 0.5,
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
-      amountUsd: 20,
+      amountUsd: 10,
       leverage: 5,
     }
 
@@ -239,7 +239,7 @@ describe('StrategyEvaluator', () => {
       negativeFundingThresholdPercent: 0.5,
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
-      amountUsd: 20,
+      amountUsd: 10,
       leverage: 5,
     }
 
@@ -308,7 +308,7 @@ describe('StrategyEvaluator', () => {
       negativeFundingThresholdPercent: 0.5,
       entryOffsetSeconds: 10,
       exitOffsetSeconds: 2,
-      amountUsd: 20,
+      amountUsd: 10,
       leverage: 5,
     }
 

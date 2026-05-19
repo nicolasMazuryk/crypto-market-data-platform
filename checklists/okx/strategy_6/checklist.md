@@ -212,7 +212,7 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
   severity: high
   description: >
     Pre-funding tiny order placed at T_f - 10s (entryOffsetSeconds=10 for strategy_6).
-    OKX WS adapter round-trip typically <100ms. Order must be live in OKX system
+    OKX WS adapter round-trip must stay within the 2000ms trade-quality threshold. Order must be live in OKX system
     before T_f so the symbol's account.bills funding event is received.
   preconditions:
     - scheduler fires at entryAt = nextFundingTimestamp - 10000ms

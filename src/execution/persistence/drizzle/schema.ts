@@ -86,6 +86,7 @@ export const tradeIntents = pgTable(
     exitReason: text('exit_reason'),
     entryFilledAt: timestamp('entry_filled_at', { withTimezone: true }),
     exitFilledAt: timestamp('exit_filled_at', { withTimezone: true }),
+    preFundingFilledAt: timestamp('pre_funding_filled_at', { withTimezone: true }),
     fundingGateOpen: boolean('funding_gate_open').notNull().default(false),
     subAccountId: text('sub_account_id').notNull().default('legacy'),
   },

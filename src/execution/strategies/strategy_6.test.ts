@@ -48,7 +48,7 @@ const BASE_CONFIG: Strategy6Config = {
   tpMultiplier: 0.5,
   slMultiplier: 1.0,
   deadlineSeconds: 3300,
-  mainAmountUsd: 20,
+  mainAmountUsd: 10,
   leverage: 5,
 }
 
@@ -79,8 +79,8 @@ describe('createStrategy6Rule', () => {
     expect(intent?.side).toBe('long')
     expect(intent?.exchange).toBe('binance')
     expect(intent?.symbol).toBe('BTCUSDT')
-    expect(intent?.amountUsd).toBe(20)
-    expect(intent?.leverage).toBe(4)
+    expect(intent?.amountUsd).toBe(10)
+    expect(intent?.leverage).toBe(5)
     expect(intent?.volume).toBeGreaterThan(0)
     expect(intent?.entryAt).toBe(1_700_000_000_000 - 10_000)
   })

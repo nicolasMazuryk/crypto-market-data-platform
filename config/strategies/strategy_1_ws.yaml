@@ -6,5 +6,5 @@ enabled: true
 negativeFundingThresholdPercent: 0.3
 entryOffsetSeconds: 3
 fundingFeeTimeoutSeconds: 10
-amountUsd: 20
+amountUsd: 10
 leverage: 5

@@ -46,6 +46,7 @@ export interface Order {
   stopPrice?: number
   reduceOnly: boolean
   status: OrderStatus
+  rejectReason?: string
   submittedAt: number
   updatedAt: number
 }

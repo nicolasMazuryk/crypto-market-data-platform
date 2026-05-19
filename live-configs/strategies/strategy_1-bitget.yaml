@@ -5,5 +5,5 @@ strategies:
     negativeFundingThresholdPercent: -0.1
     entryOffsetSeconds: 3
     exitOffsetSeconds: 4
-    amountUsd: 20
+    amountUsd: 10
     leverage: 5

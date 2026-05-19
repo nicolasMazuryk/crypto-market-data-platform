@@ -6,7 +6,7 @@
  *  4c — ladder notional: per-rung meetsMinNotional rejects low-notional rungs for Binance IRYSUSDT/SIGNUSDT
  *  4b — strategy_6: meetsMinNotional guards pre-funding qty against stale-price notional failures
  *
- * Config matches production binance/strategy_4_1a: amountUsd=20, ladderCount=5, leverage=5
+ * Config matches production binance/strategy_4_1a: amountUsd=10, ladderCount=5, leverage=5
  *
  * Usage:
  *   source <(bash scripts/exchange-subkey.sh binance strategy_4_1a)

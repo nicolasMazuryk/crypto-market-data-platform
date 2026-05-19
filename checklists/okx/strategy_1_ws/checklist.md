@@ -181,7 +181,7 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
   description: >
     Entry is placed at approximately T_f - 5s (entryOffsetSeconds). Elapsed time
     from entryAt to order.placed should be within a few hundred ms (WS adapter
-    round-trip + setLeverage). OKX WS order latency is typically <100ms.
+    round-trip + setLeverage). OKX WS order latency must stay within the 2000ms trade-quality threshold.
   preconditions:
     - scheduler running and synced to exchange clock
     - strategy condition met

@@ -37,12 +37,12 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
     - wallet.funding listener registered
   expected_behavior:
     - intent.created logged (strategy=strategy_6, exchange=kucoin)
-    - order.placed {kind: "pre_funding", side: "buy", orderType: "market"} logged
+    - order.placed {kind: "pre_funding", side: "sell"|"buy", orderType: "market"} logged
     - pollForEntryFill running (PRIMARY)
     - status decided → submitted → acked → working
   observability_contract:
     - log: 'intent.created' {strategy: "strategy_6", exchange: "kucoin"}
-    - log: 'order.placed' {kind: "pre_funding", side: "buy", orderType: "market"}
+    - log: 'order.placed' {kind: "pre_funding", side: "sell"|"buy", orderType: "market"}
     - db:orders {kind: "pre_funding", intentId: "<id>", exchange: "kucoin"}
     - db:intentLifecycleEvents decided→submitted→acked→working
   code_refs:
@@ -98,12 +98,12 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
     - MAIN market buy via WS adapter
     - pollForEntryFill for MAIN (PRIMARY — market order on KuCoin)
   expected_behavior:
-    - order.placed {kind: "main", side: "buy", orderType: "market"} logged
+    - order.placed {kind: "main", side: "buy"|"sell", orderType: "market"} logged
     - MAIN fill detected via REST poll within 1-15s
     - SL (stop_market, sell) + TP (limit, sell) placed
     - monitor.armed.sl_tp_deadline_post_funding_event logged
   observability_contract:
-    - log: 'order.placed' {kind: "main", side: "buy"}
+    - log: 'order.placed' {kind: "main", side: "buy"|"sell"}
     - log: 'order.filled' (main fill from REST poll)
     - log: 'order.placed' {kind: "sl"} and {kind: "tp"}
     - log: 'monitor.armed.sl_tp_deadline_post_funding_event' (debug)

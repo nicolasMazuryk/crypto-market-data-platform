@@ -2,7 +2,7 @@ import type { ExchangeCredentials } from '../../config/types.js'
 import type { OrderAck, OrderAmendPatch, OrderRef, OrderRequest } from '../rest/types.js'
 import type { ExchangeOrderWsAdapter } from './types.js'
 
-const ACK_TIMEOUT_MS = 5_000
+const ACK_TIMEOUT_MS = 1_500
 
 export interface OkxOrderWsAdapterOptions {
   credentials?: ExchangeCredentials

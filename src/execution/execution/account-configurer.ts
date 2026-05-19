@@ -29,6 +29,15 @@ export interface ExchangeAccountConfigurer {
   stop(): void
 }
 
+const PREWARM_CONCURRENCY: Partial<Record<Exchange, number>> = { binance: 4, okx: 2 }
+const DEFAULT_PREWARM_CONCURRENCY = 8
+
+interface ExchangeQueue {
+  running: number
+  pending: (() => Promise<void>)[]
+  max: number
+}
+
 export function createExchangeAccountConfigurer(opts: ExchangeAccountConfigurerOpts): ExchangeAccountConfigurer {
   const { adapters, marketsProvider, exchanges, configsByStrategy, execManager, logger, metrics } = opts
 
@@ -37,6 +46,42 @@ export function createExchangeAccountConfigurer(opts: ExchangeAccountConfigurerO
   const positionModeSet = new Set<string>()
   const positionModeInFlight = new Map<string, Promise<void>>()
   const stopFns: Unsubscribe[] = []
+
+  const queueByExchange = new Map<Exchange, ExchangeQueue>()
+
+  function getQueue(exchange: Exchange): ExchangeQueue {
+    let q = queueByExchange.get(exchange)
+    if (!q) {
+      q = { running: 0, pending: [], max: PREWARM_CONCURRENCY[exchange] ?? DEFAULT_PREWARM_CONCURRENCY }
+      queueByExchange.set(exchange, q)
+    }
+    return q
+  }
+
+  function drain(q: ExchangeQueue): void {
+    while (q.running < q.max && q.pending.length > 0) {
+      const next = q.pending.shift()
+      if (!next) break
+      q.running++
+      void next().finally(() => {
+        q.running--
+        drain(q)
+      })
+    }
+  }
+
+  function enqueuePrewarm(exchange: Exchange, fn: () => Promise<void>): void {
+    const q = getQueue(exchange)
+    if (q.running < q.max) {
+      q.running++
+      void fn().finally(() => {
+        q.running--
+        drain(q)
+      })
+    } else {
+      q.pending.push(fn)
+    }
+  }
 
   function getEnabledLeverages(): Set<number> {
     const leverages = new Set<number>()
@@ -143,13 +188,13 @@ export function createExchangeAccountConfigurer(opts: ExchangeAccountConfigurerO
     const market = marketsProvider.get(exchange, symbol)
     if (!market) return
 
-    void ensureMarginMode(exchange, market.exchangeSymbol, symbol)
-
-    if (PER_SYMBOL_POSITION_MODE.has(exchange)) {
-      void ensurePerSymbolPositionMode(exchange, market.exchangeSymbol, symbol)
-    }
-
-    execManager.prewarmLeverage(exchange, symbol, leverage)
+    enqueuePrewarm(exchange, async () => {
+      await ensureMarginMode(exchange, market.exchangeSymbol, symbol)
+      if (PER_SYMBOL_POSITION_MODE.has(exchange)) {
+        await ensurePerSymbolPositionMode(exchange, market.exchangeSymbol, symbol)
+      }
+      await execManager.prewarmLeverage(exchange, symbol, leverage)
+    })
   }
 
   function start(): void {

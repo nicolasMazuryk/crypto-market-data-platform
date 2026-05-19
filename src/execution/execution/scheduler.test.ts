@@ -15,14 +15,15 @@ const WINDOW_MS = 300_000
 function makeSnapshot(
   symbol = 'BTCUSDT',
   nextFundingTimestamp = FIRST_WAKE + 60_000,
-  timestamp = FIRST_WAKE - 10_000
+  timestamp = FIRST_WAKE - 10_000,
+  fundingRatePercent = -0.5
 ): FundingSnapshot {
   return {
     exchange: 'binance',
     symbol,
     exchangeSymbol: symbol,
-    fundingRate: -0.005,
-    fundingRatePercent: -0.5,
+    fundingRate: fundingRatePercent / 100,
+    fundingRatePercent,
     fundingInterval: 8,
     nextFundingTimestamp,
     nextFundingDatetime: new Date(nextFundingTimestamp).toISOString(),
@@ -41,7 +42,7 @@ function makeConfig(entryOffsetSeconds = 10): Map<StrategyId, StrategyConfig> {
         negativeFundingThresholdPercent: -0.5,
         entryOffsetSeconds,
         exitOffsetSeconds: 2,
-        amountUsd: 20,
+        amountUsd: 10,
         leverage: 5,
       } satisfies StrategyConfig,
     ],
@@ -319,6 +320,119 @@ describe('FundingEventScheduler (hourly wake)', () => {
 
     scheduler.stop()
   })
+
+  it('only schedules negative-threshold symbols that pass or are within 0.1 percentage points', () => {
+    const nft = FIRST_WAKE + 60_000
+    const latestMap = new Map([
+      ['PASSUSDT', makeSnapshot('PASSUSDT', nft, FIRST_WAKE - 10_000, -0.5)],
+      ['NEARUSDT', makeSnapshot('NEARUSDT', nft, FIRST_WAKE - 10_000, -0.41)],
+      ['FARUSDT', makeSnapshot('FARUSDT', nft, FIRST_WAKE - 10_000, -0.39)],
+    ])
+    const evaluateSpy = vi.fn()
+    const prewarmSpy = vi.fn()
+
+    const scheduler = createFundingEventScheduler({
+      clock: makeClock(),
+      evaluator: {
+        evaluate: (ex, sym) => {
+          evaluateSpy(ex, sym)
+          return []
+        },
+      },
+      funding: makeFunding(latestMap),
+      exchanges: ['binance'],
+      configsByStrategy: makeConfig(10),
+      config: makeSchedulerConfig(),
+      evaluateLeadMs: 1500,
+      leveragePrewarmer: prewarmSpy,
+      logger: noopLogger,
+    })
+
+    vi.advanceTimersByTime(FIRST_WAKE + 100_000)
+
+    expect(evaluateSpy).toHaveBeenCalledWith('binance', 'PASSUSDT')
+    expect(evaluateSpy).toHaveBeenCalledWith('binance', 'NEARUSDT')
+    expect(evaluateSpy).not.toHaveBeenCalledWith('binance', 'FARUSDT')
+    expect(prewarmSpy).toHaveBeenCalledTimes(2)
+
+    scheduler.stop()
+  })
+
+  it('handles positive and zero thresholds when filtering candidates', () => {
+    const nft = FIRST_WAKE + 60_000
+    const latestMap = new Map([
+      ['POSPASS', makeSnapshot('POSPASS', nft, FIRST_WAKE - 10_000, 0.5)],
+      ['POSNEAR', makeSnapshot('POSNEAR', nft, FIRST_WAKE - 10_000, 0.41)],
+      ['POSFAR', makeSnapshot('POSFAR', nft, FIRST_WAKE - 10_000, 0.39)],
+      ['ANYRATE', makeSnapshot('ANYRATE', nft, FIRST_WAKE - 10_000, -0.01)],
+    ])
+    const evaluateSpy = vi.fn()
+    const configs = new Map<StrategyId, StrategyConfig>([
+      [
+        'strategy_6',
+        {
+          id: 'strategy_6',
+          enabled: true,
+          mainSide: 'long',
+          funding_threshold: 0.5,
+          entryOffsetSeconds: 10,
+          fundingFeeTimeoutSeconds: 10,
+          tpMultiplier: 1,
+          slMultiplier: 1,
+          deadlineSeconds: 300,
+          mainAmountUsd: 10,
+          leverage: 5,
+        },
+      ],
+    ])
+
+    let scheduler = createFundingEventScheduler({
+      clock: makeClock(),
+      evaluator: {
+        evaluate: (ex, sym) => {
+          evaluateSpy(ex, sym)
+          return []
+        },
+      },
+      funding: makeFunding(latestMap),
+      exchanges: ['binance'],
+      configsByStrategy: configs,
+      config: makeSchedulerConfig(),
+      evaluateLeadMs: 1500,
+      logger: noopLogger,
+    })
+
+    vi.advanceTimersByTime(FIRST_WAKE + 100_000)
+
+    expect(evaluateSpy).toHaveBeenCalledWith('binance', 'POSPASS')
+    expect(evaluateSpy).toHaveBeenCalledWith('binance', 'POSNEAR')
+    expect(evaluateSpy).not.toHaveBeenCalledWith('binance', 'POSFAR')
+    expect(evaluateSpy).not.toHaveBeenCalledWith('binance', 'ANYRATE')
+    scheduler.stop()
+
+    evaluateSpy.mockClear()
+    vi.setSystemTime(0)
+    configs.set('strategy_6', { ...(configs.get('strategy_6') as Extract<StrategyConfig, { id: 'strategy_6' }>), funding_threshold: 0 })
+    scheduler = createFundingEventScheduler({
+      clock: makeClock(),
+      evaluator: {
+        evaluate: (ex, sym) => {
+          evaluateSpy(ex, sym)
+          return []
+        },
+      },
+      funding: makeFunding(latestMap),
+      exchanges: ['binance'],
+      configsByStrategy: configs,
+      config: makeSchedulerConfig(),
+      evaluateLeadMs: 1500,
+      logger: noopLogger,
+    })
+
+    vi.advanceTimersByTime(FIRST_WAKE + 100_000)
+    expect(evaluateSpy).toHaveBeenCalledWith('binance', 'ANYRATE')
+    scheduler.stop()
+  })
 })
 
 describe('FundingEventScheduler with fundingTimeOverrideMs', () => {
@@ -441,7 +555,7 @@ describe('FundingEventScheduler with fundingTimeOverrideMs', () => {
           negativeFundingThresholdPercent: -0.5,
           entryOffsetSeconds: 10,
           exitOffsetSeconds: 2,
-          amountUsd: 20,
+          amountUsd: 10,
           leverage: 5,
         } satisfies StrategyConfig,
       ],
@@ -461,8 +575,8 @@ describe('FundingEventScheduler with fundingTimeOverrideMs', () => {
 
     // leveragePrewarmer should be called once per symbol × leverage (2 symbols × 1 leverage)
     expect(prewarmSpy).toHaveBeenCalledTimes(2)
-    expect(prewarmSpy).toHaveBeenCalledWith('binance', 'BTCUSDT', 4)
-    expect(prewarmSpy).toHaveBeenCalledWith('binance', 'ETHUSDT', 4)
+    expect(prewarmSpy).toHaveBeenCalledWith('binance', 'BTCUSDT', 5)
+    expect(prewarmSpy).toHaveBeenCalledWith('binance', 'ETHUSDT', 5)
 
     scheduler.stop()
   })

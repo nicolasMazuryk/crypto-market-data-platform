@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('kucoin-api', () => ({
   FuturesClient: vi.fn(),
@@ -37,6 +37,10 @@ function makeSymbol(
 describe('KuCoin funding puller', () => {
   beforeEach(() => {
     vi.mocked(FuturesClient).mockReset()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('uses predictedFundingFeeRate when present', async () => {
@@ -90,7 +94,62 @@ describe('KuCoin funding puller', () => {
     expect(snap?.markPrice).toBeUndefined()
   })
 
-  it('defaults to 0 and still emits the snapshot when predictedFundingFeeRate is missing', async () => {
+  it('converts countdown nextFundingRateTime into a future epoch timestamp', async () => {
+    vi.setSystemTime(new Date('2026-05-18T12:00:00.000Z'))
+    const sym = makeSymbol({ nextFundingRateTime: 21_739_636 })
+    vi.mocked(FuturesClient).mockImplementation(
+      () =>
+        ({
+          getSymbols: vi.fn().mockResolvedValue({ data: [sym] }),
+        }) as never
+    )
+
+    const puller = createKucoinPuller()
+    const snapshots = await puller.pull()
+
+    const snap = snapshots.find(s => s.symbol === NORMALIZED_SYMBOL)
+    expect(snap?.nextFundingTimestamp).toBe(new Date('2026-05-18T18:02:00.000Z').getTime())
+    expect(snap?.nextFundingDatetime).toBe('2026-05-18T18:02:00.000Z')
+  })
+
+  it('stabilizes countdown-derived timestamps across repeated pulls', async () => {
+    vi.setSystemTime(new Date('2026-05-18T12:00:00.000Z'))
+    const getSymbols = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [makeSymbol({ nextFundingRateTime: 60_135 })] })
+      .mockResolvedValueOnce({ data: [makeSymbol({ nextFundingRateTime: 55_128 })] })
+    vi.mocked(FuturesClient).mockImplementation(() => ({ getSymbols }) as never)
+
+    const puller = createKucoinPuller()
+    const first = await puller.pull()
+    vi.setSystemTime(new Date('2026-05-18T12:00:05.000Z'))
+    const second = await puller.pull()
+
+    const firstSnap = first.find(s => s.symbol === NORMALIZED_SYMBOL)
+    const secondSnap = second.find(s => s.symbol === NORMALIZED_SYMBOL)
+    expect(firstSnap?.nextFundingTimestamp).toBe(new Date('2026-05-18T12:01:00.000Z').getTime())
+    expect(secondSnap?.nextFundingTimestamp).toBe(firstSnap?.nextFundingTimestamp)
+  })
+
+  it('keeps epoch-millisecond nextFundingRateTime unchanged', async () => {
+    const epochMs = new Date('2026-05-18T16:00:00.000Z').getTime()
+    const sym = makeSymbol({ nextFundingRateTime: epochMs })
+    vi.mocked(FuturesClient).mockImplementation(
+      () =>
+        ({
+          getSymbols: vi.fn().mockResolvedValue({ data: [sym] }),
+        }) as never
+    )
+
+    const puller = createKucoinPuller()
+    const snapshots = await puller.pull()
+
+    const snap = snapshots.find(s => s.symbol === NORMALIZED_SYMBOL)
+    expect(snap?.nextFundingTimestamp).toBe(epochMs)
+    expect(snap?.nextFundingDatetime).toBe('2026-05-18T16:00:00.000Z')
+  })
+
+  it('falls back to fundingFeeRate when predictedFundingFeeRate is missing', async () => {
     const sym = makeSymbol({ fundingFeeRate: 0.001, predictedFundingFeeRate: undefined })
     vi.mocked(FuturesClient).mockImplementation(
       () =>
@@ -102,10 +161,9 @@ describe('KuCoin funding puller', () => {
     const puller = createKucoinPuller()
     const snapshots = await puller.pull()
 
-    // Snapshot is still emitted (not filtered out)
     const snap = snapshots.find(s => s.symbol === NORMALIZED_SYMBOL)
     expect(snap).toBeDefined()
-    // Rate defaults to 0 — falling back to fundingFeeRate would reintroduce the bug
-    expect(snap?.fundingRate).toBe(0)
+    expect(snap?.fundingRate).toBe(0.001)
+    expect(snap?.fundingRatePercent).toBeCloseTo(0.1)
   })
 })

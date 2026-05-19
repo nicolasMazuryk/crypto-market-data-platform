@@ -48,7 +48,7 @@ const BASE_CONFIG_3A: Strategy3aConfig = {
   tpVariantAMultiplier: 1.5,
   tpVariantBOffsetPercent: 0.4,
   deadlineSeconds: 300,
-  amountUsd: 20,
+  amountUsd: 10,
   leverage: 5,
 }
 
@@ -62,7 +62,7 @@ const BASE_CONFIG_3B: Strategy3bConfig = {
   tpVariantAMultiplier: 1.5,
   tpVariantBOffsetPercent: 0.4,
   deadlineSeconds: 300,
-  amountUsd: 20,
+  amountUsd: 10,
   leverage: 5,
 }
 
@@ -95,8 +95,8 @@ describe('createStrategy3Rule — variant A', () => {
     expect(intent?.side).toBe('short')
     expect(intent?.exchange).toBe('binance')
     expect(intent?.symbol).toBe('BTCUSDT')
-    expect(intent?.amountUsd).toBe(20)
-    expect(intent?.leverage).toBe(4)
+    expect(intent?.amountUsd).toBe(10)
+    expect(intent?.leverage).toBe(5)
     const entryAt = 1_700_000_000_000 - 5_000
     expect(intent?.entryAt).toBe(entryAt)
     expect(intent?.exitPolicy.kind).toBe('sl_tp_deadline')

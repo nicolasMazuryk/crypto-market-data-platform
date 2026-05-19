@@ -97,6 +97,12 @@ export interface CcxtExchange {
     limit?: number,
     params?: Record<string, unknown>
   ): Promise<Record<string, unknown>[]>
+  fetchFundingHistory?(
+    symbol?: string,
+    since?: number,
+    limit?: number,
+    params?: Record<string, unknown>
+  ): Promise<Record<string, unknown>[]>
   createOrder?(
     symbol: string,
     type: string,

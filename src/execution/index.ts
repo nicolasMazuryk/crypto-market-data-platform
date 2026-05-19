@@ -74,6 +74,8 @@ import { insertRun } from './persistence/queries.js'
 
 import { createOrderWsAdapter } from './adapters/orderws/index.js'
 import type { ExchangeOrderWsAdapter } from './adapters/orderws/types.js'
+import { createFundingIncomePoller } from './funding/funding-income-poller.js'
+import type { FundingIncomePoller } from './funding/funding-income-poller.js'
 import type { EngineConfig } from './config/types.js'
 import type { Exchange } from './types/exchange.js'
 
@@ -542,6 +544,19 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
   })
   execManager.start()
 
+  // Belt-and-suspenders funding attribution for exchanges where funding-fee WS bills
+  // are delayed or suppressed. Fires 3 s after each 8h boundary and emits ws.funding_fee.
+  let fundingIncomePoller: FundingIncomePoller | undefined
+  if (Array.from(restAdapters.values()).some(adapter => adapter.fetchFundingFeeIncome !== undefined)) {
+    fundingIncomePoller = createFundingIncomePoller({
+      restAdapters,
+      execManager,
+      bus,
+      logger: logger.childFor('funding_income_poller'),
+    })
+    fundingIncomePoller.start()
+  }
+
   // Wire explicit kill-switch flattenAll to the manager (trip/halt itself does not flatten).
   killSwitch.wireFlattener(() => execManager.flattenAll())
 
@@ -730,6 +745,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
 
     scheduler?.stop()
     accountConfigurer.stop()
+    fundingIncomePoller?.stop()
 
     // F6-1: Close all open positions before tearing down WS/REST adapters.
     // flattenAll() cancels non-terminal intents and places market-close orders for open positions.

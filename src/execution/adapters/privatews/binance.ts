@@ -1,5 +1,5 @@
 import type { ExchangeConfig, ExchangeCredentials } from '../../config/types.js'
-import type { ExchangePrivateWsAdapter } from './types.js'
+import type { ExchangePrivateWsAdapter, FundingFeeEvent } from './types.js'
 import {
   createPrivateWsAdapterFromSpec,
   makeTypedEmitter,
@@ -63,7 +63,7 @@ export function createBinancePrivateWsAdapter(opts: BinancePrivateWsAdapterOptio
     }
     if (raw.e === 'ORDER_TRADE_UPDATE') {
       const binanceRaw = raw as unknown as BinanceOrderUpdateRaw
-      const orderEv = mapOrderTradeUpdate(binanceRaw, receivedAt, seq)
+      const orderEv = mapOrderTradeUpdate(binanceRaw, receivedAt, seq, 'binance', opts.logger)
       const fillEv = mapFillFromOrderTradeUpdate(binanceRaw, receivedAt)
       return {
         orders: [orderEv],
@@ -75,16 +75,32 @@ export function createBinancePrivateWsAdapter(opts: BinancePrivateWsAdapterOptio
     if (raw.e === 'ACCOUNT_UPDATE') {
       const acctRaw = raw as unknown as BinanceAccountUpdateRaw
       const { balances, positions } = mapAccountUpdate(acctRaw, receivedAt, seq)
-      const fee = mapFundingFee(acctRaw, receivedAt, seq, 'binance', rateCache, opts.logger)
+      let fundingFees: FundingFeeEvent[] | undefined
       if (acctRaw.a.m === 'FUNDING_FEE') {
-        opts.logger?.warn(
+        if (acctRaw.a.P.length === 0 && acctRaw.a.B.length > 1) {
+          // Multi-balance, no position data — emit one diagnostic event per balance entry.
+          fundingFees = acctRaw.a.B.map(b => ({
+            exchange: 'binance' as const,
+            symbol: '',
+            fundingTime: acctRaw.T,
+            fundingRate: 0,
+            fundingAmount: parseFloat(b.bc),
+            asset: b.a,
+            positionQty: 0,
+            receivedAt,
+          }))
+        } else {
+          const fee = mapFundingFee(acctRaw, receivedAt, seq, 'binance', rateCache, opts.logger)
+          if (fee) fundingFees = [fee]
+        }
+        opts.logger.warn(
           {
             event: 'ws.funding_fee.received',
             T: acctRaw.T,
             pCount: acctRaw.a.P.length,
             bCount: acctRaw.a.B.length,
             symbol: acctRaw.a.P[0]?.s,
-            produced: !!fee,
+            produced: fundingFees !== undefined ? fundingFees.length : 0,
           },
           'ACCOUNT_UPDATE m=FUNDING_FEE received'
         )
@@ -92,7 +108,7 @@ export function createBinancePrivateWsAdapter(opts: BinancePrivateWsAdapterOptio
       return {
         balances,
         positions,
-        fundingFees: fee ? [fee] : undefined,
+        ...(fundingFees !== undefined ? { fundingFees } : {}),
         eventType: raw.e,
         eventTimestampMs: raw.E,
       }

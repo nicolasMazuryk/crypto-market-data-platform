@@ -36,11 +36,11 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
     - wallet/position listener registered
   expected_behavior:
     - intent.created logged (strategy=strategy_6, exchange=bybit)
-    - order.placed {kind: "pre_funding", side: "buy", orderType: "market"} logged
+    - order.placed {kind: "pre_funding", side: "sell"|"buy", orderType: "market"} logged
     - status decided → submitted → acked → working
   observability_contract:
     - log: 'intent.created' {strategy: "strategy_6", exchange: "bybit"}
-    - log: 'order.placed' {kind: "pre_funding", side: "buy", orderType: "market"}
+    - log: 'order.placed' {kind: "pre_funding", side: "sell"|"buy", orderType: "market"}
     - db:orders {kind: "pre_funding", intentId: "<id>", exchange: "bybit"}
     - db:intentLifecycleEvents decided→submitted→acked→working
   code_refs:
@@ -95,12 +95,12 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
     - MAIN market buy via WS adapter
     - Bybit WS: order fill for MAIN (clientOrderId present)
   expected_behavior:
-    - order.placed {kind: "main", side: "buy"} logged
+    - order.placed {kind: "main", side: "buy"|"sell"} logged
     - MAIN fill detected via WS (<1s)
     - SL (stop_market, sell) + TP (limit, sell) placed
     - monitor.armed.sl_tp_deadline_post_funding_event logged
   observability_contract:
-    - log: 'order.placed' {kind: "main", side: "buy"}
+    - log: 'order.placed' {kind: "main", side: "buy"|"sell"}
     - log: 'order.filled' (main fill, ms timestamps)
     - log: 'order.placed' {kind: "sl"} and {kind: "tp"}
     - log: 'monitor.armed.sl_tp_deadline_post_funding_event' (debug)

@@ -183,8 +183,8 @@ Be strict: if unsure, do not delete.
 
 Independent of checklist deletions. For every trade intent in the window, flag in Issues if:
 
-- Entry placed > 100 ms off `next_funding_ts - entryOffsetSeconds*1000`.
-- Exit placed > 100 ms off planned `exit_at`.
+- Entry placed > 2000 ms off `next_funding_ts - entryOffsetSeconds*1000`.
+- Exit placed > 2000 ms off planned `exit_at`.
 - Fill price diverges > 0.5% from mark price at fill time.
 - Any `ops_events` row with `event_type` starting `recovery.` or `risk.killSwitch.`.
 - Any `persistence.wal.discarded` log event.

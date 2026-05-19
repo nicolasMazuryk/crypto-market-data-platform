@@ -4,6 +4,8 @@ After=docker.service network-online.target
 Requires=docker.service
 # %n is the full instance name (e.g. execution-engine@strategy_3a-bybit.service)
 OnFailure=execution-engine-page@%n.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=exec
@@ -26,14 +28,12 @@ ExecStart=/usr/bin/docker run \
   --registry {{ execution_config_dir }}/registry.yaml
 # Send SIGTERM to the docker process (which propagates to the container's PID 1)
 KillMode=process
-TimeoutStopSec=30s
+TimeoutStopSec=120s
 Restart=on-failure
 RestartSec=10
 # Disable per-unit journald rate limiting; recovery and mass-cancel can emit bursts.
 LogRateLimitIntervalSec=0
 LogRateLimitBurst=0
-StartLimitIntervalSec=300
-StartLimitBurst=5
 
 [Install]
 WantedBy=multi-user.target

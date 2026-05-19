@@ -132,6 +132,7 @@ export async function writeRowToDb(
         if (row.avgExitPrice) updateSet.avgExitPrice = row.avgExitPrice
         if (row.entryFilledAt) updateSet.entryFilledAt = toDate(row.entryFilledAt)
         if (row.exitFilledAt) updateSet.exitFilledAt = toDate(row.exitFilledAt)
+        if (row.preFundingFilledAt) updateSet.preFundingFilledAt = toDate(row.preFundingFilledAt)
         if (row.fundingGateOpen !== undefined) updateSet.fundingGateOpen = row.fundingGateOpen
         await db
           .update(tradeIntents)
@@ -390,7 +391,16 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
 
     const qty = exitEvent.qty
     const entryPx = exitEvent.avgEntryPrice
-    const exitPx = exitEvent.avgExitPrice
+
+    let exitPx = exitEvent.avgExitPrice
+    if (exitPx == null) {
+      const exitFills = fillRows.filter(f => f.orderKind !== 'entry' && f.orderKind !== 'pre_funding')
+      const totalExitQty = exitFills.reduce((sum, f) => sum + parseFloat(f.qty), 0)
+      if (totalExitQty > 0) {
+        const weightedSum = exitFills.reduce((sum, f) => sum + parseFloat(f.price) * parseFloat(f.qty), 0)
+        exitPx = weightedSum / totalExitQty
+      }
+    }
 
     let grossPnl: number | null = null
     if (entryPx != null && exitPx != null && qty > 0) {
@@ -445,6 +455,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
 
         const row: Record<string, unknown> = { id: state.intent.id, status: state.status }
         if (state.status === 'exited') row.exitAt = new Date()
+        if (state.preFundingFilledAt) row.preFundingFilledAt = new Date(state.preFundingFilledAt)
         enqueue({
           table: 'trade_intents',
           row,
@@ -526,6 +537,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
           filledQty: String(order.filledQty),
           ...(order.status !== 'new' ? { ackedAt: new Date(order.submittedAt) } : {}),
           ...(TERMINAL_ORDER_STATUSES.has(order.status) ? { terminalAt: new Date(order.updatedAt) } : {}),
+          ...(order.status === 'rejected' && order.rejectReason ? { rejectionReason: order.rejectReason } : {}),
         }
         if (order.filledQty > 0) {
           row.firstFillAt = new Date(order.updatedAt)
@@ -565,13 +577,14 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
             }
 
             if (!orderRow) {
+              const dlReason = event.clientOrderId ? 'foreign_session' : 'order_not_found'
               logFillUnmatched(logger, {
                 exchange: event.exchange,
                 symbol: event.symbol,
                 clientOrderId: event.clientOrderId,
                 exchangeFillId: event.exchangeFillId,
                 rawFill: event,
-                reason: 'order_not_found',
+                reason: dlReason,
               })
               try {
                 await db.insert(fillsDeadLetter).values({
@@ -579,7 +592,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
                   exchange: event.exchange,
                   symbol: event.symbol,
                   clientOrderId: event.clientOrderId,
-                  reason: 'order_not_found',
+                  reason: dlReason,
                   rawFillEvent: event as unknown as Record<string, unknown>,
                   subAccountId: identity?.subAccountId ?? null,
                 })
@@ -588,6 +601,20 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
               }
               return
             }
+
+            // Skip REST-poll synthetic fills when a real WS fill already exists for this order.
+            if (event.exchangeFillId.startsWith('poll:')) {
+              const [existingFill] = await db
+                .select({ id: fills.id })
+                .from(fills)
+                .where(eq(fills.orderId, orderRow.id))
+                .limit(1)
+              if (existingFill) {
+                logger.debug({ exchangeFillId: event.exchangeFillId, orderId: orderRow.id }, 'persistence: skipping poll fill — WS fill already exists')
+                return
+              }
+            }
+
             enqueue({
               table: 'fills',
               row: {
@@ -733,6 +760,21 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
     unsubs.push(
       bus.on('ws.funding_fee', event => {
         void (async () => {
+          if (event.symbol === '') {
+            logger.warn(
+              {
+                event: 'funding.attribution.skipped_symbol_unknown',
+                exchange: event.exchange,
+                fundingTime: event.fundingTime,
+                fundingAmount: event.fundingAmount,
+                asset: event.asset,
+                subAccountId: stamp.subAccountId,
+              },
+              'funding.attribution.skipped_symbol_unknown'
+            )
+            return
+          }
+
           const fundingTime = new Date(event.fundingTime)
           const TOLERANCE_MS = 60_000 // allow attribution for intents that exited up to 1 min after fundingTime
 
@@ -746,7 +788,12 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
                   eq(tradeIntents.exchange, event.exchange),
                   eq(tradeIntents.symbol, event.symbol),
                   eq(tradeIntents.subAccountId, stamp.subAccountId),
-                  lte(tradeIntents.entryFilledAt, fundingTime),
+                  // strategy_6: pre-funding fill predates fundingTime; MAIN fill arrives after.
+                  // Accept either entryFilledAt OR preFundingFilledAt as the position-open anchor.
+                  or(
+                    lte(tradeIntents.entryFilledAt, fundingTime),
+                    lte(tradeIntents.preFundingFilledAt, fundingTime)
+                  ),
                   or(
                     isNull(tradeIntents.exitFilledAt),
                     gte(tradeIntents.exitFilledAt, new Date(event.fundingTime - TOLERANCE_MS))

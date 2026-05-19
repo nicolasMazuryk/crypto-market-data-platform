@@ -17,7 +17,7 @@ function makeIntent(overrides: Partial<TradeIntent> = {}): TradeIntent {
     symbol: 'BTCUSDT',
     exchangeSymbol: 'BTCUSDT',
     side: 'long',
-    amountUsd: 20,
+    amountUsd: 10,
     leverage: 5,
     volume: 0,
     fundingRate: -0.006,
@@ -138,7 +138,7 @@ describe('preflight', () => {
     vi.mocked(deps.state.balances).mockReturnValue([
       { exchange: 'binance', asset: 'USDT', available: 1, locked: 0, updatedAt: 0 },
     ])
-    const result = preflight(makeIntent({ amountUsd: 20, leverage: 5 }), 50000, deps)
+    const result = preflight(makeIntent({ amountUsd: 10, leverage: 5 }), 50000, deps)
     // margin = 20/4 = 5, available = 1
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.code).toBe('insufficient_balance')
@@ -153,7 +153,7 @@ describe('preflight', () => {
 
   it('rejects when global notional cap would be exceeded', () => {
     const deps = makeDeps({ notionalInFlight: vi.fn().mockReturnValue(990) })
-    const result = preflight(makeIntent({ amountUsd: 20 }), 50000, deps)
+    const result = preflight(makeIntent({ amountUsd: 10 }), 50000, deps)
     // 990 + 20 = 1010 > 1000
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.code).toBe('cap_exceeded')

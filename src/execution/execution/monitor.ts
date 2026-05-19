@@ -81,6 +81,8 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
       const skewMs = clock.skewMs(intent.exchange)
 
       let settled = false
+      let fundingGateOpen = false
+
       const settle = (reason: ExitReason, ctx: ExitTriggerContext): void => {
         if (settled) return
         settled = true
@@ -98,6 +100,11 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
           ...(ctx.latencyMs !== undefined ? { latencyMs: ctx.latencyMs } : {}),
         }
         bus.emit('exit.triggered', triggerEvent)
+        if (fundingGateOpen) {
+          bus.emit('intent.funding_gate_closed', { intentId, reason })
+          logger.info({ intentId, reason }, 'monitor.funding_gate_closed')
+          fundingGateOpen = false
+        }
         logger.info({ intentId, reason, ...ctx }, 'monitor.settle')
         emitExit(intentId, reason)
       }
@@ -219,6 +226,10 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
           })
         })
         entry.unsubs.push(unsub)
+
+        bus.emit('intent.funding_gate_opened', { intentId })
+        logger.info({ intentId, fundingTs }, 'monitor.funding_gate_opened')
+        fundingGateOpen = true
 
         // REST fallback: poll REST 3s after funding boundary. Register BEFORE the timeout timer
         // so that when both delays are 0 (late entry), the REST poll fires first in the event loop.

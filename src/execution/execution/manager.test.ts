@@ -5,6 +5,8 @@ import { createClock } from '../core/clock.js'
 import { createIds } from '../core/ids.js'
 import { createExecutionLogger } from '../core/logger.js'
 import type { ExchangeRestAdapter, Order, OrderAck } from '../adapters/rest/types.js'
+import type { ExchangeOrderWsAdapter } from '../adapters/orderws/types.js'
+import type { Exchange } from '../types/exchange.js'
 import type { MarketMetadata, MarketMetadataProvider } from '../markets/types.js'
 import { MetricsRegistry, registerExecutionMetrics } from '../observability/metrics.js'
 import type { KillSwitch } from '../risk/types.js'
@@ -23,7 +25,7 @@ function makeIntent(overrides: Partial<TradeIntent> = {}): TradeIntent {
     symbol: 'BTCUSDT',
     exchangeSymbol: 'BTCUSDT',
     side: 'long',
-    amountUsd: 20,
+    amountUsd: 10,
     leverage: 5,
     volume: 0,
     fundingRate: -0.006,
@@ -40,8 +42,8 @@ function makeIntent(overrides: Partial<TradeIntent> = {}): TradeIntent {
 
 function makeOrder(clientOrderId: string, overrides: Partial<Order> = {}): Order {
   return {
-    exchange: 'binance',
-    symbol: 'BTCUSDT',
+    exchange: overrides.exchange ?? 'binance',
+    symbol: overrides.symbol ?? 'BTCUSDT',
     clientOrderId,
     exchangeOrderId: `eid-${clientOrderId}`,
     side: 'buy',
@@ -56,11 +58,11 @@ function makeOrder(clientOrderId: string, overrides: Partial<Order> = {}): Order
   }
 }
 
-function makeMarket(): MarketMetadata {
+function makeMarket(exchange: Exchange = 'binance'): MarketMetadata {
   return {
-    exchange: 'binance',
+    exchange,
     symbol: 'BTCUSDT',
-    exchangeSymbol: 'BTCUSDT',
+    exchangeSymbol: exchange === 'okx' ? 'BTC-USDT-SWAP' : 'BTCUSDT',
     contractSize: 1,
     pricePrecision: 2,
     amountPrecision: 0.0001,
@@ -70,9 +72,10 @@ function makeMarket(): MarketMetadata {
   }
 }
 
-function makeRestAdapter(): ExchangeRestAdapter {
+function makeRestAdapter(exchange: Exchange = 'binance'): ExchangeRestAdapter {
   return {
-    exchange: 'binance',
+    exchange,
+    ...(exchange === 'okx' ? { canonicalizeClientOrderId: (id: string) => id.replace(/-/g, '').slice(0, 32) } : {}),
     setLeverage: vi.fn().mockResolvedValue(undefined),
     createOrder: vi.fn().mockResolvedValue({
       clientOrderId: 'cid',
@@ -134,6 +137,7 @@ function makeStateStore(): StateStore {
 function makeManager(
   overrides: {
     restAdapter?: ExchangeRestAdapter
+    orderWsAdapter?: ExchangeOrderWsAdapter
     monitor?: ReturnType<typeof makeMonitor>
     preflight?: (intent: TradeIntent, price: number) => PreflightResult
     refPrice?: (exchange: string, symbol: string) => number | undefined
@@ -146,12 +150,13 @@ function makeManager(
   const metricsReg = new MetricsRegistry()
   const metrics = registerExecutionMetrics(metricsReg)
   const rest = overrides.restAdapter ?? makeRestAdapter()
+  const exchange = rest.exchange
   const monitor = overrides.monitor ?? makeMonitor()
   const stateStore = overrides.stateStore ?? makeStateStore()
 
   const markets: MarketMetadataProvider = {
-    list: () => [makeMarket()],
-    get: () => makeMarket(),
+    list: () => [makeMarket(exchange)],
+    get: () => makeMarket(exchange),
     resolve: () => undefined,
     refresh: vi.fn(),
     onUpdate: vi.fn().mockReturnValue(() => {}),
@@ -163,13 +168,14 @@ function makeManager(
     ids,
     logger: createExecutionLogger(),
     metrics,
-    restAdapters: new Map([['binance', rest]]),
+    restAdapters: new Map([[exchange, rest]]),
     state: stateStore,
     markets,
     killSwitch: makeKillSwitch(),
     monitor,
     preflight: overrides.preflight ?? ((_i, _p) => ({ ok: true, qty: 0.001 })),
     refPrice: overrides.refPrice ?? ((_e, _s) => 50000),
+    ...(overrides.orderWsAdapter ? { orderWsAdapters: new Map([[exchange, overrides.orderWsAdapter]]) } : {}),
   })
   manager.start()
   return { manager, bus, clock, ids, rest, monitor }
@@ -239,6 +245,156 @@ describe('ExecutionManager', () => {
     const state = await manager.submit(makeIntent())
     expect(state.status).toBe('error')
     expect(state.error?.code).toBe('order_rejected')
+  })
+
+  it('OKX WS_TIMEOUT falls back to REST with the same clientOrderId', async () => {
+    const rest = makeRestAdapter('okx')
+    const ws: ExchangeOrderWsAdapter = {
+      exchange: 'okx',
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      createOrder: vi.fn().mockResolvedValue({
+        clientOrderId: 'cid',
+        exchangeOrderId: '',
+        status: 'rejected',
+        rejectReason: 'WS_TIMEOUT',
+        submittedAt: Date.now(),
+        ackedAt: Date.now(),
+      } satisfies OrderAck),
+      cancelOrder: vi.fn(),
+      amendOrder: vi.fn(),
+    }
+    const { manager } = makeManager({ restAdapter: rest, orderWsAdapter: ws })
+    const intent = makeIntent({
+      strategy: 'strategy_1_ws',
+      exchange: 'okx',
+      exchangeSymbol: 'BTC-USDT-SWAP',
+      exitPolicy: {
+        kind: 'funding_fee_event',
+        fundingTs: Date.now() + 30_000,
+        timeoutAt: Date.now() + 40_000,
+      },
+    })
+
+    const state = await manager.submit(intent)
+
+    expect(state.status).toBe('working')
+    expect(ws.createOrder).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(rest.createOrder)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(rest.createOrder).mock.calls[0]![0].clientOrderId).toBe(
+      vi.mocked(ws.createOrder).mock.calls[0]![0].clientOrderId
+    )
+  })
+
+  it('non-OKX WS_TIMEOUT remains terminal', async () => {
+    const rest = makeRestAdapter('bybit')
+    const ws: ExchangeOrderWsAdapter = {
+      exchange: 'bybit',
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      createOrder: vi.fn().mockResolvedValue({
+        clientOrderId: 'cid',
+        exchangeOrderId: '',
+        status: 'rejected',
+        rejectReason: 'WS_TIMEOUT',
+        submittedAt: Date.now(),
+        ackedAt: Date.now(),
+      } satisfies OrderAck),
+      cancelOrder: vi.fn(),
+      amendOrder: vi.fn(),
+    }
+    const { manager } = makeManager({ restAdapter: rest, orderWsAdapter: ws })
+    const state = await manager.submit(
+      makeIntent({
+        strategy: 'strategy_1_ws',
+        exchange: 'bybit',
+        exchangeSymbol: 'BTCUSDT',
+        exitPolicy: {
+          kind: 'funding_fee_event',
+          fundingTs: Date.now() + 30_000,
+          timeoutAt: Date.now() + 40_000,
+        },
+      })
+    )
+
+    expect(state.status).toBe('error')
+    expect(state.error?.code).toBe('order_rejected')
+    expect(vi.mocked(rest.createOrder)).not.toHaveBeenCalled()
+  })
+
+  it('protection-failure close is registered before REST ACK so a racing close fill exits cleanly', async () => {
+    const rest = makeRestAdapter('okx')
+    const { manager, bus, ids } = makeManager({ restAdapter: rest })
+    const intent = makeIntent({
+      exchange: 'okx',
+      exchangeSymbol: 'BTC-USDT-SWAP',
+      exitPolicy: {
+        kind: 'sl_tp_deadline',
+        slPct: 1,
+        tpPct: 1.5,
+        deadlineAt: Date.now() + 60_000,
+        tpVariant: 'A',
+      },
+    })
+    const cancelledOrders: string[] = []
+    bus.on('ws.order', event => {
+      if (event.order.status === 'cancelled') cancelledOrders.push(event.order.clientOrderId)
+    })
+
+    vi.mocked(rest.createOrder).mockImplementation(async params => {
+      if (params.type === 'stop_market') {
+        return {
+          clientOrderId: params.clientOrderId,
+          exchangeOrderId: '',
+          status: 'rejected',
+          rejectReason: '50014: Parameter orderPx can not be empty.',
+          submittedAt: Date.now(),
+          ackedAt: Date.now(),
+        }
+      }
+      if (params.reduceOnly && params.type === 'market') {
+        bus.emit('ws.order', {
+          exchange: 'okx',
+          order: makeOrder(params.clientOrderId, {
+            exchange: 'okx',
+            symbol: 'BTC-USDT-SWAP',
+            clientOrderId: params.clientOrderId.replace(/-/g, '').slice(0, 32),
+            side: params.side,
+            reduceOnly: true,
+            status: 'filled',
+            filledQty: params.qty,
+            avgFillPrice: 49_900,
+          }),
+          seq: 99,
+          receivedAt: Date.now(),
+        })
+      }
+      return {
+        clientOrderId: params.clientOrderId,
+        exchangeOrderId: `eid-${params.clientOrderId}`,
+        status: 'accepted',
+        submittedAt: Date.now(),
+        ackedAt: Date.now(),
+      }
+    })
+
+    await manager.submit(intent)
+    bus.emit('ws.order', {
+      exchange: 'okx',
+      order: makeOrder(ids.forIntent(intent.id, 0), {
+        exchange: 'okx',
+        symbol: 'BTC-USDT-SWAP',
+        status: 'filled',
+        filledQty: 0.001,
+        avgFillPrice: 50_000,
+      }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 10))
+
+    expect(manager.get(intent.id)?.status).toBe('exited')
+    expect(cancelledOrders.length).toBeGreaterThan(0)
   })
 
   it('handles partial fill then full fill', async () => {
@@ -506,7 +662,7 @@ describe('ExecutionManager', () => {
     const rest = makeRestAdapter()
     const { manager } = makeManager({ restAdapter: rest })
 
-    manager.prewarmLeverage('binance', 'BTCUSDT', 4)
+    manager.prewarmLeverage('binance', 'BTCUSDT', 5)
     await new Promise(r => setTimeout(r, 10)) // let the fire-and-forget settle
 
     await manager.submit(makeIntent())
@@ -527,7 +683,7 @@ describe('ExecutionManager', () => {
     const { manager } = makeManager({ restAdapter: rest })
 
     // Start prewarm without awaiting — registers the in-flight promise
-    manager.prewarmLeverage('binance', 'BTCUSDT', 4)
+    manager.prewarmLeverage('binance', 'BTCUSDT', 5)
 
     // Submit runs concurrently and must join the in-flight prewarm promise
     const submitPromise = manager.submit(makeIntent())

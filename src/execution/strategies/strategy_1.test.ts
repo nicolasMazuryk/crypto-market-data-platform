@@ -44,7 +44,7 @@ const BASE_CONFIG: Strategy1Config = {
   negativeFundingThresholdPercent: -0.5,
   entryOffsetSeconds: 10,
   exitOffsetSeconds: 2,
-  amountUsd: 20,
+  amountUsd: 10,
   leverage: 5,
 }
 
@@ -77,8 +77,8 @@ describe('createStrategy1Rule', () => {
     expect(intent?.side).toBe('long')
     expect(intent?.exchange).toBe('binance')
     expect(intent?.symbol).toBe('BTCUSDT')
-    expect(intent?.amountUsd).toBe(20)
-    expect(intent?.leverage).toBe(4)
+    expect(intent?.amountUsd).toBe(10)
+    expect(intent?.leverage).toBe(5)
     expect(intent?.entryAt).toBe(1_700_000_000_000 - 10_000)
     expect(intent?.exitPolicy).toEqual({ kind: 'timed', exitAt: 1_700_000_000_000 + 2_000 })
     expect(intent?.volume).toBeGreaterThan(0)
@@ -122,7 +122,7 @@ describe('createStrategy1Rule', () => {
   })
 
   it('returns empty when qty computation fails (price too high for amountUsd)', () => {
-    // price=50000, amountUsd=20 → rawQty=0.0004 < step(0.001) → qty=0 → null
+    // price=50000, amountUsd=10 → rawQty=0.0002 < step(0.001) → qty=0 → null
     const ruleHighPrice = createStrategy1Rule({ ids, refPrice: () => 50000 })
     expect(ruleHighPrice.evaluate(makeCtx())).toHaveLength(0)
   })

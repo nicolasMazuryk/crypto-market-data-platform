@@ -5,6 +5,21 @@ import { normalizeSymbol } from '../../utils/symbol-normalizer.js'
 import type { ExchangeFundingPuller, FundingSnapshot } from './types.js'
 
 const KUCOIN_DEFAULT_FUNDING_INTERVAL: FundingInterval = 8
+const EPOCH_MILLISECONDS_FLOOR = 1_000_000_000_000
+const DEFAULT_NEXT_FUNDING_DELAY_MS = 8 * 3600 * 1000
+const COUNTDOWN_FUNDING_BOUNDARY_MS = 60_000
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function resolveNextFundingTimestamp(value: unknown, now: number): number {
+  const raw = finiteNumber(value)
+  if (raw === undefined) return now + DEFAULT_NEXT_FUNDING_DELAY_MS
+  if (raw >= EPOCH_MILLISECONDS_FLOOR) return raw
+  const absolute = now + raw
+  return Math.round(absolute / COUNTDOWN_FUNDING_BOUNDARY_MS) * COUNTDOWN_FUNDING_BOUNDARY_MS
+}
 
 export function createKucoinPuller(): ExchangeFundingPuller {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -35,10 +50,8 @@ export function createKucoinPuller(): ExchangeFundingPuller {
         const normalizedSymbol = normalizeSymbol(s.symbol)
         if (!normalizedSymbol.endsWith('USDT')) continue
 
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        const fundingRate = s.predictedFundingFeeRate ?? 0
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        const nextFundingTimestamp = s.nextFundingRateTime ?? now + 8 * 3600 * 1000
+        const fundingRate = finiteNumber(s.predictedFundingFeeRate) ?? finiteNumber(s.fundingFeeRate) ?? 0
+        const nextFundingTimestamp = resolveNextFundingTimestamp(s.nextFundingRateTime, now)
 
         snapshots.push({
           exchange: 'kucoin' as Exchange,

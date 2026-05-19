@@ -17,7 +17,7 @@ strategies:
     retracementPct: 1
     deadlineSeconds: 900
     slMultiplier: 2
-    amountUsd: 20
+    amountUsd: 10
     leverage: 5
 observability:
   metricsPort: 9527

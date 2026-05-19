@@ -43,7 +43,7 @@ const STRATEGY_CONFIG = {
       stopLossPercent: 1.0,
       tpVariantAMultiplier: 1.8,
       deadlineSeconds: 3300,
-      amountUsd: 20,
+      amountUsd: 10,
       leverage: 5,
     },
   ],

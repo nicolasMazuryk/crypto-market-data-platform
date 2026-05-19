@@ -8,5 +8,5 @@ strategies:
     tpVariantAMultiplier: 1.5
     tpVariantBOffsetPercent: 0.3
     deadlineSeconds: 1800
-    amountUsd: 20
+    amountUsd: 10
     leverage: 5

@@ -11,7 +11,7 @@ function makeIntentRow(overrides?: Partial<TradeIntentRow>): TradeIntentRow {
     symbol: 'BTCUSDT',
     exchangeSymbol: 'BTCUSDT',
     side: 'short',
-    amountUsd: '20',
+    amountUsd: '10',
     leverage: 5,
     fundingRate: '-0.0005',
     fundingRatePercent: '-0.05',

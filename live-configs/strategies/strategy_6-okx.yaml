@@ -5,9 +5,9 @@ strategies:
     mainSide: long
     funding_threshold: 0.1
     entryOffsetSeconds: 3
-    fundingFeeTimeoutSeconds: 10
+    fundingFeeTimeoutSeconds: 45
     tpMultiplier: 1.5
     slMultiplier: 1.5
     deadlineSeconds: 1800
-    mainAmountUsd: 20
+    mainAmountUsd: 10
     leverage: 5

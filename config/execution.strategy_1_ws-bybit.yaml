@@ -15,7 +15,7 @@ strategies:
     negativeFundingThresholdPercent: -0.1
     entryOffsetSeconds: 3
     fundingFeeTimeoutSeconds: 10
-    amountUsd: 20
+    amountUsd: 10
     leverage: 5
 observability:
   metricsPort: 9506

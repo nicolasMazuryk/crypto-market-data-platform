@@ -48,6 +48,8 @@ export interface IntentState {
   preFundingExchangeOrderId?: string
   preFundingFilledQty?: number
   preFundingAvgFillPrice?: number
+  preFundingFilledEmitted?: boolean
+  preFundingFilledAt?: number
   exitOrderRefs?: { sl?: ExitOrderRef; tp?: ExitOrderRef; close?: ExitOrderRef }
   filledQty: number
   avgEntryPrice?: number
@@ -70,7 +72,9 @@ export interface ExecutionManager {
   flattenAll(): Promise<void>
   get(intentId: string): IntentState | undefined
   onStateChange(listener: (state: IntentState) => void): Unsubscribe
-  prewarmLeverage(exchange: Exchange, symbol: string, leverage: number): void
+  prewarmLeverage(exchange: Exchange, symbol: string, leverage: number): Promise<void>
+  listOpenIntents(): { intentId: string; exchange: Exchange; symbol: string }[]
+  listRecentIntentsForAttribution(maxAgeMs: number): { intentId: string; exchange: Exchange; symbol: string }[]
 }
 
 export interface PositionMonitor {

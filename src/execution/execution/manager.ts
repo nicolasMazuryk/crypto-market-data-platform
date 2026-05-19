@@ -13,7 +13,7 @@ import type {
 } from '../core/types.js'
 import type { ExecutionIds } from '../core/ids.js'
 import type { ExecutionMetrics } from '../observability/metrics.js'
-import type { ExchangeRestAdapter, Order, OrderSide } from '../adapters/rest/types.js'
+import type { ExchangeRestAdapter, Order, OrderAck, OrderRequest, OrderSide } from '../adapters/rest/types.js'
 import type { ExchangeOrderWsAdapter } from '../adapters/orderws/types.js'
 import type { StateStore } from '../state/types.js'
 import type { MarketMetadataProvider } from '../markets/types.js'
@@ -108,6 +108,32 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     const rest = restAdapters.get(exchange)
     if (!rest) throw new Error(`no adapter for exchange: ${exchange}`)
     return rest
+  }
+
+  async function createOrderWithOkxWsFallback(strategy: string, req: OrderRequest): Promise<OrderAck> {
+    const ack = await orderClient(req.exchange, strategy).createOrder(req)
+    if (
+      req.exchange === 'okx' &&
+      requiresWsOrderAdapter(strategy) &&
+      ack.status === 'rejected' &&
+      (ack.rejectReason ?? '').includes('WS_TIMEOUT')
+    ) {
+      const rest = restAdapters.get(req.exchange)
+      if (!rest) return ack
+      logger.warn(
+        {
+          event: 'okx.ws_timeout_rest_fallback',
+          intentId: req.intentId,
+          clientOrderId: req.clientOrderId,
+          symbol: req.symbol,
+          type: req.type,
+          reduceOnly: req.reduceOnly,
+        },
+        'okx.ws_timeout_rest_fallback'
+      )
+      return rest.createOrder(req)
+    }
+    return ack
   }
 
   const intentStates: Map<string, IntentState> = opts.initialState?.intentStates ?? new Map<string, IntentState>()
@@ -266,20 +292,82 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     }
 
     for (const ref of placedRefs) {
-      await rest
+      const cancelled = await rest
         .cancelOrder({
           symbol: s.intent.exchangeSymbol,
           clientOrderId: ref.clientOrderId,
           ...(ref.exchangeOrderId ? { exchangeOrderId: ref.exchangeOrderId } : {}),
         })
+        .then(() => true)
         .catch((err: unknown) => {
           logger.warn({ intentId: s.intent.id, clientOrderId: ref.clientOrderId, err }, 'protective failure cancel failed')
+          return false
         })
+      if (cancelled) {
+        const now = clock.now()
+        bus.emit('ws.order', {
+          exchange: s.intent.exchange,
+          seq: 0,
+          receivedAt: now,
+          order: {
+            exchange: s.intent.exchange,
+            symbol: s.intent.exchangeSymbol,
+            clientOrderId: ref.clientOrderId,
+            exchangeOrderId: ref.exchangeOrderId ?? '',
+            side: s.intent.side === 'long' ? 'sell' : 'buy',
+            type: 'limit',
+            qty: 0,
+            filledQty: 0,
+            reduceOnly: true,
+            status: 'cancelled',
+            submittedAt: now,
+            updatedAt: now,
+          },
+        })
+      }
     }
 
     const closeId = ids.forExit(s.intent.id, 'close')
+    const canonCloseId = canonicalize(s.intent.exchange, closeId)
     const exitSide: OrderSide = s.intent.side === 'long' ? 'sell' : 'buy'
     const closeQty = await confirmedCloseQty(s, rest)
+    s.exitReason = 'error'
+    s.exitOrderRefs = { ...s.exitOrderRefs, close: { clientOrderId: closeId } }
+    byCloseOrderId.set(canonCloseId, s.intent.id)
+
+    const closePlacedPre: OrderPlacedEvent = {
+      intentId: s.intent.id,
+      exchange: s.intent.exchange,
+      symbol: s.intent.symbol,
+      clientOrderId: closeId,
+      kind: 'close',
+      side: exitSide,
+      orderType: 'market',
+      qty: closeQty,
+      reduceOnly: true,
+      ackPending: true,
+    }
+    if (opts.beforeCreateOrder) {
+      await opts
+        .beforeCreateOrder({
+          intentId: s.intent.id,
+          clientOrderId: closeId,
+          exchange: s.intent.exchange,
+          symbol: s.intent.exchangeSymbol,
+          side: exitSide,
+          kind: 'close',
+          orderType: 'market',
+          qty: closeQty,
+          reduceOnly: true,
+        })
+        .catch((err: unknown) => {
+          logger.warn({ intentId: s.intent.id, err }, 'manager: durability write failed for protective close')
+        })
+    }
+
+    bus.emit('order.placed', closePlacedPre)
+    logger.error({ event: 'protective.close_placed', code, ...closePlacedPre }, 'protective.close_placed')
+
     try {
       const ack = await rest.createOrder({
         intentId: s.intent.id,
@@ -292,25 +380,26 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         reduceOnly: true,
       })
       if (ack.status === 'accepted') {
-        const closePlaced: OrderPlacedEvent = {
-          intentId: s.intent.id,
-          exchange: s.intent.exchange,
-          symbol: s.intent.symbol,
-          clientOrderId: closeId,
-          kind: 'close',
-          side: exitSide,
-          orderType: 'market',
-          qty: closeQty,
-          reduceOnly: true,
-          ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+        if (ack.exchangeOrderId) {
+          byCloseExchangeOrderId.set(ack.exchangeOrderId, s.intent.id)
+          s.exitOrderRefs = { ...s.exitOrderRefs, close: { clientOrderId: closeId, exchangeOrderId: ack.exchangeOrderId } }
+          bus.emit('order.placed', { ...closePlacedPre, exchangeOrderId: ack.exchangeOrderId, ackPending: false })
         }
-        bus.emit('order.placed', closePlaced)
-        logger.error({ event: 'protective.close_placed', code, ...closePlaced }, 'protective.close_placed')
+        if (!TERMINAL.has(s.status)) {
+          transition(s, 'exiting')
+          void pollForCloseFill(s, closeId, ack.exchangeOrderId, rest, () => {
+            setError(s, code, message)
+          })
+        }
       } else {
         logger.error({ intentId: s.intent.id, code, rejectReason: ack.rejectReason }, 'protective market close rejected')
+        byCloseOrderId.delete(canonCloseId)
+        setError(s, code, message)
       }
     } catch (err) {
       logger.error({ intentId: s.intent.id, code, err }, 'protective market close failed')
+      byCloseOrderId.delete(canonCloseId)
+      setError(s, code, message)
     }
 
     metrics.intentRejectedTotal.inc(1, { exchange: s.intent.exchange, strategy: s.intent.strategy, code })
@@ -321,7 +410,6 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       eventType: 'protective_order_failure_close',
       payload: { intentId: s.intent.id, code, message },
     })
-    setError(s, code, message)
   }
 
   async function handleEntryFilled(s: IntentState): Promise<void> {
@@ -385,6 +473,27 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             reduceOnly: true,
           })
           if (slResult.status === 'rejected') {
+            const rejectNow = clock.now()
+            bus.emit('ws.order', {
+              exchange: intent.exchange,
+              seq: 0,
+              receivedAt: rejectNow,
+              order: {
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                clientOrderId: slId,
+                exchangeOrderId: slResult.exchangeOrderId ?? '',
+                side: exitSide,
+                type: 'stop_market',
+                qty: exitQty,
+                filledQty: 0,
+                reduceOnly: true,
+                status: 'rejected',
+                ...(slResult.rejectReason !== undefined ? { rejectReason: slResult.rejectReason } : {}),
+                submittedAt: rejectNow,
+                updatedAt: rejectNow,
+              },
+            })
             await closeAfterProtectionFailure(
               s,
               'retracement_sl_rejected',
@@ -591,6 +700,52 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             ...(tpResult.value.exchangeOrderId ? { exchangeOrderId: tpResult.value.exchangeOrderId } : {}),
           })
         }
+        // Emit synthetic ws.order for any rejected protective order so the DB row leaves status=new.
+        const rejectNow = clock.now()
+        if (slReject && slResult.status === 'fulfilled' && slResult.value.status === 'rejected') {
+          bus.emit('ws.order', {
+            exchange: intent.exchange,
+            seq: 0,
+            receivedAt: rejectNow,
+            order: {
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              clientOrderId: slId,
+              exchangeOrderId: slResult.value.exchangeOrderId ?? '',
+              side: exitSide,
+              type: 'stop_market',
+              qty: exitQty,
+              filledQty: 0,
+              reduceOnly: true,
+              status: 'rejected',
+              ...(slResult.value.rejectReason !== undefined ? { rejectReason: slResult.value.rejectReason } : {}),
+              submittedAt: rejectNow,
+              updatedAt: rejectNow,
+            },
+          })
+        }
+        if (tpReject && tpResult.status === 'fulfilled' && tpResult.value.status === 'rejected') {
+          bus.emit('ws.order', {
+            exchange: intent.exchange,
+            seq: 0,
+            receivedAt: rejectNow,
+            order: {
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              clientOrderId: tpId,
+              exchangeOrderId: tpResult.value.exchangeOrderId ?? '',
+              side: exitSide,
+              type: 'limit',
+              qty: exitQty,
+              filledQty: 0,
+              reduceOnly: true,
+              status: 'rejected',
+              ...(tpResult.value.rejectReason !== undefined ? { rejectReason: tpResult.value.rejectReason } : {}),
+              submittedAt: rejectNow,
+              updatedAt: rejectNow,
+            },
+          })
+        }
         if (slReject || tpReject) {
           logger.error({ intentId: intent.id, slReject, tpReject }, 'manager: protective order placement failed')
           await closeAfterProtectionFailure(
@@ -774,6 +929,52 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           placedRefs.push({
             clientOrderId: canonicalize(intent.exchange, tpId),
             ...(tpResult.value.exchangeOrderId ? { exchangeOrderId: tpResult.value.exchangeOrderId } : {}),
+          })
+        }
+        // Emit synthetic ws.order for any rejected protective order so the DB row leaves status=new.
+        const rejectNowPf = clock.now()
+        if (slReject && slResult.status === 'fulfilled' && slResult.value.status === 'rejected') {
+          bus.emit('ws.order', {
+            exchange: intent.exchange,
+            seq: 0,
+            receivedAt: rejectNowPf,
+            order: {
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              clientOrderId: slId,
+              exchangeOrderId: slResult.value.exchangeOrderId ?? '',
+              side: exitSide,
+              type: 'stop_market',
+              qty: exitQty,
+              filledQty: 0,
+              reduceOnly: true,
+              status: 'rejected',
+              ...(slResult.value.rejectReason !== undefined ? { rejectReason: slResult.value.rejectReason } : {}),
+              submittedAt: rejectNowPf,
+              updatedAt: rejectNowPf,
+            },
+          })
+        }
+        if (tpReject && tpResult.status === 'fulfilled' && tpResult.value.status === 'rejected') {
+          bus.emit('ws.order', {
+            exchange: intent.exchange,
+            seq: 0,
+            receivedAt: rejectNowPf,
+            order: {
+              exchange: intent.exchange,
+              symbol: intent.exchangeSymbol,
+              clientOrderId: tpId,
+              exchangeOrderId: tpResult.value.exchangeOrderId ?? '',
+              side: exitSide,
+              type: 'limit',
+              qty: exitQty,
+              filledQty: 0,
+              reduceOnly: true,
+              status: 'rejected',
+              ...(tpResult.value.rejectReason !== undefined ? { rejectReason: tpResult.value.rejectReason } : {}),
+              submittedAt: rejectNowPf,
+              updatedAt: rejectNowPf,
+            },
           })
         }
         if (slReject || tpReject) {
@@ -1277,26 +1478,39 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     if (s.intent.entryPolicy?.kind === 'pre_funding_then_main' && s.preFundingOrderId) {
       const canonId = order.clientOrderId ? canonicalize(s.intent.exchange, order.clientOrderId) : ''
       const preCanonId = canonicalize(s.intent.exchange, s.preFundingOrderId)
+      const mainCanonId = s.entryOrderId ? canonicalize(s.intent.exchange, s.entryOrderId) : ''
+      // Priority 1: clientOrderId matches MAIN order — block misroute regardless of exchangeOrderId collision.
+      // Priority 2: clientOrderId matches pre-funding order.
+      // Priority 3: fall back to exchangeOrderId only when clientOrderId absent; clamp by preFundingVolume.
       const isPreFunding =
-        canonId === preCanonId ||
-        (order.exchangeOrderId !== undefined && order.exchangeOrderId === s.preFundingExchangeOrderId)
+        canonId !== '' && mainCanonId !== '' && canonId === mainCanonId
+          ? false
+          : canonId !== ''
+            ? canonId === preCanonId
+            : order.exchangeOrderId !== undefined &&
+              order.exchangeOrderId === s.preFundingExchangeOrderId &&
+              order.filledQty <= s.intent.entryPolicy.preFundingVolume * 1.5
       if (isPreFunding) {
         if (order.filledQty > (s.preFundingFilledQty ?? 0)) {
           s.preFundingFilledQty = order.filledQty
           if (order.avgFillPrice !== undefined) s.preFundingAvgFillPrice = order.avgFillPrice
         }
         if (order.status === 'filled') {
-          const filled: OrderFilledEvent = {
-            intentId: s.intent.id,
-            exchange: s.intent.exchange,
-            symbol: s.intent.symbol,
-            clientOrderId: s.preFundingOrderId,
-            filledQty: order.filledQty,
-            ...(order.avgFillPrice !== undefined ? { avgFillPrice: order.avgFillPrice } : {}),
+          if (!s.preFundingFilledEmitted) {
+            s.preFundingFilledEmitted = true
+            s.preFundingFilledAt = clock.now()
+            const filled: OrderFilledEvent = {
+              intentId: s.intent.id,
+              exchange: s.intent.exchange,
+              symbol: s.intent.symbol,
+              clientOrderId: s.preFundingOrderId,
+              filledQty: order.filledQty,
+              ...(order.avgFillPrice !== undefined ? { avgFillPrice: order.avgFillPrice } : {}),
+            }
+            bus.emit('order.filled', filled)
+            logger.info({ event: 'strategy6.pre_funding_filled', ...filled }, 'strategy6.pre_funding_filled')
+            if (s.status === 'working' || s.status === 'acked') emitState(s)
           }
-          bus.emit('order.filled', filled)
-          logger.info({ event: 'strategy6.pre_funding_filled', ...filled }, 'strategy6.pre_funding_filled')
-          if (s.status === 'working' || s.status === 'acked') emitState(s)
         } else if (order.status === 'partially_filled') {
           emitState(s)
         } else if (order.status === 'cancelled' || order.status === 'rejected') {
@@ -1392,6 +1606,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             const effectiveCid = clientOrderId || order.clientOrderId
             const effectiveEoid = order.exchangeOrderId || exchangeOrderId
             const now = clock.now()
+            // Re-check status: WS fast_fill may have advanced the intent while REST was in-flight.
+            // Emitting synthetic ws.order/ws.fill after WS already processed the fill causes duplicates.
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+            if (TERMINAL.has(s.status) || (s.status as string) !== 'working') return
             bus.emit('ws.order', {
               exchange: s.intent.exchange,
               seq: 0,
@@ -1621,8 +1839,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     const { sl: slRef, tp: tpRef } = s.exitOrderRefs
     if (!slRef && !tpRef) return
 
-    const POLL_INTERVAL_MS = 15_000
-    const MAX_POLLS = 50 // 50 × 15s = ~12 min, well within any deadline
+    const POLL_INTERVAL_MS = 5_000
+    const MAX_POLLS = 150 // 150 × 5s = ~12 min, well within any deadline
 
     for (let i = 0; i < MAX_POLLS; i++) {
       await new Promise<void>(r => setTimeout(r, POLL_INTERVAL_MS))
@@ -2024,7 +2242,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       logger.info({ event: 'order.placed', ...closePlacedPre }, 'order.placed')
 
       try {
-        let closeAck = await orderClient(intent.exchange, intent.strategy).createOrder({
+        const closeAck = await createOrderWithOkxWsFallback(intent.strategy, {
           intentId: intent.id,
           clientOrderId: closeId,
           exchange: intent.exchange,
@@ -2034,27 +2252,6 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           qty: closeQty,
           reduceOnly: true,
         })
-        if (closeAck.status === 'rejected' && requiresWsOrderAdapter(intent.strategy)) {
-          logger.error(
-            {
-              event: 'close.ws_rejected',
-              intentId: intent.id,
-              attempt: s.closeAttemptCount,
-              rejectReason: closeAck.rejectReason,
-            },
-            'close.ws_rejected: falling back to REST reduce-only market close'
-          )
-          closeAck = await rest.createOrder({
-            intentId: intent.id,
-            clientOrderId: closeId,
-            exchange: intent.exchange,
-            symbol: intent.exchangeSymbol,
-            side: exitSide,
-            type: 'market',
-            qty: closeQty,
-            reduceOnly: true,
-          })
-        }
         if (closeAck.status === 'rejected') {
           byCloseOrderId.delete(canonCloseId)
           delete s.exitOrderRefs
@@ -2686,16 +2883,30 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             }
             try {
               let actualFilled = 0
+              let positionSnapshot: unknown[] = []
               try {
                 const positions = await rest.getPositions(intent.exchangeSymbol)
-                const pos = positions.find(p => p.symbol === intent.symbol || p.symbol === intent.exchangeSymbol)
+                positionSnapshot = positions
+                const pos = positions.find(
+                  p =>
+                    p.symbol === intent.symbol ||
+                    p.symbol === intent.exchangeSymbol ||
+                    normalizeSymbol(p.symbol) === intent.symbol
+                )
                 actualFilled = pos?.qty ?? 0
               } catch {
                 actualFilled = s.preFundingFilledQty ?? 0
               }
 
               if (actualFilled <= 0) {
-                logger.info({ intentId: intent.id }, 'strategy6.closePreFunding: no position to close')
+                logger.info(
+                  {
+                    intentId: intent.id,
+                    preFundingFilledQty: s.preFundingFilledQty,
+                    positionSnapshot,
+                  },
+                  'strategy6.closePreFunding: no position to close'
+                )
                 return
               }
 
@@ -2793,7 +3004,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
           let ack
           try {
-            ack = await orderClient(intent.exchange, intent.strategy).createOrder({
+            ack = await createOrderWithOkxWsFallback(intent.strategy, {
               intentId: intent.id,
               clientOrderId: mainOrderId,
               exchange: intent.exchange,
@@ -2813,6 +3024,27 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (ack.status === 'rejected') {
             byEntryOrderId.delete(canonMainId)
             setError(s, 'main_order_rejected', ack.rejectReason ?? 'main order rejected')
+            const rejectNow = clock.now()
+            bus.emit('ws.order', {
+              exchange: intent.exchange,
+              seq: 0,
+              receivedAt: rejectNow,
+              order: {
+                exchange: intent.exchange,
+                symbol: intent.exchangeSymbol,
+                clientOrderId: mainOrderId,
+                exchangeOrderId: ack.exchangeOrderId,
+                side: mainSide,
+                type: 'market',
+                qty: entryPolicy.mainVolume,
+                filledQty: 0,
+                reduceOnly: false,
+                status: 'rejected',
+                ...(ack.rejectReason !== undefined ? { rejectReason: ack.rejectReason } : {}),
+                submittedAt: rejectNow,
+                updatedAt: rejectNow,
+              },
+            })
             void closePreFunding()
             return
           }
@@ -2896,7 +3128,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         let preFundingAck
         try {
           preFundingAck = await withSubmissionGate(intent.exchange, () =>
-            orderClient(intent.exchange, intent.strategy).createOrder({
+            createOrderWithOkxWsFallback(intent.strategy, {
               intentId: intent.id,
               clientOrderId: preFundingId,
               exchange: intent.exchange,
@@ -3075,6 +3307,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
                     filledQty: 0,
                     reduceOnly: false,
                     status: 'rejected',
+                    ...(ack.rejectReason !== undefined ? { rejectReason: ack.rejectReason } : {}),
                     submittedAt: rejectNow,
                     updatedAt: rejectNow,
                   },
@@ -3390,7 +3623,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       let ack
       try {
         ack = await withSubmissionGate(intent.exchange, () =>
-          orderClient(intent.exchange, intent.strategy).createOrder({
+          createOrderWithOkxWsFallback(intent.strategy, {
             intentId: intent.id,
             clientOrderId,
             exchange: intent.exchange,
@@ -3410,6 +3643,27 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (ack.status === 'rejected') {
         byEntryOrderId.delete(canonEntryId)
         setError(s, 'order_rejected', ack.rejectReason ?? 'order rejected')
+        const rejectNow = clock.now()
+        bus.emit('ws.order', {
+          exchange: intent.exchange,
+          seq: 0,
+          receivedAt: rejectNow,
+          order: {
+            exchange: intent.exchange,
+            symbol: intent.exchangeSymbol,
+            clientOrderId,
+            exchangeOrderId: ack.exchangeOrderId,
+            side: entrySide,
+            type: 'market',
+            qty: check.qty,
+            filledQty: 0,
+            reduceOnly: false,
+            status: 'rejected',
+            ...(ack.rejectReason !== undefined ? { rejectReason: ack.rejectReason } : {}),
+            submittedAt: rejectNow,
+            updatedAt: rejectNow,
+          },
+        })
         return s
       }
 
@@ -3420,7 +3674,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (s.status !== 'submitted') {
         // Legitimate pre-emption (filled/working/acked) is debug noise; only warn for truly orphaned states.
-        const isLegitTerminal = s.status === 'filled' || s.status === 'working' || s.status === 'acked'
+        const isLegitTerminal =
+          s.status === 'filled' ||
+          s.status === 'working' ||
+          s.status === 'acked' ||
+          s.status === 'monitoring' ||
+          s.status === 'exiting' ||
+          s.status === 'exited'
         logger[isLegitTerminal ? 'debug' : 'warn'](
           { event: 'market_entry.preempted_in_flight', intentId: intent.id, exchange: intent.exchange, status: s.status },
           'market order placed but intent preempted in-flight — cancelling orphan order'
@@ -3601,14 +3861,37 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       return () => stateChangeListeners.delete(listener)
     },
 
-    prewarmLeverage(exchange: Exchange, symbol: string, leverage: number): void {
+    prewarmLeverage(exchange: Exchange, symbol: string, leverage: number): Promise<void> {
       const rest = restAdapters.get(exchange)
-      if (!rest) return
+      if (!rest) return Promise.resolve()
       const market = opts.markets.get(exchange, symbol)
-      if (!market) return
-      void ensureLeverage(rest, exchange, market.exchangeSymbol, symbol, leverage).catch((err: unknown) => {
+      if (!market) return Promise.resolve()
+      return ensureLeverage(rest, exchange, market.exchangeSymbol, symbol, leverage).catch((err: unknown) => {
         logger.warn({ event: 'prewarm.leverage_failed', exchange, symbol, leverage, err }, 'prewarmLeverage failed')
       })
+    },
+
+    listOpenIntents(): { intentId: string; exchange: Exchange; symbol: string }[] {
+      const result: { intentId: string; exchange: Exchange; symbol: string }[] = []
+      for (const [id, s] of intentStates) {
+        if (!TERMINAL.has(s.status)) {
+          result.push({ intentId: id, exchange: s.intent.exchange, symbol: s.intent.symbol })
+        }
+      }
+      return result
+    },
+
+    listRecentIntentsForAttribution(maxAgeMs: number): { intentId: string; exchange: Exchange; symbol: string }[] {
+      const cutoff = clock.now() - maxAgeMs
+      const result: { intentId: string; exchange: Exchange; symbol: string }[] = []
+      for (const [id, s] of intentStates) {
+        if (!TERMINAL.has(s.status)) {
+          result.push({ intentId: id, exchange: s.intent.exchange, symbol: s.intent.symbol })
+        } else if (s.updatedAt >= cutoff) {
+          result.push({ intentId: id, exchange: s.intent.exchange, symbol: s.intent.symbol })
+        }
+      }
+      return result
     },
   }
 }

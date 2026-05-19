@@ -47,7 +47,7 @@ const BASE_CONFIG: Strategy2Config = {
   deadlineSeconds: 60,
   slMultiplier: 1.0,
   fundingFeeTimeoutSeconds: 8,
-  amountUsd: 20,
+  amountUsd: 10,
   leverage: 5,
 }
 
@@ -78,8 +78,8 @@ describe('createStrategy2Rule', () => {
     expect(intent?.side).toBe('long')
     expect(intent?.exchange).toBe('binance')
     expect(intent?.symbol).toBe('BTCUSDT')
-    expect(intent?.amountUsd).toBe(20)
-    expect(intent?.leverage).toBe(4)
+    expect(intent?.amountUsd).toBe(10)
+    expect(intent?.leverage).toBe(5)
     expect(intent?.entryAt).toBe(1_700_000_000_000 - 5_000)
     expect(intent?.volume).toBeGreaterThan(0)
   })

@@ -7,5 +7,5 @@ strategies:
     retracementPct: 1.0
     deadlineSeconds: 900
     slMultiplier: 2.0
-    amountUsd: 20
+    amountUsd: 10
     leverage: 5

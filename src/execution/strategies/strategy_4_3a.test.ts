@@ -47,7 +47,7 @@ const BASE_CONFIG: Strategy4_3aConfig = {
   slMultiplier: 1.5,
   takeProfitPct: 0.3,
   deadlineSeconds: 60,
-  amountUsd: 20,
+  amountUsd: 10,
   leverage: 5,
 }
 

@@ -15,7 +15,7 @@ strategies:
     negativeFundingThresholdPercent: -0.5   # % — entry threshold (e.g. -0.5 = −0.5 % per 8 h)
     entryOffsetSeconds: 2                   # s — enter N seconds before funding time
     exitOffsetSeconds: 1                    # s — exit N seconds after funding time
-    amountUsd: 20                           # USD — notional per intent
+    amountUsd: 10                           # USD — notional per intent
     leverage: 4                             # x — leverage applied at the exchange
 
   # strategy_3a and strategy_3b are mutually exclusive — enable at most one.
@@ -27,7 +27,7 @@ strategies:
     tpVariantAMultiplier: 1.5              # x — TP = |fundingRate| × multiplier
     tpVariantBOffsetPercent: 0.4           # % — TP offset for variant B (unused in 3a)
     deadlineSeconds: 300                    # s — max time in position before forced exit
-    amountUsd: 20                           # USD — notional per intent
+    amountUsd: 10                           # USD — notional per intent
     leverage: 4                             # x
 
   #- id: strategy_3b
@@ -38,7 +38,7 @@ strategies:
   #  tpVariantAMultiplier: 1.5
   #  tpVariantBOffsetPercent: 0.4
   #  deadlineSeconds: 300
-  #  amountUsd: 20
+  #  amountUsd: 10
   #  leverage: 4
 
 # ── Risk limits ───────────────────────────────────────────────────────────────

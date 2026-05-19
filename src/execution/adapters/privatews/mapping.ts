@@ -94,13 +94,15 @@ export function mapOrderTradeUpdate(
   raw: BinanceOrderUpdateRaw,
   receivedAt: number,
   seq: number,
-  exchange: Exchange = 'binance'
+  exchange: Exchange = 'binance',
+  logger?: { warn: (obj: Record<string, unknown>, msg: string) => void }
 ): OrderEvent {
   const o = raw.o
+  const clientOrderId = o.c || (o.C ?? '')
   const order: Order = {
     exchange,
     symbol: o.s,
-    clientOrderId: o.c || (o.C ?? ''),
+    clientOrderId,
     exchangeOrderId: String(o.i),
     side: o.S.toLowerCase() as OrderSide,
     type: mapWsOrderType(o.o),
@@ -117,6 +119,12 @@ export function mapOrderTradeUpdate(
   if (avgFill > 0) order.avgFillPrice = avgFill
   const stopPrice = parseFloat(o.sp)
   if (stopPrice > 0) order.stopPrice = stopPrice
+  if (order.reduceOnly && order.status === 'filled' && !clientOrderId) {
+    logger?.warn(
+      { event: 'binance.ws.unmatched_reduce_only_fill', c: o.c, C: o.C, X: o.X, i: o.i, s: o.s },
+      'binance.ws.unmatched_reduce_only_fill'
+    )
+  }
   return { exchange, order, seq, receivedAt }
 }
 
@@ -191,20 +199,26 @@ export function mapFundingFee(
   _seq: number,
   exchange: Exchange = 'binance',
   rateCache?: FundingRateCache,
-  logger?: { warn: (obj: Record<string, unknown>, msg: string) => void }
+  _logger?: { warn: (obj: Record<string, unknown>, msg: string) => void }
 ): FundingFeeEvent | null {
   if (raw.a.m !== 'FUNDING_FEE') return null
   const firstPos = raw.a.P[0]
   const firstBal = raw.a.B[0]
   if (!firstPos) {
     // P is empty — Binance omits position data in some sub-account configurations.
-    // Funding timestamps are shared by many symbols, so the rate cache cannot identify
-    // the fee's symbol safely.
-    logger?.warn(
-      { event: 'funding_fee.missing_position', m: raw.a.m, P: raw.a.P, B: raw.a.B, T: raw.T },
-      'ACCOUNT_UPDATE FUNDING_FEE: a.P empty — cannot determine symbol, dropping event'
-    )
-    return null
+    // Emit with symbol:'' so the bus receives a diagnostic event; writer will skip attribution
+    // and log funding.attribution.skipped_symbol_unknown. Income poller is authoritative path.
+    if (!firstBal) return null
+    return {
+      exchange,
+      symbol: '',
+      fundingTime: raw.T,
+      fundingRate: 0,
+      fundingAmount: parseFloat(firstBal.bc),
+      asset: firstBal.a,
+      positionQty: 0,
+      receivedAt,
+    }
   }
   return {
     exchange,

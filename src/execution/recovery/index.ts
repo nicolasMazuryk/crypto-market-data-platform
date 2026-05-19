@@ -207,6 +207,9 @@ export async function runRecovery(opts: RecoveryOptions): Promise<RecoveryResult
           state.preFundingExchangeOrderId = preFundingOrder.exchangeOrderId
           byEntryExchangeOrderId.set(preFundingOrder.exchangeOrderId, intent.id)
         }
+        if ((state.preFundingFilledQty ?? 0) > 0) {
+          state.preFundingFilledEmitted = true
+        }
       }
 
       if (entryOrders.length > 1 || intent.entryPolicy?.kind === 'ladder_limit') {

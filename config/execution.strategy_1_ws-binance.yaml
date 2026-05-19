@@ -8,14 +8,26 @@ exchanges:
     rateLimits:
       criticalReservationFraction: 0.1
       criticalWindowSeconds: 60
-      buckets: []
+      buckets:
+        - endpointClass: order_write
+          tokensPerSecond: 6
+          burst: 12
+        - endpointClass: account_write
+          tokensPerSecond: 3
+          burst: 6
+        - endpointClass: order_read
+          tokensPerSecond: 6
+          burst: 12
+        - endpointClass: account_read
+          tokensPerSecond: 3
+          burst: 6
 strategies:
   - id: strategy_1_ws
     enabled: true
     negativeFundingThresholdPercent: -0.1
     entryOffsetSeconds: 3
     fundingFeeTimeoutSeconds: 10
-    amountUsd: 20
+    amountUsd: 10
     leverage: 5
 observability:
   metricsPort: 9501

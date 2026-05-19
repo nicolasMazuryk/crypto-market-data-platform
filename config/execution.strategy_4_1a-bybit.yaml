@@ -20,7 +20,7 @@ strategies:
     takeProfitPct: 0.003
     deadlineSeconds: 1800
     slMultiplier: 2.5
-    amountUsd: 20
+    amountUsd: 10
     leverage: 5
 observability:
   metricsPort: 9508
