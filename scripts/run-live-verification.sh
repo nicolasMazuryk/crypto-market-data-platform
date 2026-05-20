@@ -19,7 +19,7 @@ set -euo pipefail
 export PATH="$HOME/.local/bin:$PATH"
 
 PROMPT_FILE="${PROMPT_FILE:-prompts/live-execution-verify.md}"
-MAX_PARALLEL="${MAX_PARALLEL:-12}"
+MAX_PARALLEL="${MAX_PARALLEL:-6}"
 RUN_ID="$(date -u +%Y-%m-%dT%H-%M-%SZ)"
 LOG_DIR="${LOG_DIR:-logs/live-verification}/$RUN_ID"
 DRY_RUN="${DRY_RUN:-}"
@@ -36,7 +36,7 @@ PAIRS=(
     "bybit strategy_1_ws"
     "bybit strategy_2"
     "bybit strategy_4_1a"
-    "bybit strategy_6"
+    # "bybit strategy_6"
     "okx strategy_1"
     "okx strategy_1_ws"
     "okx strategy_2"
@@ -95,7 +95,7 @@ spawn() {
   fi
   (
     printf '%s %s\n\n%s\n' "$exchange" "$strategy" "$PROMPT_TEXT" \
-      | claude -p --dangerously-skip-permissions --model sonnet --effort medium
+      | claude -p --dangerously-skip-permissions --model sonnet --effort low
   ) >"$logfile" 2>&1 &
   PIDS+=("$!")
   META+=("$exchange|$strategy|$logfile")
