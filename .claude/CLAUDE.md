@@ -1,5 +1,7 @@
 # Data Pipeline - Crypto Exchange Markets
 
+IMPORTANT: Always read: [Agent Workflow](./agent-workflow.md)
+
 Collects active + delisted USDT-margined perpetual markets and stores them in ClickHouse. Funding rates schema is in place for future ingestion.
 
 ## Data Period
