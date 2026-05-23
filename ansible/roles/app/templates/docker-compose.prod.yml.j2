@@ -9,6 +9,7 @@ services:
     volumes:
       - {{ clickhouse_data_dir }}:/var/lib/clickhouse
       - {{ repo_dir }}/src/db/migrations:/docker-entrypoint-initdb.d:ro
+      - /opt/arbinet/clickhouse-config:/etc/clickhouse-server/config.d:ro
     environment:
       CLICKHOUSE_DB: {{ clickhouse_database }}
       CLICKHOUSE_USER: {{ clickhouse_user }}

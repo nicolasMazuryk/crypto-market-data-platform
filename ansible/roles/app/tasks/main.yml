@@ -48,6 +48,22 @@
     creates: /home/nicolas/.ssh/github_deploy_key
   become_user: nicolas
 
+- name: Ensure ClickHouse config directory exists
+  ansible.builtin.file:
+    path: /opt/arbinet/clickhouse-config
+    state: directory
+    owner: nicolas
+    group: nicolas
+    mode: "0755"
+
+- name: Deploy ClickHouse system log TTL config
+  ansible.builtin.template:
+    src: clickhouse-system-logs.xml.j2
+    dest: /opt/arbinet/clickhouse-config/system-logs.xml
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
 - name: Template docker-compose.prod.yml
   ansible.builtin.template:
     src: docker-compose.prod.yml.j2

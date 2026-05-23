@@ -1,0 +1,40 @@
+<clickhouse>
+    <!-- Limit text_log to warning level to prevent excessive row accumulation (was 1.35B rows, 39 GiB) -->
+    <text_log>
+        <level>warning</level>
+        <ttl>event_time + INTERVAL 7 DAY</ttl>
+    </text_log>
+
+    <!-- TTLs for all system log tables to prevent unbounded growth -->
+    <query_log>
+        <ttl>event_time + INTERVAL 7 DAY</ttl>
+    </query_log>
+
+    <trace_log>
+        <ttl>event_time + INTERVAL 3 DAY</ttl>
+    </trace_log>
+
+    <processors_profile_log>
+        <ttl>event_time + INTERVAL 3 DAY</ttl>
+    </processors_profile_log>
+
+    <part_log>
+        <ttl>event_time + INTERVAL 7 DAY</ttl>
+    </part_log>
+
+    <asynchronous_metric_log>
+        <ttl>event_time + INTERVAL 7 DAY</ttl>
+    </asynchronous_metric_log>
+
+    <metric_log>
+        <ttl>event_time + INTERVAL 7 DAY</ttl>
+    </metric_log>
+
+    <latency_log>
+        <ttl>event_time + INTERVAL 7 DAY</ttl>
+    </latency_log>
+
+    <query_metric_log>
+        <ttl>event_time + INTERVAL 7 DAY</ttl>
+    </query_metric_log>
+</clickhouse>
