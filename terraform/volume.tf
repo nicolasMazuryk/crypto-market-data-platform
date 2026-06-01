@@ -1,5 +1,5 @@
 resource "hcloud_volume" "data" {
-  name     = "arbinet-data"
+  name     = "arbinet-data-50"
   size     = var.volume_size
   location = var.location
   format   = "ext4"

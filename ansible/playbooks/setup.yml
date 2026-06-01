@@ -22,6 +22,8 @@
     - postgres
     - workers
     - monitoring
-    - observability
-    - log-shipping
+    - role: observability
+      when: enable_observability | default(false)
+    - role: log-shipping
+      when: enable_observability | default(false)
     - execution-engine
