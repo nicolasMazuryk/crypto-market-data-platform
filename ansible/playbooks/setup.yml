@@ -26,4 +26,5 @@
       when: enable_observability | default(false)
     - role: log-shipping
       when: enable_observability | default(false)
-    - execution-engine
+    - role: execution-engine
+      when: execution_engine_enabled | default(false)
