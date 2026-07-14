@@ -7,6 +7,7 @@
   "types": "src/index.ts",
   "scripts": {
     "start": "tsx src/index.ts",
+    "debug": "node --inspect-brk=127.0.0.1:9229 --enable-source-maps -r ts-node/register src/main.ts",
     "execution:live": "tsx src/execution/index.ts --config config/execution.live.yaml",
     "execution:dry-run": "tsx src/execution/index.ts --config config/execution.dry-run.yaml",
     "config:validate": "tsx src/execution/scripts/validate-config.ts",

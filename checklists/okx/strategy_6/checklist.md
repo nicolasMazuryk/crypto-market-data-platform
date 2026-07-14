@@ -69,40 +69,6 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
     channel emits funding fee events. The pre-funding order's fill is detected via
     byEntryOrderId lookup using the stripped clOrdId from the 'orders' channel.
 
-- id: strategy_6.okx.ORDER_LIFECYCLE.PRE_FUNDING_FILLED_WS
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Pre-funding tiny market order fills. OKX 'orders' WS channel emits state=filled
-    with clOrdId = stripped preFundingId. Manager routes via byEntryOrderId lookup,
-    detects isPreFunding=true, logs strategy6.pre_funding_filled, stores
-    preFundingFilledQty. Intent stays in working state awaiting ws.funding_fee.
-  preconditions:
-    - pre-funding order placed (status=working)
-    - OKX 'orders' WS channel active
-  trigger_sequence:
-    - OKX WS: 'orders' {state: "filled", clOrdId: <stripped-preFundingId>}
-  expected_behavior:
-    - strategy6.pre_funding_filled logged (filledQty = min lot qty)
-    - s.preFundingFilledQty set to order.filledQty
-    - intent stays in working state (no transition to monitoring)
-    - no SL/TP placed yet
-  observability_contract:
-    - log: 'strategy6.pre_funding_filled' {filledQty: "<min lot qty>", exchange: "okx"}
-    - bus: 'order.filled' {kind: "pre_funding"}
-    - db:fills row for pre-funding fill
-    - db:intentLifecycleEvents NO transition (stays working)
-  code_refs:
-    - src/execution/execution/manager.ts:1097 (isPreFunding detection)
-    - src/execution/execution/manager.ts:1104 (preFundingFilledQty set)
-  spec_refs:
-    - docs-strategy/strategies/strategy_6.md (PHASE 1 — pre-funding fill)
-  status: ⏳
-  natural_occurrence: routine
-  notes: >
-    OKX avgPx field carries fill price. OKX clOrdId in 'orders' channel = stripped form.
-    The byEntryOrderId map key (stripped preFundingId) must match OKX's clOrdId exactly.
-
 - id: strategy_6.okx.ORDER_LIFECYCLE.FUNDING_FEE_GATES_MAIN_ORDER
   category: ORDER_LIFECYCLE
   severity: critical
@@ -144,40 +110,6 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
     OKX account.bills bizType for funding: "Funding fee" (verify exact string in adapter).
     OKX symbol in bills event is instId format (e.g. BTC-USDT-SWAP) — adapter normalizes
     to BTCUSDT before emitting ws.funding_fee.
-
-- id: strategy_6.okx.ORDER_LIFECYCLE.MAIN_FILLED_AND_SL_TP_PLACED
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    MAIN market order fills. OKX 'orders' WS emits state=filled with stripped mainId.
-    Manager routes via byEntryOrderId, detects isMain=true, logs order.filled, transitions
-    to filled. handleEntryFilled (sl_tp_deadline_post_funding_event variant) places SL+TP
-    via REST and arms the monitor.
-  preconditions:
-    - MAIN order placed (after ws.funding_fee match)
-    - OKX 'orders' WS active
-  trigger_sequence:
-    - OKX WS: 'orders' {state: "filled", clOrdId: <stripped-mainId>}
-    - handleEntryFilled → SL + TP placed via REST
-    - monitor.armed.sl_tp_deadline_post_funding_event logged
-  expected_behavior:
-    - order.filled logged (mainQty, avgFillPrice)
-    - position.opened logged (side=mainSide)
-    - SL (stop_market) + TP (limit) placed via REST
-    - monitor armed with sl_tp_deadline_post_funding_event policy
-  observability_contract:
-    - log: 'order.filled' {exchange: "okx", filledQty: ">0"}
-    - log: 'position.opened' {side: "buy"|"sell"}
-    - log: 'order.placed' {kind: "sl"} and {kind: "tp"}
-    - log: 'monitor.armed.sl_tp_deadline_post_funding_event' (debug)
-    - db:intentLifecycleEvents filled→monitoring
-  code_refs:
-    - src/execution/execution/manager.ts:595 (handleEntryFilled sl_tp_deadline_post_funding_event)
-    - src/execution/execution/manager.ts:784 (monitor.arm + pollForSlTpFill)
-  spec_refs:
-    - docs-strategy/strategies/strategy_6.md (PHASE 2 — fill → SL+TP)
-  status: ⏳
-  natural_occurrence: routine
 
 - id: strategy_6.okx.ORDER_LIFECYCLE.FUNDING_FEE_TIMEOUT_FALLBACK
   category: ORDER_LIFECYCLE
@@ -290,34 +222,6 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
     - src/execution/execution/manager.ts:1520 (cancelSiblingExit)
   spec_refs:
     - docs-strategy/strategies/strategy_6.md (SL exit)
-  status: ⏳
-  natural_occurrence: occasional
-
-- id: strategy_6.okx.OCO.TP_FILLS_SL_CANCELED
-  category: OCO
-  severity: critical
-  description: >
-    TP limit fills for the MAIN position. OKX 'orders' emits state=filled for TP's
-    stripped clientOrderId. Monitor settle('tp'). handleMonitorExit cancels SL.
-  preconditions:
-    - intent in monitoring, TP resting
-    - price hits TP limit level
-  trigger_sequence:
-    - OKX WS: 'orders' {state: "filled", clOrdId: <tpId stripped>}
-    - monitor.settle('tp') → handleMonitorExit
-  expected_behavior:
-    - monitor.settle {reason: "tp"} logged
-    - oco.cancel.start for SL
-    - intent.exited.complete {exitReason: "tp"}
-  observability_contract:
-    - log: 'monitor.settle' {reason: "tp"}
-    - log: 'oco.cancel.start' {clientOrderId: <slId stripped>}
-    - log: 'intent.exited.complete' {exitReason: "tp"}
-  code_refs:
-    - src/execution/execution/monitor.ts:131 (ws.order listener for TP fill)
-    - src/execution/execution/manager.ts:1504 (cancel sl on tp exit)
-  spec_refs:
-    - docs-strategy/strategies/strategy_6.md (TP exit)
   status: ⏳
   natural_occurrence: occasional
 

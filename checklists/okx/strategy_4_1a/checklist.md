@@ -10,51 +10,6 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
 ```yaml
 # ── ORDER_LIFECYCLE ─────────────────────────────────────────────────────────
 
-- id: strategy_4_1a.okx.ORDER_LIFECYCLE.ALL_RUNGS_PLACED
-  category: ORDER_LIFECYCLE
-  severity: critical
-  description: >
-    Scheduler fires at T_f - entryOffsetSeconds (default 5s). Preflight passes.
-    All N ladder rungs placed in parallel via Promise.allSettled. Each rung gets a
-    unique clientOrderId = ids.forIntent(intent.id, i), then dash-stripped by
-    canonicalize() for OKX before registration in byEntryOrderId and before the REST
-    createOrder call. Each successful rung emits order.placed and logs ladder.rung_placed.
-  preconditions:
-    - fundingRatePercent < -negativeFundingThresholdPercent (default -0.6%)
-    - available USDT >= amountUsd / leverage
-    - kill switch inactive
-    - market status = trading
-    - N = ladderCount rungs configured
-  trigger_sequence:
-    - scheduler: evaluator fires at entryAt = nextFundingTimestamp - entryOffsetSeconds * 1000
-    - manager.submit() → ladder_limit branch → Promise.allSettled places all N rungs
-  expected_behavior:
-    - intent.created logged (strategy=strategy_4_1a, exchange=okx)
-    - status transitions decided → submitted → acked → working
-    - N × order.placed logged (kind=entry, orderType=limit, side=buy, reduceOnly=false)
-    - N × ladder.rung_placed logged (info, rungIdx 0..N-1, limitPrice, rungQty)
-    - N dash-stripped clientOrderIds registered in byEntryOrderId
-  observability_contract:
-    - log: 'intent.created' {strategy: "strategy_4_1a", exchange: "okx"}
-    - log: 'ladder.rung_placed' {rungIdx: 0..N-1, limitPrice: "<price below market>"}  # N times
-    - log: 'order.placed' {kind: "entry", side: "buy", orderType: "limit"}  # N times
-    - db:orders N rows {kind: "entry", orderType: "limit", status: "pending"}
-    - db:intentLifecycleEvents decided→submitted→acked→working
-  code_refs:
-    - src/execution/execution/manager.ts:130 (canonicalize — strips dashes for OKX)
-    - src/execution/execution/manager.ts:2395 (ladder_limit branch start)
-    - src/execution/execution/manager.ts:2450 (Promise.allSettled — place all rungs)
-    - src/execution/execution/manager.ts:2476 (order.placed emit per rung)
-    - src/execution/execution/manager.ts:2489 (ladder.rung_placed info log)
-  spec_refs:
-    - docs-strategy/strategies/strategy_4_1.md (Entry — ladder_limit)
-  status: ⏳
-  natural_occurrence: routine
-  notes: >
-    OKX limit orders use 'orders' WS channel for fill events. OKX clientOrderId max
-    32 chars, alphanumeric. UUID with dashes stripped = 32 chars exactly. Each rung
-    gets a distinct ID (ids.forIntent(id, i)) — all stripped before use.
-
 - id: strategy_4_1a.okx.ORDER_LIFECYCLE.RUNG_REJECTED_BY_EXCHANGE
   category: ORDER_LIFECYCLE
   severity: high
