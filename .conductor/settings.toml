@@ -1,0 +1,11 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+[scripts]
+archive = "rm -rf node_modules"
+setup = "npm install\ncp $CONDUCTOR_ROOT_PATH/.env .env"
+
+[scripts.run.run]
+available_in = "local"
+command = "npm run db:up & npm run start"
+default = true
+icon = "play"
