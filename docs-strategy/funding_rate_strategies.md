@@ -1,11 +1,36 @@
 # Crypto Perpetual Futures Funding Rate Strategies
-## Backtesting Specification Document
+## Backtesting & Live Execution Specification
 
 ---
 
 ## Core Hypothesis
 
-Tokens with significantly negative funding rates (< -1%) experience sharp price drops (−0.5% to −3%) within seconds of the funding settlement event. This document formalizes strategies to exploit this inefficiency.
+Tokens with significantly negative funding rates experience sharp price drops (−0.5% to −3%) within seconds of the funding settlement event. This document formalizes strategies to exploit this inefficiency.
+
+Strategy 6 is the exception: it bets on the directional move after settlement in either direction, and the live fleet runs it on *positive* funding.
+
+---
+
+## Deployment Status
+
+The live fleet is declared in `live-configs/fleet.yaml`: **30 containers**, one
+strategy per container, across 6 exchanges (binance, bybit, okx, gateio, kucoin,
+bitget). Per-instance params live in
+`live-configs/strategies/<strategy>-<exchange>.yaml`.
+
+| Strategy | Live ID | Implemented | Deployed | Notes |
+|---|---|---|---|---|
+| 1 | `strategy_1` | ✅ | ✅ 6 exchanges | |
+| 1 WS | `strategy_1_ws` | ✅ | ✅ 6 exchanges | |
+| 2 | `strategy_2` | ✅ | ✅ 6 exchanges | |
+| 3a | `strategy_3a` | ✅ | ❌ | Config exists, absent from `fleet.yaml` |
+| 4.1a | `strategy_4_1a` | ✅ | ✅ 6 exchanges | |
+| 4.2a | `strategy_4_2a` | ✅ | ❌ | Config exists but is written in the wrong (backtest) schema — see §4.2a |
+| 6 | `strategy_6` | ✅ | ✅ 6 exchanges | Live-only; cannot be backtested |
+
+The engine runs **one strategy per container** because the config loader forbids
+enabling a SHORT strategy (3a) alongside any LONG strategy in the same engine — they
+would offset each other inside the same funding window.
 
 ---
 
@@ -15,8 +40,8 @@ Tokens with significantly negative funding rates (< -1%) experience sharp price 
 
 | Variable | Description |
 |---|---|
-| `T_funding` | Funding settlement timestamp (typically every 8h or 1h depending on exchange) |
-| `T_entry` | Entry time relative to `T_funding` (e.g., `T_funding - 5s`) |
+| `T_funding` | Funding settlement timestamp (every 1h, 2h, 4h, or 8h depending on market conditions) |
+| `T_entry` | Entry time relative to `T_funding` (e.g., `T_funding - 3s`) |
 | `T_exit` | Exit time (strategy-dependent) |
 | `T_deadline` | Maximum time to hold position before forced exit |
 
@@ -29,18 +54,6 @@ Tokens with significantly negative funding rates (< -1%) experience sharp price 
 | `P_funding` | Price at exact `T_funding` (HH:MM:00) |
 | `P_low` | Lowest price reached during the post-funding drop |
 | `P_exit` | Actual exit price |
-
-### Strategy Parameters
-
-| Variable | Description |
-|---|---|
-| `F_threshold` | Minimum absolute funding rate to trigger a strategy |
-| `SL` | Stop-loss distance (% from entry) |
-| `TP` | Take-profit distance (% from entry or from average entry) |
-| `retracement_pct` | Fibonacci/percentage retracement level for exit |
-| `ladder_count` | Number of limit orders in a ladder |
-| `ladder_top_mult` | Multiplier for top of ladder range |
-| `ladder_bottom_mult` | Multiplier for bottom of ladder range |
 
 ### P&L Components
 
@@ -56,7 +69,7 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 | `FUNDING_PNL` (when F is negative) | `+F` (longs receive) | `−F` (shorts pay) |
 | `FEES` | `taker_fee × 2` (entry + exit for market orders) or `taker_fee + maker_fee` (market entry + limit exit) | same |
 
-> **Key Insight:** With negative funding, longs *receive* the funding fee and shorts *pay* it. The strategies either profit from the funding payment (long strategies) or from the price drop (short strategies), each bearing the opposite as a cost.
+> **Key Insight:** With negative funding, longs *receive* the funding fee and shorts *pay* it. The strategies either profit from the funding payment (Strategies 1, 1 WS, 2), from the price drop (Strategy 3a), or from the delta recovery after the drop (Strategies 4.x), each bearing the opposite as a cost.
 
 ---
 
@@ -71,48 +84,58 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 
 ---
 
----
+## Sizing (every strategy)
 
-# SINGLE EXCHANGE STRATEGIES
+| Live config key | Live value | Meaning |
+|---|---|---|
+| `amountUsd` (`mainAmountUsd` on Strategy 6) | 10 | Notional per intent, USD. Qty = `amountUsd / price / contractSize`, floored to the exchange lot step. |
+| `leverage` | 5 (**okx Strategy 1: 4**) | Set via `setLeverage` before entry; failure is a hard reject. Does **not** scale position size — notional is always `amountUsd`; leverage only sets the margin posted. |
+| `enabled` | `true` | Strategy is skipped entirely when `false`. |
 
 ---
 
 ## Strategy 1: Negative Funding LONG — Instant Exit
 
+**Status:** deployed on all 6 exchanges.
+
 **Thesis:** Collect funding fee by holding a long position through the settlement event, then immediately exit to minimize delta exposure.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.4% |
-| Entry offset | `T_entry` | `T_funding − 5s` |
-| Exit time | `T_exit` | `T_funding + 2s` |
+| Parameter | Doc variable | Live config key | Live value | Schema default |
+|---|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | **−0.1** | −0.5 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | **3** (`T_funding − 3s`) | 10 |
+| Exit offset | `T_exit` | `exitOffsetSeconds` | **4** (`T_funding + 4s`) | 2 |
+
+Strategy 1 is the only strategy with a purely **timed** exit — no SL, no TP, no
+deadline. Exit reason is always `timed`.
 
 ### Selection Logic
 
 ```
-IF current_time == T_funding - 5s
-AND predicted_funding_rate < -F_threshold
+IF current_time == T_funding - entryOffsetSeconds
+AND funding_rate_percent <= -abs(negativeFundingThresholdPercent)    # i.e. <= -0.1%
+AND market.status == 'trading'
 THEN trigger strategy
 ```
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
+1. AT T_funding - entryOffsetSeconds (live: -3s):
    → ENTRY: BUY MARKET at best ask
 
-2. AT T_funding + 2s:
+2. AT T_funding + exitOffsetSeconds (live: +4s):
    → EXIT: SELL MARKET (reduce-only) at best bid
 ```
 
 ### P&L Formula
 
 ```
-DELTA_PNL  = (P_exit - P_entry) / P_entry        # likely negative (price drops)
-FUNDING_PNL = +F                                   # received as long holder
-FEES        = taker_fee × 2                        # two market orders
+DELTA_PNL   = (P_exit - P_entry) / P_entry       # likely negative (price drops)
+FUNDING_PNL = +F                                  # received as long holder
+FEES        = taker_fee × 2                       # two market orders
 
 NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 ```
@@ -125,120 +148,194 @@ F > |DELTA_PNL| + FEES
 
 > **The core bet:** the funding fee received exceeds the price drop suffered plus execution fees.
 
-### Backtesting Variables to Extract
+---
 
-- `P` at `T_funding - 5s` (entry)
-- `P` at `T_funding + 2s` (exit)
-- `F` at settlement
+## Strategy 1 WS: Negative Funding LONG — Funding-Fee Event Exit
+
+**Status:** deployed on all 6 exchanges.
+
+**Thesis:** Same entry as Strategy 1, but exit as soon as the exchange confirms the funding fee on the private WebSocket stream — minimizing post-settlement delta exposure without exiting *before* funding is actually credited.
+
+### Parameters
+
+| Parameter | Doc variable | Live config key | Live value | Schema default |
+|---|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | **−0.1** | −0.5 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | **3** | 10 |
+| Funding-fee event timeout | `T_timeout` | `fundingFeeTimeoutSeconds` | **10** (**okx: 45**) | 30 |
+
+> **OKX runs a 45s timeout** rather than 10s, because its private funding-fee event is materially slower to arrive. 10s there would cause routine false timeouts.
+
+### Execution Flow
+
+```
+1. AT T_funding - entryOffsetSeconds (live: -3s):
+   → ENTRY: BUY MARKET at best ask (WS order adapter)
+
+2. AFTER T_funding:
+   → WAIT for the private ws.funding_fee event for this (exchange, symbol).
+     The event's fundingTime must match T_funding within ±5s to be accepted.
+
+3. ON funding-fee event:
+   → EXIT: SELL MARKET reduce-only at best bid      # exitReason = funding_fee_event
+
+4. IF no event within fundingFeeTimeoutSeconds after T_funding:
+   → EXIT: SELL MARKET reduce-only                  # exitReason = funding_fee_timeout
+```
+
+`exitPolicy.kind = 'funding_fee_event'`.
+
+### WS-Miss Safety Net
+
+A **REST funding-fee poll** fires at `T_funding + 3s` with an **8s grace period**. If
+it observes the funding credit before the WS event arrives, the funding gate opens and
+the exit proceeds normally. The `fundingFeeTimeoutSeconds` fallback sits behind that.
+
+Order placement is **WS-mandatory** (the engine throws at startup without a WS order
+adapter). OKX — and only OKX — falls back to REST on `WS_TIMEOUT`.
+
+### Difference From Strategy 1
+
+Strategy 1 exits at a fixed offset. Strategy 1 WS exits on the private-stream event, so
+the exit can land earlier or later depending on exchange event timing, WS latency,
+reconnect behavior, and the timeout.
+
+### P&L Formula
+
+```
+DELTA_PNL   = (P_exit_ws - P_entry) / P_entry
+FUNDING_PNL = +F
+FEES        = taker_fee × 2
+
+NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
+```
 
 ---
 
 ## Strategy 2: Negative Funding LONG — Retracement Exit
 
-**Thesis:** Same as Strategy 1, but instead of immediately exiting at a loss from the price drop, wait for a partial price retracement to reduce (or eliminate) the delta cost.
+**Status:** deployed on all 6 exchanges.
+
+**Thesis:** Same as Strategy 1, but instead of immediately exiting at a loss from the price drop, wait for a price retracement to reduce (or eliminate) the delta cost.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.4% |
-| Entry offset | `T_entry` | `T_funding − 5s` |
-| Retracement level | `retracement_pct` | 0.50 (50%), range: [0.3, 0.618] |
-| Deadline exit | `T_deadline` | `T_funding + 60s` |
+| Parameter | Doc variable | Live config key | Live value | Schema default |
+|---|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | **−0.1** | −0.4 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | **3** | 5 |
+| Retracement level | `retracement_pct` | `retracementPct` | **1.0** (full retracement) | 0.5 |
+| Deadline exit | `T_deadline` | `deadlineSeconds` | **900** (15 min) | 60 |
+| Stop-loss multiplier | `sl_mult` | `slMultiplier` | **2.0** | 1.0 |
+| Funding-fee event timeout | — | `fundingFeeTimeoutSeconds` | *(unset → 30)* | 30 |
 
-### Selection Logic
-
-```
-IF current_time == T_funding - 5s
-AND predicted_funding_rate < -F_threshold
-THEN trigger strategy
-```
+> **`retracementPct = 1.0` puts the take-profit back at the anchor price** — the
+> strategy waits for a full recovery to the pre-funding reference, not a partial
+> retrace. The `[0.3, 0.618]` Fibonacci range in the original spec is not what the
+> fleet runs.
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
-   → ENTRY: BUY MARKET at best ask
-   → Record P_entry
+1. AT T_funding - entryOffsetSeconds (live: -3s):
+   → ENTRY: BUY MARKET at best ask (WS order adapter)
+   → Record P_entry (fill) and anchorPrice (reference price at decision time)
+   → Place STOP-LOSS: SELL STOP at P_entry × (1 − |F%| × slMultiplier / 100)
 
-2. AFTER T_funding (price drop occurs):
-   → Observe P_funding (price at HH:MM:00)
-   → Observe P_low (lowest price in the drop)
-   → Compute retracement target:
-     P_target = P_low + (P_funding - P_low) × retracement_pct
+2. ON ws.funding_fee event (fallback: fundingFeeTimeoutSeconds after T_funding):
+   → ARM the retracement tracker
 
-3. EXIT (whichever comes first):
-   → SELL LIMIT at P_target (placed after P_low is identified)
-   → OR if T_deadline reached and limit not filled:
-     SELL MARKET (reduce-only) at T_deadline
+3. WHILE tracking (polls price every 1s):
+   → Maintain a running P_low (lowest price seen since arming)
+   → EACH TIME P_low makes a new low:
+       P_target = P_low + (anchorPrice - P_low) × retracementPct
+       → CANCEL the previous TP limit and RE-PLACE SELL LIMIT at P_target
+       (throttled to at most one re-place per second)
+
+4. EXIT (whichever comes first):
+   → SL hit: SELL STOP triggers (taker fee)
+   → TP hit: SELL LIMIT at the current P_target (maker fee)
+   → T_deadline (T_funding + 900s): SELL MARKET reduce-only (taker fee)
 ```
+
+`exitPolicy.kind = 'sl_tp_deadline_retracement_funding_event'`. WS-mandatory. The
+tracker is re-spawned from the database on engine recovery, so a restart mid-position
+does not lose the trailing TP.
 
 ### P&L Formula
 
 ```
-IF limit order filled:
+IF SL hit:
+  DELTA_PNL = (P_SL_fill - P_entry) / P_entry
+  FEES      = taker_fee × 2                      # market entry + stop-market exit
+IF TP hit:
   DELTA_PNL = (P_target - P_entry) / P_entry
   FEES      = taker_fee + maker_fee              # market entry + limit exit
-ELSE (deadline exit):
+IF deadline exit:
   DELTA_PNL = (P_deadline - P_entry) / P_entry
-  FEES      = taker_fee × 2                      # two market orders
+  FEES      = taker_fee × 2
 
 FUNDING_PNL = +F
 NET_PNL     = DELTA_PNL + FUNDING_PNL - FEES
 ```
 
-### Backtesting Variables to Extract
+### Key Consideration — P_low Identification (resolved)
 
-- `P` at `T_funding - 5s` (entry)
-- `P` at `T_funding` (reference for move start)
-- `P_low` in window `[T_funding, T_deadline]`
-- `T_low` (timestamp of lowest price — needed to know when to place limit)
-- `P` tick-by-tick in `[T_low, T_deadline]` to check if `P_target` was reached
-- `P` at `T_deadline` (fallback exit)
-- `F` at settlement
+The original spec flagged this as an open problem: in live trading you cannot know
+`P_low` in advance, so you cannot place a single correct retracement limit.
 
-### Key Consideration
+**The live engine solves it with a trailing take-profit rather than a one-shot limit.**
+The tracker re-places the TP each time the running low makes a new low, so the TP
+chases the bottom down and settles wherever the drop actually ends — no prediction
+required.
 
-> **P_low identification problem:** In live trading, you don't know `P_low` in real-time. For backtesting this is straightforward, but for live execution you'd need a heuristic (e.g., "price hasn't made a new low for X seconds" or use a trailing approach). The backtester should model this realistically.
+Two consequences the backtester must model to stay at parity:
+
+- The TP is only armed **after the funding-fee event**, not at `T_funding` — there is
+  a window right after settlement in which only the SL is live.
+- The TP price is a function of the **running minimum**, not the final `P_low`. A
+  backtest that places one limit at the true `P_low`-derived target is optimistic.
 
 ---
 
-## Strategy 3: Negative Funding SHORT — Ride the Drop
+## Strategy 3a: Negative Funding SHORT — Ride the Drop
+
+**Status:** implemented, **not deployed** (config exists; absent from `fleet.yaml`).
 
 **Thesis:** Instead of collecting funding (which you'd pay as a short), profit directly from the anticipated price drop. The price drop must exceed the funding fee paid.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.4% |
-| Entry offset | `T_entry` | `T_funding − 5s` |
-| Stop-loss | `SL` | 1.0% |
-| Take-profit mode A | `TP_a` | `F × 1.5` |
-| Take-profit mode B | `TP_b` | `F + 0.4%` |
+| Parameter | Doc variable | Live config key | Live value | Schema default |
+|---|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | **−0.1** | −0.5 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | **3** | 10 |
+| Stop-loss | `SL` | `stopLossPercent` | **1.0** | 1.0 |
+| Take-profit multiplier | `TP` | `tpVariantAMultiplier` | **1.5** (`TP = |F%| × 1.5`) | 1.5 |
+| Deadline | `T_deadline` | `deadlineSeconds` | **900** | 300 |
 
-### Selection Logic
-
-```
-IF current_time == T_funding - 5s
-AND predicted_funding_rate < -F_threshold
-THEN trigger strategy
-```
+> **`stopLossPercent` is a fixed percentage, not a multiple of the funding rate.**
+> Unlike `slMultiplier` elsewhere, this SL does not scale with `F` — a 1.0% adverse
+> move stops the position out regardless of how negative funding was.
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
+1. AT T_funding - entryOffsetSeconds (live: -3s):
    → ENTRY: SELL MARKET at best bid
    → Record P_entry
 
-2. IMMEDIATELY place:
-   → STOP-LOSS: BUY STOP-MARKET at P_entry × (1 + SL)
-   → TAKE-PROFIT (variant A): BUY LIMIT at P_entry × (1 - TP_a)
-   → TAKE-PROFIT (variant B): BUY LIMIT at P_entry × (1 - TP_b)
+2. IMMEDIATELY place (OCO pair):
+   → STOP-LOSS:   BUY STOP-MARKET at P_entry × (1 + stopLossPercent / 100)
+   → TAKE-PROFIT: BUY LIMIT       at P_entry × (1 − |F%| × tpVariantAMultiplier / 100)
 
-3. EXIT: whichever is triggered first (SL or TP)
+3. EXIT (whichever comes first):
+   → SL hit (taker fee)
+   → TP hit (maker fee)
+   → T_deadline (T_funding + 900s) → BUY MARKET reduce-only, exitReason = deadline
 ```
+
+`exitPolicy.kind = 'sl_tp_deadline'`.
 
 ### P&L Formula
 
@@ -248,6 +345,9 @@ IF take-profit hit:
   FEES      = taker_fee + maker_fee
 ELSE IF stop-loss hit:
   DELTA_PNL = -SL                                 # negative (short stopped out)
+  FEES      = taker_fee × 2
+ELSE (deadline):
+  DELTA_PNL = (P_entry - P_deadline) / P_entry
   FEES      = taker_fee × 2
 
 FUNDING_PNL = -F                                   # shorts PAY on negative funding
@@ -262,329 +362,289 @@ DELTA_PNL > F + FEES
 
 > **The core bet:** the price drop magnitude exceeds the funding fee paid plus execution costs.
 
-### Backtesting Variables to Extract
+### Cannot Run Alongside a LONG Strategy
 
-- `P` at `T_funding - 5s` (entry)
-- `P_high` and `P_low` in window after entry (to check SL/TP triggers)
-- Tick-by-tick price data to determine *which was hit first* (SL or TP)
-- `F` at settlement
-
-### Important Note on TP Variants
-
-TP variant A (`F × 1.5`) and TP variant B (`F + 0.4%`) should be tested as **separate sub-strategies** (3A and 3B) in the backtester, as they have different risk/reward profiles.
+The config loader rejects any engine that enables `strategy_3a` together with a LONG
+strategy (`strategy_1`, `strategy_1_ws`, `strategy_2`, `strategy_4_*a`) — the two would
+offset each other inside the same funding window. `strategy_6` is exempt, since its
+direction is configurable.
 
 ---
 
-## Strategy 4.1: Negative Funding Ladder LONG — Post-Funding Entry
+## Strategy 4.1a: Negative Funding Ladder LONG — Post-Funding Entry
 
-**Thesis:** Place a ladder of limit buy orders below the current price to catch the post-funding drop, then exit at a profit target above average entry. The sharp price drop occurs at the funding timestamp, and limit orders are filled during/after this drop. On some exchanges, an order filled at the exact funding second may still receive the funding fee — this is exchange-dependent behavior.
+**Status:** deployed on all 6 exchanges.
 
-### Sub-Scenarios
-
-| Scenario | Description | Funding Received? |
-|---|---|---|
-| Scenario 1 | Funding fee is NOT applied to the position | No |
-| Scenario 2 | Funding fee IS applied to the position (exchange-dependent) | Yes (+F) |
-
-> **Backtesting Note:** Scenario 1 and Scenario 2 must be backtested as **separate sub-strategies** (4.1a and 4.1b) since the funding fee significantly impacts net P&L. This accounts for the uncertainty of whether the exchange applies funding to positions opened at the exact funding timestamp.
+**Thesis:** Place a ladder of limit buy orders below the current price to catch the post-funding drop, then exit at a profit target above average entry. Because the position opens *after* settlement, **no funding fee is received** — the entire edge is the delta recovery off the bottom of the drop.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.6% |
-| Setup time | `T_setup` | `T_funding − 5s` |
-| Ladder count | `ladder_count` | 5 |
-| Ladder top | `ladder_top_mult` | 0.4 |
-| Ladder bottom | `ladder_bottom_mult` | 1.5 |
-| Take-profit | `TP` | 0.2% above average filled price |
-| Deadline | `T_deadline` | `T_funding + 60s` |
+| Parameter | Doc variable | Live config key | Live value | Schema default |
+|---|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | **−0.1** | −0.4 |
+| Setup time | `T_setup` | `entryOffsetSeconds` | **3** | 5 |
+| Ladder count | `ladder_count` | `ladderCount` | **5** | 5 (min 2) |
+| Ladder top | `ladder_top_mult` | `ladderTopMult` | **0.7** | 0.5 |
+| Ladder bottom | `ladder_bottom_mult` | `ladderBottomMult` | **1.8** | 1.5 |
+| Take-profit | `TP` | `takeProfitPct` | **0.003** ⚠️ | 0.2 |
+| Stop-loss multiplier | `sl_mult` | `slMultiplier` | **2.5** | 1.0 |
+| Deadline | `T_deadline` | `deadlineSeconds` | **1800** (30 min) | 60 |
 
-### Selection Logic
+> ⚠️ **`takeProfitPct: 0.003` is very likely a unit error.** The engine computes
+> `tpPrice = fill × (1 + takeProfitPct / 100)`, so this means **0.003 percent ≈ 0.3
+> basis points** above the average fill — a take-profit essentially at the entry price.
+> It looks like a decimal fraction (`0.003` = 0.3%) mis-ported from the backtest schema,
+> where the same concept is a fraction rather than a percent. Documented here as it
+> actually runs; **this is not a recommendation.** Verify against backtest intent before
+> changing.
 
-```
-IF current_time == T_funding - 5s
-AND predicted_funding_rate < -F_threshold
-THEN trigger strategy
-```
+`ladderBottomMult` MUST be greater than `ladderTopMult` — enforced by the config loader.
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
+1. AT T_funding - entryOffsetSeconds (live: -3s):
    → Record P_current
    → Compute ladder range:
-     ladder_top    = P_current × (1 - F × ladder_top_mult)
-     ladder_bottom = P_current × (1 - F × ladder_bottom_mult)
-   → Place ladder_count × BUY LIMIT orders evenly spaced:
-     prices[i] = ladder_top - i × (ladder_top - ladder_bottom) / (ladder_count - 1)
-       for i in [0, ladder_count - 1]
+     ladder_top    = P_current × (1 - |F%| × ladderTopMult    / 100)
+     ladder_bottom = P_current × (1 - |F%| × ladderBottomMult / 100)
+   → Place ladderCount × BUY LIMIT orders, evenly spaced in offset space:
+     prices[i] = ladder_top - i × (ladder_top - ladder_bottom) / (ladderCount - 1)
+       for i in [0, ladderCount - 1]
+   → Each unfilled rung carries expireAt = T_funding + deadlineSeconds
 
-2. WAIT for fills during and after funding event
+2. WAIT for fills during and after the funding event
 
-3. AFTER fills (or partial fills):
-   → Compute P_avg = weighted average of filled order prices
-   → Place TAKE-PROFIT: SELL LIMIT at P_avg × (1 + TP)
+3. AFTER T_funding, once unfilled rungs are cancelled:
+   → Compute P_avg = weighted average of filled rung prices
+   → Place STOP-LOSS:   SELL STOP  at P_avg × (1 − |F%| × slMultiplier / 100)
+   → Place TAKE-PROFIT: SELL LIMIT at P_avg × (1 + takeProfitPct / 100)
 
-4. EXIT:
-   → TP hit, OR
-   → T_deadline reached → SELL MARKET (reduce-only) + cancel unfilled limits
+4. EXIT (whichever comes first):
+   → SL hit (taker fee)
+   → TP hit (maker fee)
+   → T_deadline → SELL MARKET reduce-only + cancel unfilled limits
 ```
+
+### Ladder Mechanics (live engine)
+
+- **Quantity distribution.** `amountUsd` is split across rungs using a
+  **largest-remainder distribution** over the exchange lot step, so rounding does not
+  silently lose size. Rungs are not necessarily equal in quantity.
+- **Min-notional pre-check.** If even the *top* rung — at its most favourable price —
+  fails the exchange's `minCost`, the symbol is skipped entirely before any order goes
+  out. Individual rungs below min-notional are dropped at placement, so a ladder may go
+  out with fewer than `ladderCount` orders.
+- **Pre-funding fill.** A rung is *supposed* to fill after settlement. If one fills
+  **before** `T_funding` the position does accrue funding, contradicting the no-funding
+  premise. The engine logs `ladder.pre_funding_fill` plus an ops event and **keeps the
+  position**.
+- **Post-error protective close.** If a rung fills after the intent has already errored
+  with `ladder_no_fills` (a cancel/fill race), a reduce-only market close is placed so
+  no orphan position is left behind.
 
 ### P&L Formula
 
 ```
 P_avg = sum(filled_price[i] × qty[i]) / sum(qty[i])
 
-DELTA_PNL = (P_exit - P_avg) / P_avg
-
-IF scenario 2 (funding included):
-  FUNDING_PNL = +F
-ELSE (scenario 1, funding excluded):
-  FUNDING_PNL = 0
+DELTA_PNL   = (P_exit - P_avg) / P_avg
+FUNDING_PNL = 0                                  # position opens after settlement
 
 FEES = (num_filled_limits × maker_fee) + exit_fee
-  where exit_fee = maker_fee (if TP limit) or taker_fee (if deadline market)
+  where exit_fee = maker_fee (if TP limit) or taker_fee (if SL / deadline market)
 
 NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 ```
 
-### Backtesting Variables to Extract
-
-- `P` at `T_funding - 5s` (for ladder placement)
-- Tick-by-tick prices in `[T_funding - 5s, T_deadline]` to determine which ladder levels filled
-- `P` tick data after last fill to check if TP was reached
-- `P` at `T_deadline` (fallback)
-- `F` at settlement
-
 ---
 
-## Strategy 4.2: Negative Funding Single LONG — Post-Funding Entry
+## Strategy 4.2a: Negative Funding Single LONG — Post-Funding Entry
 
-**Thesis:** Simplified version of 4.1 — single limit buy instead of a ladder.
+**Status:** implemented, **not deployed** — and its live config is unusable as written.
 
-### Sub-Scenarios
+> **⚠️ The `live-configs/strategies/strategy_4_2a-<exchange>.yaml` files are written in
+> the flat *backtest* schema** (`strategy_id`, `direction`, `funding_threshold`,
+> `limit_offset_mult`, `take_profit`, `funding_applied_on_same_second`), not the
+> execution engine's schema (a `strategies:` list of camelCase keys). The fleet config
+> generator would reject them with *"produced no strategies"*. This has gone unnoticed
+> because `strategy_4_2a` is absent from `fleet.yaml` and runs in no container. **These
+> files must be rewritten into the execution schema before this strategy can be
+> deployed.**
 
-| Scenario | Description | Funding Received? |
-|---|---|---|
-| Scenario 1 | Funding fee is NOT applied to the position | No |
-| Scenario 2 | Funding fee IS applied to the position (exchange-dependent) | Yes (+F) |
-
-> **Backtesting Note:** Scenario 1 and Scenario 2 must be backtested as **separate sub-strategies** (4.2a and 4.2b).
+**Thesis:** Simplified version of 4.1a — single limit buy instead of a ladder. The position opens after settlement, so **no funding fee is received**.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.6% |
-| Limit offset | `limit_offset_mult` | 1.0 (i.e., `F × 1.0`) |
-| Take-profit | `TP` | 0.2% above entry |
-| Deadline | `T_deadline` | `T_funding + 60s` |
+Engine schema keys, with schema defaults. There are no valid live values to quote — see
+the warning above.
+
+| Parameter | Doc variable | Live config key | Schema default |
+|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | −0.4 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | 5 |
+| Limit offset | `limit_offset_mult` | `limitOffsetMult` | 0.75 |
+| Take-profit | `TP` | `takeProfitPct` | 0.2 |
+| Stop-loss multiplier | `sl_mult` | `slMultiplier` | 1.5 |
+| Deadline | `T_deadline` | `deadlineSeconds` | 60 |
+
+`slMultiplier` MUST be greater than `limitOffsetMult` — enforced by the config loader.
+Otherwise the stop would sit above the entry limit.
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
+1. AT T_funding - entryOffsetSeconds:
    → Record P_current
-   → Place BUY LIMIT at: P_current × (1 - F × limit_offset_mult)
+   → Place BUY LIMIT at: P_current × (1 - |F%| × limitOffsetMult / 100)
+   → The order carries expireAt = T_funding + deadlineSeconds
 
 2. IF filled:
-   → Place TAKE-PROFIT: SELL LIMIT at P_fill × (1 + TP)
+   → Place STOP-LOSS:   SELL STOP  at P_fill × (1 − |F%| × slMultiplier / 100)
+   → Place TAKE-PROFIT: SELL LIMIT at P_fill × (1 + takeProfitPct / 100)
 
-3. EXIT:
-   → TP hit, OR
+3. EXIT (whichever comes first):
+   → SL hit (taker fee)
+   → TP hit (maker fee)
    → T_deadline → SELL MARKET + cancel unfilled limit
+
+4. IF never filled by T_deadline:
+   → Cancel the limit; intent terminates with error code = limit_expired
+     (no position, no SL/TP placed)
 ```
 
 ### P&L Formula
 
-Same structure as 4.1 but with single entry price instead of `P_avg`. Use Scenario 1 (FUNDING_PNL = 0) and Scenario 2 (FUNDING_PNL = +F) as separate sub-strategies.
+Same structure as 4.1a but with a single entry price instead of `P_avg`, and
+`FUNDING_PNL = 0`.
 
 ---
 
-## Strategy 4.3: Negative Funding LONG — Limit Entry with SL/TP
+## Strategy 6: Post-Funding Directional — WS-Gated Entry
 
-**Thesis:** Refined version with tighter entry, explicit stop-loss, and fixed TP.
+**Status:** deployed on all 6 exchanges. **Live-only** — the backtest engine rejects any config containing `strategy_6`, because backtests cannot emulate private WS funding-fee events.
 
-### Sub-Scenarios
+**Thesis:** Take a directional position whose entry is triggered by the WS `funding_fee` event — the moment funding actually accrues on the exchange. Private WS user-data streams only push events for symbols where you already hold a position, so a tiny **PRE_FUNDING order in the opposite direction** is placed before settlement purely to subscribe the symbol into the stream. The full-size **MAIN order** fires on the event and reverses that tiny position; net exposure is `mainVolume − preFundingVolume`.
 
-| Scenario | Description | Funding Received? |
-|---|---|---|
-| Scenario 1 | Funding fee is NOT applied to the position | No |
-| Scenario 2 | Funding fee IS applied to the position (exchange-dependent) | Yes (+F) |
-
-> **Backtesting Note:** Scenario 1 and Scenario 2 must be backtested as **separate sub-strategies** (4.3a and 4.3b).
+> **Strategy 6 is not a negative-funding strategy.** The live fleet runs
+> `mainSide: long` with `funding_threshold: +0.1` — it goes **long on positive funding
+> ≥ +0.1%**, the opposite regime from every other strategy here. The bet is on the
+> post-settlement directional move, not on collecting funding. Do not assume the
+> negative-funding framing of Strategies 1–4 applies.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.6% |
-| Entry offset | `T_entry` | `T_funding − 2s` |
-| Limit price multiplier | `entry_mult` | 0.75 |
-| Stop-loss multiplier | `sl_mult` | 1.5 |
-| Take-profit | `TP` | 0.3% |
-| Deadline | `T_deadline` | `T_funding + 60s` |
+| Parameter | Live config key | Live value | Schema default |
+|---|---|---|---|
+| Trade direction | `mainSide` | **`long`** | *(required)* |
+| Funding-rate threshold (signed, percent) | `funding_threshold` | **+0.1** | 0 (always-on) |
+| Pre-funding entry offset | `entryOffsetSeconds` | **3** | 10 |
+| WS funding-fee timeout | `fundingFeeTimeoutSeconds` | **10** (**okx: 45**) | 30 |
+| TP multiplier | `tpMultiplier` | **1.5** | 0.5 |
+| SL multiplier | `slMultiplier` | **1.5** | 1.0 |
+| Deadline after funding | `deadlineSeconds` | **1800** (30 min) | 3300 |
+| Main position size | `mainAmountUsd` | **10** | *(required)* |
+| Leverage | `leverage` | **5** | *(required)* |
 
-### Execution Flow
-
-```
-1. AT T_funding - 2s:
-   → Record P_current
-   → Place BUY LIMIT at: P_current × (1 - F × entry_mult)
-
-2. IF filled:
-   → Place STOP-LOSS: SELL STOP-MARKET at: P_current × (1 - F × sl_mult)
-   → Place TAKE-PROFIT: SELL LIMIT at: P_fill × (1 + TP)
-
-3. EXIT (whichever first):
-   → TP hit
-   → SL hit
-   → T_deadline → SELL MARKET + cancel remaining orders
-```
-
-### P&L Formula
-
-```
-IF TP hit:
-  DELTA_PNL = +TP
-  FEES      = maker_fee × 2                       # limit entry + limit exit
-ELSE IF SL hit:
-  DELTA_PNL = (SL_price - P_fill) / P_fill        # negative
-  FEES      = maker_fee + taker_fee                # limit entry + stop market exit
-ELSE (deadline):
-  DELTA_PNL = (P_deadline - P_fill) / P_fill
-  FEES      = maker_fee + taker_fee
-
-FUNDING_PNL = +F (scenario 2, funding included)
-            = 0  (scenario 1, funding excluded)
-
-NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
-```
-
-### Risk/Reward Profile
-
-```
-Max Loss  = F × sl_mult - F × entry_mult = F × (sl_mult - entry_mult)
-          = F × (1.5 - 0.75) = F × 0.75
-Max Gain  = TP + F (if funding received) = 0.3% + F
-```
-
----
-
----
-
-# MULTIPLE EXCHANGE STRATEGIES
-
----
-
-## Strategy 5: Main-Exchange-Driven Cross-Exchange Short
-
-**Thesis:** When the most-liquid exchange (main, e.g. Binance) has deeply negative funding, it leads price down. Less-liquid target exchanges follow. Shorting on a target exchange captures the directional move while paying a smaller funding cost (target's rate is less negative than main's). One independent trade is opened per eligible (main_event, target_exchange) pair.
-
-### Parameters
-
-| Parameter | Variable | Default |
-|---|---|---|
-| Main exchange | `main_exchange` | binance |
-| Excluded exchanges | `exclude_exchanges` | [] |
-| Main funding threshold | `main_exchange_funding_threshold` | 0.005 |
-| Min funding spread | `min_funding_spread` | 0.004 |
-| Stop-loss | `stop_loss` | 0.005 (0.5% above entry) |
-| TP multiplier | `tp_multiplier` | 1.5 |
-| Entry offset | `entry_offset_seconds` | 3 |
-| Deadline | `deadline_seconds` | 60 |
-| Funding time tolerance | `funding_time_tolerance_seconds` | 60 |
+> `funding_threshold` is the only **snake_case** strategy key in the config schema; every
+> other param is camelCase. The size key is `mainAmountUsd`, not `amountUsd`.
 
 ### Selection Logic
 
 ```
-FOR EACH funding event on main_exchange where:
-  main_exchange.funding_rate < 0
-  AND abs(main_exchange.funding_rate) >= main_exchange_funding_threshold
-  AND EXISTS target_exchange NOT IN (main_exchange ∪ exclude_exchanges):
-    (target.funding_rate - main.funding_rate) >= min_funding_spread
-    AND abs(target.funding_time - main.funding_time) <= funding_time_tolerance_seconds
-THEN open one independent short trade per (main_event, eligible_target) pair
+IF current_time == T_funding - entryOffsetSeconds
+AND ((funding_threshold > 0 AND F% >= funding_threshold)     # live: F% >= +0.1
+     OR (funding_threshold < 0 AND F% <= funding_threshold)
+     OR funding_threshold == 0)
+AND market.status == 'trading'
+AND preFundingQty < mainQty                                   # else no net exposure — skip
+THEN trigger strategy
 ```
 
-The spread condition `F_target − F_main >= min_spread` is equivalent to requiring main to be more negative than target by at least `min_spread`.
+`mainSide` and `funding_threshold` are independent — all four combinations (long/short × positive/negative threshold) are legal.
 
-### Execution Flow
+### Execution Flow (LONG example; SHORT mirrors signs)
 
 ```
-1. AT T_main_funding - entry_offset_seconds (on target_exchange):
-   → ENTRY: SELL MARKET at best bid
-   → Record entry_price
-   → TP_price = entry_price × (1 - |F_main| × tp_multiplier)
-   → SL_price = entry_price × (1 + stop_loss)
+1. AT T_funding - entryOffsetSeconds:
+   → PRE_FUNDING_ORDER: SELL MARKET (opposite to mainSide),
+     size = min possible (exchange lot floor + min-notional floor).
+     This tiny SHORT subscribes the symbol to the private WS stream.
 
-2. PLACE ORDERS (valid until T_main_funding + deadline_seconds):
-   → BUY LIMIT  at TP_price   [take-profit]
-   → BUY STOP   at SL_price   [stop-loss; wins on same-candle ambiguity]
+2. AWAIT ws.funding_fee for (exchange, symbol), fundingTime ≈ T_funding (±5s tolerance)
+   Hard fallback at T_funding + fundingFeeTimeoutSeconds:
+     → abort: MARKET-close PRE_FUNDING (reduce-only), retried up to 3× with
+       250 / 1000 / 3000 ms backoff; a REST position fetch is ground truth.
+     → settle as funding_event_timeout
 
-3. EXIT (first trigger wins; SL beats TP on tie):
-   → SL_HIT:    BUY at SL_price (taker)
-   → TP_HIT:    BUY at TP_price (maker)
-   → DEADLINE:  BUY MARKET at T_main_funding + deadline_seconds
+3. ON ws.funding_fee event:
+   → Confirm PRE_FUNDING actually filled (else abort + close)
+   → MAIN: BUY MARKET, size = mainVolume, via WS order adapter
+   → A mainEventLock guarantees MAIN fires exactly once
+   Net exchange position = mainVolume − preFundingVolume LONG
+
+4. ON MAIN fill at price P_entry:
+   → Confirm net position qty via REST getPositions()
+   → TP: SELL LIMIT       at P_entry × (1 + |F%| × tpMultiplier / 100)
+   → SL: SELL STOP-MARKET at P_entry × (1 − |F%| × slMultiplier / 100)
+   → tpPct / slPct are computed at FILL time, not decision time
+   → TP/SL sized on NET qty (filledQty − preFundingVolume)
+   → Arm deadline at T_funding + deadlineSeconds
+
+5. EXIT (whichever comes first):
+   → TP fill: cancel SL, settle
+   → SL trigger: cancel TP, settle
+   → Deadline: cancel both, MARKET-close net position, settle
 ```
-
-### Funding Applicability
-
-Funding is charged by the **target exchange** at its own `target_funding_time`, which may differ from `main_funding_time` by up to `funding_time_tolerance_seconds`. Funding applies to the position only if `target_funding_time` falls strictly within the position's open window `(entry_time, exit_time]`.
 
 ### P&L Formula
 
 ```
-DELTA_PNL   = (entry_price - exit_price) / entry_price   # positive when price drops
-FUNDING_PNL = -|F_target|  if funding applies            # shorts pay on negative rate
-            = 0             otherwise
-FEES        = taker_fee (entry) + maker_fee (TP) or taker_fee (SL / DEADLINE)
+PRE_FUNDING_DELTA = (P_main_entry - P_pre_fill) × preFundingVolume × (-1)   # tiny opposing delta
+FUNDING_PRE       = − funding_fee_paid_on_pre_funding_position               # cost (wrong direction)
+MAIN_DELTA        = (P_exit - P_entry) × (mainVolume - preFundingVolume)     # net position delta
+FEES              = taker_fee × 2  (PRE_FUNDING + MAIN entries)
+                  + maker_fee or taker_fee for exit
 
-NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
+NET_PNL = PRE_FUNDING_DELTA + FUNDING_PRE + MAIN_DELTA − FEES
 ```
+
+`FUNDING_PRE` is always negative (PRE_FUNDING is in the wrong direction). It is minimised by using the smallest possible PRE_FUNDING size.
 
 ### Profit Condition
 
 ```
-DELTA_PNL > |F_target| + FEES
+MAIN_DELTA > |PRE_FUNDING_DELTA| + FUNDING_PRE + FEES
 ```
 
-> **The edge:** Main exchange's deep negative funding drives a correlated price drop on target. Shorting the target captures the move while paying only the target's (smaller) funding cost.
+### Key Risks
 
-### Parameter Bounds
+- **WS event miss:** if `ws.funding_fee` never arrives, the timeout fires and PRE_FUNDING is closed at a small loss.
+- **PRE_FUNDING funding cost:** the tiny position accrues funding in the wrong direction.
+- **MAIN slippage:** MAIN is a market order fired immediately after the event; liquidity around the funding spike may be thin.
+- **Ordering caveat:** the MAIN fill completes after settlement, so MAIN does **not** receive the funding fee this cycle. On exchanges that settle FIFO, the PRE_FUNDING position receives it instead.
 
-| Parameter | Min | Max |
-|---|---|---|
-| `main_exchange_funding_threshold` | 0.002 | 0.015 |
-| `min_funding_spread` | 0.001 | 0.015 |
-| `stop_loss` | 0.001 | 0.020 |
-| `tp_multiplier` | 0.1 | 3.0 |
-| `entry_offset_seconds` | 1 | 5 |
-| `deadline_seconds` | 10 | 900 |
+### Error Codes
 
-### Backtesting Variables to Extract
-
-- `F_main`, `F_target` at each matched funding period (within `funding_time_tolerance_seconds`)
-- Orderbook (1s candles) for each target exchange around `T_main_funding`
-- Per-exchange fee schedules (maker/taker)
-- `target_funding_time` (for correct funding applicability, distinct from `main_funding_time`)
-
----
+| Code | Meaning |
+|---|---|
+| `pre_funding_order_failed` | PRE_FUNDING order submission threw |
+| `pre_funding_order_rejected` | Exchange rejected the PRE_FUNDING order |
+| `pre_funding_not_filled` | WS event arrived but PRE_FUNDING never filled — MAIN is not sent |
+| `funding_event_timeout` | No `ws.funding_fee` within the timeout; PRE_FUNDING closed |
+| `main_order_failed` | MAIN order submission threw |
+| `main_order_rejected` | Exchange rejected the MAIN order |
+| `close_pre_funding_failed` | Abort path could not flatten PRE_FUNDING (all 3 retries failed) |
 
 ---
 
 # CONSOLIDATED VARIABLE REGISTRY
-
-All unique variables across all strategies, for backtester implementation.
 
 ## Input Variables (per funding event)
 
 | Variable | Type | Source |
 |---|---|---|
 | `funding_rate` | float | Exchange API (predicted) |
-| `funding_rate_main` | float | Main exchange API (Strategy 5) |
-| `funding_rate_target` | float | Target exchange API (Strategy 5) |
 | `T_funding` | datetime | Exchange funding schedule |
 | `price_timeseries` | float[] | Tick/second-level OHLCV |
 | `volume_24h` | float | Exchange API |
@@ -593,26 +653,25 @@ All unique variables across all strategies, for backtester implementation.
 
 ## Strategy Parameters (tunable)
 
-| Parameter | Used In | Type | Default |
-|---|---|---|---|
-| `F_threshold` | 1, 2, 3 | float | 0.4% |
-| `F_threshold_high` | 4.1, 4.2, 4.3 | float | 0.6% |
-| `entry_offset_seconds` | 1, 2, 3, 5 | int | 5s (or 3s, 2s) |
-| `exit_offset_seconds` | 1 | int | 2s |
-| `retracement_pct` | 2 | float | 0.50 |
-| `SL` | 3, 4.3 | float | 1.0% (or multiplier) |
-| `TP` | 3, 4.x | float | varies |
-| `TP_mode` | 3 | enum | A or B |
-| `ladder_count` | 4.1 | int | 5 |
-| `ladder_top_mult` | 4.1 | float | 0.4 |
-| `ladder_bottom_mult` | 4.1 | float | 1.5 |
-| `limit_offset_mult` | 4.2 | float | 1.0 |
-| `entry_mult` | 4.3 | float | 0.75 |
-| `sl_mult` | 4.3 | float | 1.5 |
-| `T_deadline` | 2, 4.x | int (seconds) | 60s |
-| `main_exchange_funding_threshold` | 5 | float | 0.5% |
-| `min_funding_spread` | 5 | float | 0.4% |
-| `funding_time_tolerance_seconds` | 5 | int | 60s |
+| Parameter | Live config key | Used In | Type | Schema default |
+|---|---|---|---|---|
+| `F_threshold` | `negativeFundingThresholdPercent` | 1, 1_ws, 2, 3a, 4.1a, 4.2a | float (percent, signed) | −0.4 to −0.5 |
+| `entry_offset_seconds` | `entryOffsetSeconds` | all | int | 5s (or 10s) |
+| `exit_offset_seconds` | `exitOffsetSeconds` | 1 | int | 2s |
+| — | `fundingFeeTimeoutSeconds` | 1_ws, 2, 6 | int | 30s |
+| `retracement_pct` | `retracementPct` | 2 | float [0, 1] | 0.50 |
+| `SL` | `stopLossPercent` | 3a | float (fixed percent) | 1.0% |
+| `TP` | `takeProfitPct` | 4.1a, 4.2a | float (percent) | varies |
+| `TP_mode` | `tpVariantAMultiplier` | 3a | float | 1.5 |
+| `ladder_count` | `ladderCount` | 4.1a | int | 5 |
+| `ladder_top_mult` | `ladderTopMult` | 4.1a | float | 0.5 |
+| `ladder_bottom_mult` | `ladderBottomMult` | 4.1a | float | 1.5 |
+| `limit_offset_mult` | `limitOffsetMult` | 4.2a | float | 0.75 |
+| `sl_mult` | `slMultiplier` | 2, 4.1a, 4.2a, 6 | float | 1.0–1.5 |
+| `T_deadline` | `deadlineSeconds` | 2, 3a, 4.x, 6 | int (seconds) | 60s |
+| — | `mainSide` | 6 | enum `long`/`short` | *(required)* |
+| — | `funding_threshold` | 6 | float (percent, **signed**) | 0 |
+| — | `tpMultiplier` | 6 | float | 0.5 |
 
 ## Output Variables (per trade)
 
@@ -625,7 +684,7 @@ All unique variables across all strategies, for backtester implementation.
 | `funding_pnl` | Funding fee P&L (%) |
 | `fee_cost` | Total fees paid (%) |
 | `net_pnl` | Final net P&L (%) |
-| `exit_reason` | Enum: `TP_HIT`, `SL_HIT`, `DEADLINE`, `MARKET_EXIT` |
+| `exit_reason` | Enum: `TP_HIT`, `SL_HIT`, `DEADLINE`, `MARKET_EXIT`, `timed`, `funding_fee_event`, `funding_fee_timeout` |
 | `hold_duration` | Seconds from entry to exit |
 | `fill_count` | Number of limit orders filled (ladder) |
 | `funding_received` | Boolean: did the position receive funding? |
@@ -636,16 +695,13 @@ All unique variables across all strategies, for backtester implementation.
 
 | | Direction | Entry | Exit | Profits From | Costs | Key Risk |
 |---|---|---|---|---|---|---|
-| **S1** | LONG | Market (−5s) | Market (+2s) | Funding fee | Delta drop + fees | Drop > funding |
-| **S2** | LONG | Market (−5s) | Limit (retrace) or Market (deadline) | Funding fee + partial retrace | Residual delta + fees | No retracement |
-| **S3** | SHORT | Market (−5s) | Limit (TP) or Stop (SL) | Delta drop | Funding fee paid + fees | Drop < funding paid |
-| **S4.1a** | LONG | Ladder limits (−5s) | Limit (TP) or Market (deadline) | Delta recovery | Fees, unfilled orders | No recovery, full drop |
-| **S4.1b** | LONG | Ladder limits (−5s) | Limit (TP) or Market (deadline) | Delta recovery + funding | Fees, unfilled orders | No recovery, full drop |
-| **S4.2a** | LONG | Single limit (−5s) | Limit (TP) or Market (deadline) | Delta recovery | Fees | Not filled, or no recovery |
-| **S4.2b** | LONG | Single limit (−5s) | Limit (TP) or Market (deadline) | Delta recovery + funding | Fees | Not filled, or no recovery |
-| **S4.3a** | LONG | Limit (−2s) | Limit (TP) / Stop (SL) / Market (deadline) | Delta recovery | SL risk, fees | Stopped out |
-| **S4.3b** | LONG | Limit (−2s) | Limit (TP) / Stop (SL) / Market (deadline) | Delta recovery + funding | SL risk, fees | Stopped out |
-| **S5** | SHORT (target) | Market (−entry_offset) | Limit (TP) / Stop (SL) / Market (deadline) | Cross-exchange delta | Funding fee (target) + fees | Price doesn't propagate from main |
+| **S1** | LONG | Market (−3s) | Market (+4s), timed | Funding fee | Delta drop + fees | Drop > funding |
+| **S1 WS** | LONG | Market (−3s) | Market on WS funding-fee event (timeout fallback) | Funding fee | Delta drop + fees | Event delayed/missed |
+| **S2** | LONG | Market (−3s) | Stop (SL), trailing Limit (retrace), or Market (deadline) | Funding fee + retrace | Residual delta + fees | No retracement; sharp drop triggers SL |
+| **S3a** | SHORT | Market (−3s) | Limit (TP), Stop (SL), or Market (deadline) | Delta drop | Funding fee paid + fees | Drop < funding paid |
+| **S4.1a** | LONG | Ladder limits (−3s) | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery | Fees, unfilled orders | No recovery; sharp drop triggers SL |
+| **S4.2a** | LONG | Single limit | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery | Fees | Not filled, or sharp drop triggers SL |
+| **S6** | LONG or SHORT | Pre-fund opposite (tiny) + MAIN market on WS event | TP Limit / SL Stop-Market / Deadline | Directional move post-funding | 2 entries + 1 exit fees + PRE_FUNDING funding cost | WS event miss; MAIN slippage; thin liquidity |
 
 ---
 
@@ -660,12 +716,26 @@ All unique variables across all strategies, for backtester implementation.
 ## Ideal Data
 
 4. **Trade-by-trade data** (for precise fill simulation)
-5. **Multi-exchange data** (for Strategy 5)
-6. **Volume data** per exchange (for Strategy 5 liquidity filter)
 
 ## Backtesting Considerations
 
-- **Funding fee scenarios for Strategies 4.x:** The price drop occurs at the funding timestamp. Limit orders are filled during this drop at the same second. Some exchanges apply the funding fee to positions opened at the exact funding timestamp, some do not. Strategies 4.1, 4.2, and 4.3 each have two sub-strategies (a: funding excluded, b: funding included) to account for this.
-- **Partial fills:** Ladder strategies (4.1) may only partially fill. The backtester must track per-order fills.
-- **Order placement latency:** A realistic backtester should account for 50-200ms network latency for order placement.
-- **Exchange clock synchronization:** Entry at `T_funding - 5s` assumes accurate clock sync with the exchange.
+- **No funding for Strategies 4.x:** the price drop occurs at the funding timestamp and limit orders fill during and after it, so the position opens *after* settlement and receives no funding fee. Model `FUNDING_PNL = 0`. The one exception is a ladder rung filling *before* `T_funding` — the live engine keeps such a position, and it *does* accrue funding.
+- **Partial fills:** the 4.1a ladder may only partially fill. The backtester must track per-order fills.
+- **Strategy 2 trailing TP:** the TP is re-placed as the running low makes new lows, and is only armed after the funding-fee event. A backtest that places one limit at the true `P_low`-derived target is optimistic.
+- **Strategy 6 cannot be backtested:** its MAIN entry depends on a private WS `funding_fee` event that backtests cannot emulate.
+- **Order placement latency:** a realistic backtester should account for 50–200ms network latency for order placement.
+- **Exchange clock synchronization:** entry at `T_funding − entryOffsetSeconds` assumes accurate clock sync with the exchange.
+
+---
+
+# LIVE ENGINE BEHAVIOR
+
+Engine-level guards that are not YAML parameters but materially change which trades are
+taken. See `docs-strategy/strategies/_globals.md` for the full treatment.
+
+- **Scheduler pre-filter:** only symbols within **0.1 pp** of an enabled threshold get an evaluation timer; snapshots older than 30s are skipped; candidates are ordered **most-negative funding first**.
+- **Risk caps:** `maxConcurrentIntents: 200`, `maxNotionalUsd: 50000` per container. **Smart preemption** cancels the least-negative-funding non-monitoring intent to make room for a better one.
+- **WS-mandatory order path** for `strategy_1_ws`, `strategy_2`, `strategy_6`. OKX falls back to REST on `WS_TIMEOUT`.
+- **Submission stagger:** bybit 150ms, binance 100ms.
+- **Fallbacks:** REST fill-poll on WS miss; REST funding-fee poll; orphan-position auto-flatten; stale reduce-only sweep before entry.
+- **Kill switch:** `off` / `paused` / `flatten`. Non-`off` rejects every new intent before any exchange API call.

@@ -9,49 +9,71 @@ file. For global variables and hard bounds, see `_globals.md`.
 
 ## Strategy 2: Negative Funding LONG — Retracement Exit
 
+**Status:** deployed on all 6 exchanges.
+
 **Thesis:** Same as Strategy 1, but instead of immediately exiting at a loss from the price drop, wait for a partial price retracement to reduce (or eliminate) the delta cost.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.4% |
-| Entry offset | `T_entry` | `T_funding − 5s` |
-| Retracement level | `retracement_pct` | 0.50 (50%), range: [0.3, 0.618] |
-| Deadline exit | `T_deadline` | `T_funding + 60s` |
-| Stop-loss multiplier | `sl_mult` | 1.5 — SL at `P_entry × (1 − F × sl_mult)` |
+| Parameter | Doc variable | Live config key | Live value | Schema default |
+|---|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | **−0.1** | −0.4 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | **3** (`T_funding − 3s`) | 5 |
+| Retracement level | `retracement_pct` | `retracementPct` | **1.0** (full retracement) | 0.5 |
+| Deadline exit | `T_deadline` | `deadlineSeconds` | **900** (15 min) | 60 |
+| Stop-loss multiplier | `sl_mult` | `slMultiplier` | **2.0** | 1.0 |
+| Funding-fee event timeout | — | `fundingFeeTimeoutSeconds` | *(unset → 30)* | 30 |
+| Notional | — | `amountUsd` | 10 | 20 |
+| Leverage | — | `leverage` | 5 | 4 |
+
+> **`retracementPct = 1.0` means the take-profit sits back at the anchor price** —
+> the strategy waits for the price to fully recover to its pre-funding reference
+> before exiting, rather than settling for a partial retrace. The `[0.3, 0.618]`
+> Fibonacci range in the original spec is not what the fleet runs.
 
 ### Selection Logic
 
 ```
-IF current_time == T_funding - 5s
-AND predicted_funding_rate < -F_threshold
+IF current_time == T_funding - entryOffsetSeconds
+AND funding_rate_percent <= -abs(negativeFundingThresholdPercent)    # i.e. <= -0.1%
+AND market.status == 'trading'
 THEN trigger strategy
 ```
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
-   → ENTRY: BUY MARKET at best ask
-   → Record P_entry
-   → Place STOP-LOSS: SELL STOP at P_entry × (1 − F × sl_mult)
-     (active immediately from entry+1s)
+1. AT T_funding - entryOffsetSeconds (live: -3s):
+   → ENTRY: BUY MARKET at best ask (WS order adapter)
+   → Record P_entry (fill) and anchorPrice (reference price at decision time)
+   → Place STOP-LOSS: SELL STOP at P_entry × (1 − |F%| × slMultiplier / 100)
+     (active immediately from entry)
 
-2. AFTER T_funding (price drop occurs):
-   → Observe P_funding (price at HH:MM:00)
-   → Observe P_low (lowest price in the drop)
-   → Compute retracement target:
-     P_target = P_low + (P_funding - P_low) × retracement_pct
-   → Place TAKE-PROFIT: SELL LIMIT at P_target
-     (active from T_low+1s — TP only valid after P_low is identified)
+2. ON ws.funding_fee event (fallback: fundingFeeTimeoutSeconds after T_funding):
+   → ARM the retracement tracker
 
-3. EXIT (whichever comes first):
+3. WHILE tracking (polls price every 1s):
+   → Maintain a running P_low (lowest price seen since arming)
+   → EACH TIME P_low makes a new low:
+       P_target = P_low + (anchorPrice - P_low) × retracementPct
+       → CANCEL the previous TP limit and RE-PLACE SELL LIMIT at P_target
+       (throttled to at most one re-place per second)
+
+4. EXIT (whichever comes first):
    → SL hit: SELL STOP triggers at P_SL (taker fee)
-   → TP hit: SELL LIMIT at P_target (maker fee)
-   → T_deadline reached and neither filled:
-     SELL MARKET (reduce-only) at T_deadline (taker fee)
+   → TP hit: SELL LIMIT at the current P_target (maker fee)
+   → T_deadline (T_funding + 900s) reached and neither filled:
+     SELL MARKET (reduce-only) (taker fee)
 ```
+
+`exitPolicy.kind = 'sl_tp_deadline_retracement_funding_event'`.
+
+Order placement is **WS-mandatory** for this strategy. The tracker is re-spawned
+from the database on engine recovery, so a restart mid-position does not lose the
+trailing TP.
+
+Code references: `src/execution/strategies/strategy_2.ts`,
+`src/execution/execution/manager.ts` (retracement tracker).
 
 ### P&L Formula
 
@@ -80,21 +102,36 @@ NET_PNL     = DELTA_PNL + FUNDING_PNL - FEES
 - `P` at `T_deadline` (fallback exit)
 - `F` at settlement
 
-### Key Consideration
+### Key Consideration — P_low Identification (resolved)
 
-> **P_low identification problem:** In live trading, you don't know `P_low` in real-time. For backtesting this is straightforward, but for live execution you'd need a heuristic (e.g., "price hasn't made a new low for X seconds" or use a trailing approach). The backtester should model this realistically.
+The original spec flagged this as an open problem: in live trading you cannot know
+`P_low` in advance, so you cannot place a single correct retracement limit.
+
+**The live engine solves it with a trailing take-profit rather than a one-shot
+limit.** The tracker polls price every second and re-places the TP limit each time
+the running low makes a new low, recomputing `P_target` from the new `P_low`. The
+TP therefore chases the bottom down and settles wherever the drop actually ends —
+no prediction required.
+
+Two consequences the backtester must model to stay at parity:
+
+- The TP is only armed **after the funding-fee event** (not at `T_funding`), so
+  there is a window right after settlement in which only the SL is live.
+- The TP price is a **function of the running minimum**, not of the final `P_low`.
+  A backtest that places one limit at the true `P_low`-derived target is optimistic.
 
 ---
 
 ## Relevant Registry Rows
 
-| Parameter | Used In | Type | Default |
-|---|---|---|---|
-| `F_threshold` | 2 | float | 0.4% |
-| `entry_offset_seconds` | 2 | int | 5s |
-| `retracement_pct` | 2 | float | 0.50 |
-| `sl_mult` | 2 | float | 1.5 |
-| `T_deadline` | 2 | int (seconds) | 60s |
+| Parameter | Live config key | Used In | Type | Live value |
+|---|---|---|---|---|
+| `F_threshold` | `negativeFundingThresholdPercent` | 2 | float | −0.1 |
+| `entry_offset_seconds` | `entryOffsetSeconds` | 2 | int | 3s |
+| `retracement_pct` | `retracementPct` | 2 | float | 1.0 |
+| `sl_mult` | `slMultiplier` | 2 | float | 2.0 |
+| `T_deadline` | `deadlineSeconds` | 2 | int (seconds) | 900s |
+| — | `fundingFeeTimeoutSeconds` | 2 | int (seconds) | 30s (default) |
 
 ---
 
@@ -102,7 +139,7 @@ NET_PNL     = DELTA_PNL + FUNDING_PNL - FEES
 
 | | Direction | Entry | Exit | Profits From | Costs | Key Risk |
 |---|---|---|---|---|---|---|
-| **S2** | LONG | Market (−5s) | Stop (SL), Limit (retrace), or Market (deadline) | Funding fee + partial retrace | Residual delta + fees | No retracement; sharp drop triggers SL |
+| **S2** | LONG | Market (−3s) | Stop (SL), trailing Limit (retrace), or Market (deadline) | Funding fee + retrace | Residual delta + fees | No retracement; sharp drop triggers SL |
 
 ---
 

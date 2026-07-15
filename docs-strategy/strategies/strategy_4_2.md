@@ -1,68 +1,87 @@
-# Strategy 4.2 — Extracted Spec
+# Strategy 4.2a — Extracted Spec
 
-This is the extracted spec for Strategy 4.2 (covers sub-strategies 4.2a and 4.2b).
-It contains only the sections relevant to this strategy, pulled verbatim from
-`docs-strategy/funding_rate_strategies.md`. For the full monolith, see that
-file. For global variables and hard bounds, see `_globals.md`.
+This is the extracted spec for Strategy 4.2a. It contains only the sections relevant
+to this strategy. For global variables, engine behavior, and hard bounds, see
+`_globals.md`.
 
 ---
 
-## Strategy 4.2: Negative Funding Single LONG — Post-Funding Entry
+## Strategy 4.2a: Negative Funding Single LONG — Post-Funding Entry
 
-**Thesis:** Simplified version of 4.1 — single limit buy instead of a ladder.
+**Status:** implemented, **not deployed** — and its live config is unusable as written.
 
-### Sub-Scenarios
+> **⚠️ The `live-configs/strategies/strategy_4_2a-<exchange>.yaml` files are written
+> in the flat *backtest* schema** (`strategy_id`, `direction`, `funding_threshold`,
+> `limit_offset_mult`, `take_profit`, `funding_applied_on_same_second`), not the
+> execution engine's schema (a `strategies:` list of camelCase keys). The fleet
+> config generator would reject them with *"produced no strategies"*. This has gone
+> unnoticed because `strategy_4_2a` is absent from `live-configs/fleet.yaml` and
+> therefore runs in no container. **These files must be rewritten into the execution
+> schema before this strategy can be deployed.**
 
-| Scenario | Description | Funding Received? |
-|---|---|---|
-| Scenario 1 | Funding fee is NOT applied to the position | No |
-| Scenario 2 | Funding fee IS applied to the position (exchange-dependent) | Yes (+F) |
-
-> **Backtesting Note:** Scenario 1 and Scenario 2 must be backtested as **separate sub-strategies** (4.2a and 4.2b).
+**Thesis:** Simplified version of 4.1a — single limit buy instead of a ladder. The position opens *after* settlement, so **no funding fee is received**; the edge is the delta recovery off the drop.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.6% |
-| Limit offset | `limit_offset_mult` | 1.0 (i.e., `F × 1.0`) |
-| Take-profit | `TP` | 0.2% above entry |
-| Stop-loss multiplier | `sl_mult` | 1.5 — SL at `entry × (1 − F × sl_mult)`; MUST be > `limit_offset_mult` |
-| Deadline | `T_deadline` | `T_funding + 60s` |
+Engine schema keys (what the loader accepts), with schema defaults. There are no
+valid live values to quote — see the warning above.
+
+| Parameter | Doc variable | Live config key | Schema default |
+|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | −0.4 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | 5 |
+| Limit offset | `limit_offset_mult` | `limitOffsetMult` | 0.75 |
+| Take-profit | `TP` | `takeProfitPct` | 0.2 |
+| Stop-loss multiplier | `sl_mult` | `slMultiplier` | 1.5 |
+| Deadline | `T_deadline` | `deadlineSeconds` | 60 |
+| Notional | — | `amountUsd` | 20 |
+| Leverage | — | `leverage` | 4 |
+
+`slMultiplier` MUST be greater than `limitOffsetMult` — enforced by the config loader.
+Otherwise the stop would sit above the entry limit.
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
+1. AT T_funding - entryOffsetSeconds:
    → Record P_current
-   → Place BUY LIMIT at: P_current × (1 - F × limit_offset_mult)
+   → Place BUY LIMIT at: P_current × (1 - |F%| × limitOffsetMult / 100)
+   → The order carries expireAt = T_funding + deadlineSeconds
 
 2. IF filled:
-   → Place STOP-LOSS: SELL STOP at P_fill × (1 − F × sl_mult)
-   → Place TAKE-PROFIT: SELL LIMIT at P_fill × (1 + TP)
+   → Place STOP-LOSS:   SELL STOP  at P_fill × (1 − |F%| × slMultiplier / 100)
+   → Place TAKE-PROFIT: SELL LIMIT at P_fill × (1 + takeProfitPct / 100)
    → Both active from the first candle after entry fill (OCO pair)
 
 3. EXIT (whichever comes first):
    → SL hit: SELL STOP fires (taker fee)
    → TP hit: SELL LIMIT fills (maker fee)
    → T_deadline → SELL MARKET + cancel unfilled limit
+
+4. IF never filled by T_deadline:
+   → Cancel the limit; intent terminates with error code = limit_expired
+     (no position, no SL/TP placed)
 ```
+
+`exitPolicy.kind = 'sl_tp_deadline'`.
 
 ### P&L Formula
 
-Same structure as 4.1 but with single entry price instead of `P_avg`. Use Scenario 1 (FUNDING_PNL = 0) and Scenario 2 (FUNDING_PNL = +F) as separate sub-strategies.
+Same structure as 4.1a but with a single entry price instead of `P_avg`, and
+`FUNDING_PNL = 0` (the position opens after settlement).
 
 ---
 
 ## Relevant Registry Rows
 
-| Parameter | Used In | Type | Default |
-|---|---|---|---|
-| `F_threshold_high` | 4.2 | float | 0.6% |
-| `entry_offset_seconds` | 4.2 | int | 5s |
-| `limit_offset_mult` | 4.2 | float | 1.0 |
-| `TP` | 4.2 | float | 0.2% |
-| `T_deadline` | 4.2 | int (seconds) | 60s |
+| Parameter | Live config key | Used In | Type | Schema default |
+|---|---|---|---|---|
+| `F_threshold` | `negativeFundingThresholdPercent` | 4.2a | float | −0.4 |
+| `entry_offset_seconds` | `entryOffsetSeconds` | 4.2a | int | 5s |
+| `limit_offset_mult` | `limitOffsetMult` | 4.2a | float | 0.75 |
+| `TP` | `takeProfitPct` | 4.2a | float | 0.2% |
+| `sl_mult` | `slMultiplier` | 4.2a | float | 1.5 |
+| `T_deadline` | `deadlineSeconds` | 4.2a | int (seconds) | 60s |
 
 ---
 
@@ -70,8 +89,7 @@ Same structure as 4.1 but with single entry price instead of `P_avg`. Use Scenar
 
 | | Direction | Entry | Exit | Profits From | Costs | Key Risk |
 |---|---|---|---|---|---|---|
-| **S4.2a** | LONG | Single limit (−5s) | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery | Fees | Not filled, or sharp drop triggers SL |
-| **S4.2b** | LONG | Single limit (−5s) | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery + funding | Fees | Not filled, or sharp drop triggers SL |
+| **S4.2a** | LONG | Single limit | Stop (SL), Limit (TP), or Market (deadline) | Delta recovery | Fees | Not filled, or sharp drop triggers SL |
 
 ---
 
@@ -80,7 +98,7 @@ Same structure as 4.1 but with single entry price instead of `P_avg`. Use Scenar
 - Tick-level or 1-second candle data around each funding event (at least `[T_funding - 60s, T_funding + 120s]`)
 - Predicted funding rate at each funding interval
 - Exchange fee schedule (maker/taker)
-- **Funding fee scenarios:** Strategies 4.2a (funding excluded) and 4.2b (funding included) account for exchange-dependent funding on positions opened at the exact funding timestamp.
+- **No funding:** the limit is intended to fill during the post-settlement drop, so the position receives no funding fee. The backtester must model `FUNDING_PNL = 0`.
 
 ---
 

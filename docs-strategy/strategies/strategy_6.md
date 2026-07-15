@@ -1,44 +1,66 @@
 # Strategy 6 — Extracted Spec
 
-This is the extracted spec for Strategy 6. It contains only the sections
-relevant to this strategy, pulled verbatim from
-`docs-strategy/funding_rate_strategies.md`. For the full monolith, see that
-file. For global variables and hard bounds, see `_globals.md`.
+This is the extracted spec for Strategy 6. For global variables, engine behavior,
+and hard bounds, see `_globals.md`.
 
 ---
 
 ## Strategy 6: Post-Funding Directional — WS-Gated Entry
 
+**Status:** deployed on all 6 exchanges.
+
 **Thesis:** Take a directional position (LONG or SHORT) whose entry is triggered by the WS `funding_fee` event — the moment funding accrues on the exchange. A tiny PRE_FUNDING_ORDER in the opposite direction is placed before funding to subscribe the symbol into the private WS user-data stream; the larger MAIN order reverses this position on the WS event. TP/SL/deadline manage exit. The funding-rate threshold is signed; its sign is independent of `mainSide` — all four combinations (long/short × positive/negative threshold) are legal.
 
-> **Live-only.** This strategy cannot run in backtest mode because backtests cannot emulate WS funding-fee events. The backtest engine will reject any config that includes `strategy_6`.
+> **Strategy 6 is not a negative-funding strategy.** It is the one strategy in this
+> document whose thesis is not "funding is deeply negative". It bets on the
+> *directional move* that follows settlement, in whichever direction `mainSide` says
+> — see the live configuration below.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Trade direction | `mainSide` | *(required)* `long` or `short` |
-| Funding-rate threshold (signed) | `funding_threshold` | `0` (always-on) |
-| Pre-funding entry offset | `entryOffsetSeconds` | `10s` |
-| WS funding-fee timeout | `fundingFeeTimeoutSeconds` | `8s` |
-| TP multiplier | `tpMultiplier` | `0.5` |
-| SL multiplier | `slMultiplier` | `1.0` |
-| Deadline after funding | `deadlineSeconds` | `3300s` (55 min) |
-| Main position size | `mainAmountUsd` | — |
-| Leverage | `leverage` | — |
+| Parameter | Live config key | Live value | Schema default |
+|---|---|---|---|
+| Trade direction | `mainSide` | **`long`** (all 6) | *(required)* |
+| Funding-rate threshold (signed, percent) | `funding_threshold` | **+0.1** | 0 (always-on) |
+| Pre-funding entry offset | `entryOffsetSeconds` | **3** | 10 |
+| WS funding-fee timeout | `fundingFeeTimeoutSeconds` | **10** (**okx: 45**) | 30 |
+| TP multiplier | `tpMultiplier` | **1.5** | 0.5 |
+| SL multiplier | `slMultiplier` | **1.5** | 1.0 |
+| Deadline after funding | `deadlineSeconds` | **1800** (30 min) | 3300 |
+| Main position size | `mainAmountUsd` | **10** | *(required)* |
+| Leverage | `leverage` | **5** | *(required)* |
+
+> **The live fleet goes LONG on POSITIVE funding.** `mainSide: long` with
+> `funding_threshold: +0.1` means the strategy fires when funding is **≥ +0.1%** —
+> the opposite regime from every other strategy in this document, which trigger on
+> funding ≤ −0.1%. The bet is that the post-settlement move on a positively-funded
+> symbol is upward, not that funding is collected. Do not assume the negative-funding
+> framing of Strategies 1–4 applies here.
+
+> Note `funding_threshold` is the only **snake_case** strategy key in the whole config
+> schema; every other param is camelCase. The size key is `mainAmountUsd`, not
+> `amountUsd`.
+
+> **OKX runs a 45s WS timeout** rather than 10s — its private funding-fee event is
+> materially slower to arrive.
 
 ### Selection Logic
 
 ```
 IF current_time == T_funding - entryOffsetSeconds
-AND ((funding_threshold > 0 AND F% >= funding_threshold)
+AND ((funding_threshold > 0 AND F% >= funding_threshold)     # live: F% >= +0.1
      OR (funding_threshold < 0 AND F% <= funding_threshold)
      OR funding_threshold == 0)
 AND market.status == 'trading'
+AND preFundingQty < mainQty                                   # else no net exposure — skip
 THEN trigger strategy
 ```
 
 `mainSide` and `funding_threshold` are independent — all four combinations (long/short × positive/negative threshold) are legal.
+
+**Sizing guard:** the symbol is skipped entirely if the minimum possible PRE_FUNDING
+quantity is greater than or equal to the MAIN quantity — reversing would leave no net
+position. This is re-checked at submission time against a fresh price.
 
 ### Execution Flow (LONG example; SHORT mirrors signs)
 
@@ -50,15 +72,22 @@ THEN trigger strategy
 2. AWAIT ws.funding_fee for (exchange, symbol) with fundingTime ≈ T_funding (±5 s tolerance)
    Hard fallback at T_funding + fundingFeeTimeoutSeconds:
      → abort: MARKET-close PRE_FUNDING (reduce-only, size = preFundingVolume)
+       Retried up to 3× with 250 / 1000 / 3000 ms backoff; a REST position fetch is
+       treated as ground truth for what actually needs closing.
      → settle as funding_event_timeout
 
 3. ON ws.funding_fee event:
+   → Confirm the PRE_FUNDING order actually filled (else abort + close)
    → MAIN: BUY MARKET (mainSide = LONG), size = mainVolume, via WS order adapter
    The PRE_FUNDING SHORT is reversed; net exchange position = mainVolume − preFundingVolume LONG
+   A mainEventLock guarantees the MAIN order fires exactly once.
 
 4. ON MAIN fill at price P_entry:
+   → Confirm net position qty via REST getPositions()
    → TP: SELL LIMIT at P_entry × (1 + |F%| × tpMultiplier / 100)
    → SL: SELL STOP-MARKET at P_entry × (1 − |F%| × slMultiplier / 100)
+   → tpPct and slPct are computed at FILL time, not at decision time
+   → TP/SL are sized on the NET qty (filledQty − preFundingVolume)
    → Arm deadline at T_funding + deadlineSeconds
 
 5. EXIT (whichever comes first):
@@ -66,6 +95,21 @@ THEN trigger strategy
    → SL trigger: cancel TP, settle
    → Deadline: cancel both, MARKET-close net position, settle
 ```
+
+### Error Codes
+
+Strategy 6 has the most elaborate entry state machine and a correspondingly specific
+set of terminal error codes. These are the ones to watch in ops:
+
+| Code | Meaning |
+|---|---|
+| `pre_funding_order_failed` | PRE_FUNDING order submission threw |
+| `pre_funding_order_rejected` | Exchange rejected the PRE_FUNDING order |
+| `pre_funding_not_filled` | WS event arrived but PRE_FUNDING never filled — MAIN is not sent |
+| `funding_event_timeout` | No `ws.funding_fee` within `fundingFeeTimeoutSeconds`; PRE_FUNDING closed |
+| `main_order_failed` | MAIN order submission threw |
+| `main_order_rejected` | Exchange rejected the MAIN order |
+| `close_pre_funding_failed` | Abort path could not flatten the PRE_FUNDING position (all 3 retries failed) |
 
 ### P&L Formula
 
@@ -100,15 +144,18 @@ The directional bet must overcome PRE_FUNDING cost and fees.
 
 ## Relevant Registry Rows
 
-| Parameter | Used In | Type | Default |
-|---|---|---|---|
-| `mainSide` | 6 | enum | *(required)* |
-| `funding_threshold` | 6 | float (signed) | 0 |
-| `entryOffsetSeconds` | 6 | int | 10s |
-| `fundingFeeTimeoutSeconds` | 6 | int | 8s |
-| `tpMultiplier` | 6 | float | 0.5 |
-| `slMultiplier` | 6 | float | 1.0 |
-| `deadlineSeconds` | 6 | int | 3300s |
+| Live config key | Used In | Type | Live value | Schema default |
+|---|---|---|---|---|
+| `mainSide` | 6 | enum | `long` | *(required)* |
+| `funding_threshold` | 6 | float (percent, signed) | +0.1 | 0 |
+| `entryOffsetSeconds` | 6 | int | 3s | 10s |
+| `fundingFeeTimeoutSeconds` | 6 | int | 10s (okx 45s) | 30s |
+| `tpMultiplier` | 6 | float | 1.5 | 0.5 |
+| `slMultiplier` | 6 | float | 1.5 | 1.0 |
+| `deadlineSeconds` | 6 | int | 1800s | 3300s |
+| `mainAmountUsd` | 6 | float | 10 | *(required)* |
+| `leverage` | 6 | int | 5 | *(required)* |
+| `preFundingVolume` | 6 | derived | min lot / min-notional qty | *(not configurable)* |
 
 ---
 

@@ -8,6 +8,8 @@ funding-fee event gate.
 
 ## Strategy 1 WS: Negative Funding LONG — Funding-Fee Event Exit
 
+**Status:** deployed on all 6 exchanges.
+
 **Thesis:** Collect negative funding by holding a long through settlement, then exit
 as soon as the exchange confirms the funding fee on the private stream. This aims to
 minimize post-settlement delta exposure without exiting before funding is actually
@@ -15,43 +17,72 @@ credited.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.4% |
-| Entry offset | `T_entry` | `T_funding - 5s` |
-| Funding-fee event timeout | `T_timeout` | strategy config |
+| Parameter | Doc variable | Live config key | Live value | Schema default |
+|---|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | **−0.1** | −0.5 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | **3** (`T_funding − 3s`) | 10 |
+| Funding-fee event timeout | `T_timeout` | `fundingFeeTimeoutSeconds` | **10** (**okx: 45**) | 30 |
+| Notional | — | `amountUsd` | 10 | 20 |
+| Leverage | — | `leverage` | 5 | 4 |
+
+> **OKX runs a 45s timeout** rather than 10s, because its private funding-fee event
+> is materially slower to arrive. Setting it to 10s there would cause routine false
+> timeouts.
 
 ### Selection Logic
 
 ```
-IF current_time == T_funding - 5s
-AND predicted_funding_rate < -F_threshold
+IF current_time == T_funding - entryOffsetSeconds
+AND funding_rate_percent <= -abs(negativeFundingThresholdPercent)    # i.e. <= -0.1%
+AND market.status == 'trading'
 THEN trigger strategy
 ```
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
-   -> ENTRY: BUY MARKET at best ask
+1. AT T_funding - entryOffsetSeconds (live: -3s):
+   -> ENTRY: BUY MARKET at best ask (placed over the WS order adapter)
 
 2. AFTER T_funding:
-   -> WAIT for private WebSocket funding-fee event for the same exchange and symbol
+   -> WAIT for private WebSocket funding_fee event for the same exchange and symbol.
+      The event's fundingTime must match T_funding within +/- 5s to be accepted.
 
 3. ON funding-fee event:
    -> EXIT: SELL MARKET reduce-only at best bid
+   -> exitReason = funding_fee_event
 
-4. IF no funding-fee event arrives before timeout:
-   -> EXIT: SELL MARKET reduce-only using the timeout fallback
+4. IF no funding-fee event arrives within fundingFeeTimeoutSeconds after T_funding:
+   -> EXIT: SELL MARKET reduce-only (timeout fallback)
+   -> exitReason = funding_fee_timeout
 ```
+
+`exitPolicy.kind = 'funding_fee_event'`.
 
 ### Difference From Strategy 1
 
-Strategy 1 exits at a fixed timestamp: `T_funding + 2s`.
+Strategy 1 exits at a fixed offset: `T_funding + exitOffsetSeconds`.
 
 Strategy 1 WS exits when the private account stream reports the funding-fee event.
-The exit time can be earlier or later than `T_funding + 2s`, depending on exchange
-event timing, WebSocket latency, reconnect behavior, and the configured timeout.
+The exit time can be earlier or later than Strategy 1's fixed exit, depending on
+exchange event timing, WebSocket latency, reconnect behavior, and the configured
+timeout.
+
+### WS-Miss Safety Net
+
+The WS event is not the only detection path. A **REST funding-fee poll** fires at
+`T_funding + 3s` with an **8s grace period**; if it observes the funding credit
+before the WS event arrives, it opens the funding gate and the exit proceeds
+normally. The `fundingFeeTimeoutSeconds` fallback is the last resort behind that.
+
+Order placement for this strategy is **WS-mandatory** — the engine throws at startup
+if no WS order adapter is available. OKX (and only OKX) falls back to REST on
+`WS_TIMEOUT`.
+
+Observability: `intent.funding_gate_opened` / `intent.funding_gate_closed`.
+
+Code references: `src/execution/execution/monitor.ts` (funding gate, REST poll),
+`src/execution/strategies/strategy_1_ws.ts`.
 
 ### Assumptions
 
@@ -68,7 +99,7 @@ event timing, WebSocket latency, reconnect behavior, and the configured timeout.
 - A delayed or missing private event extends holding time until the timeout fallback.
 - A false or mismatched funding-fee event can close earlier than intended.
 - WebSocket order rejection requires immediate REST reduce-only fallback.
-- Backtests using fixed `T_funding + 2s` exits are not parity for this variant unless
+- Backtests using a fixed post-funding exit are not parity for this variant unless
   private funding-fee event timing is modeled.
 
 ### P&L Formula
