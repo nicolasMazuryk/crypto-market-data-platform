@@ -23,5 +23,14 @@
     "useUnknownInCatchVariables": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/__tests__/**"]
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/__tests__/**"],
+  "ts-node": {
+    "transpileOnly": true,
+    "files": true,
+    "compilerOptions": {
+      "sourceMap": false,
+      "inlineSourceMap": true,
+      "inlineSources": true
+    }
+  }
 }

@@ -81,8 +81,6 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 | Variable | Type | Source |
 |---|---|---|
 | `funding_rate` | float | Exchange API (predicted) |
-| `funding_rate_A` | float | Exchange A API (Strategy 5) |
-| `funding_rate_B` | float | Exchange B API (Strategy 5) |
 | `T_funding` | datetime | Exchange funding schedule |
 | `price_timeseries` | float[] | Tick/second-level OHLCV |
 | `volume_24h` | float | Exchange API |
@@ -91,27 +89,38 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 
 ### Strategy Parameters (tunable)
 
-| Parameter | Used In | Type | Default |
-|---|---|---|---|
-| `F_threshold` | 1, 2, 3 | float | 0.4% |
-| `F_threshold_high` | 4.1, 4.2, 4.3 | float | 0.6% |
-| `entry_offset_seconds` | 1, 2, 3, 5 | int | 5s (or 3s, 2s) |
-| `exit_offset_seconds` | 1 | int | 2s |
-| `retracement_pct` | 2 | float | 0.50 |
-| `SL` | 3, 4.3 | float | 1.0% (or multiplier) |
-| `TP` | 3, 4.x | float | varies |
-| `TP_mode` | 3 | enum | A or B |
-| `ladder_count` | 4.1 | int | 5 |
-| `ladder_top_mult` | 4.1 | float | 0.4 |
-| `ladder_bottom_mult` | 4.1 | float | 1.5 |
-| `limit_offset_mult` | 4.2 | float | 1.0 |
-| `entry_mult` | 4.3 | float | 0.75 |
-| `sl_mult` | 2, 4.1, 4.2, 4.3 | float | 1.5 |
-| `T_deadline` | 2, 4.x | int (seconds) | 60s |
-| `F_A_threshold` | 5 | float | 1.5% |
-| `F_B_max` | 5 | float | 0.4% |
-| `F_spread_threshold` | 5 | float | 1.0% |
-| `vol_ratio_threshold` | 5 | float | TBD |
+Doc notation on the left, the actual key an operator edits in
+`live-configs/strategies/<strategy>-<exchange>.yaml` on the right.
+
+| Parameter | Live config key | Used In | Type | Schema default |
+|---|---|---|---|---|
+| `F_threshold` | `negativeFundingThresholdPercent` | 1, 1_ws, 2, 3a, 4.1a, 4.2a | float (percent, signed) | −0.4 to −0.5 |
+| `entry_offset_seconds` | `entryOffsetSeconds` | all | int | 5s (or 10s) |
+| `exit_offset_seconds` | `exitOffsetSeconds` | 1 | int | 2s |
+| — | `fundingFeeTimeoutSeconds` | 1_ws, 2, 6 | int | 30s |
+| `retracement_pct` | `retracementPct` | 2 | float [0, 1] | 0.50 |
+| `SL` | `stopLossPercent` | 3a | float (fixed percent) | 1.0% |
+| `TP` | `takeProfitPct` | 4.1a, 4.2a | float (percent) | varies |
+| `TP_mode` | `tpVariantAMultiplier` | 3a | float | 1.5 |
+| `ladder_count` | `ladderCount` | 4.1a | int | 5 |
+| `ladder_top_mult` | `ladderTopMult` | 4.1a | float | 0.5 |
+| `ladder_bottom_mult` | `ladderBottomMult` | 4.1a | float | 1.5 |
+| `limit_offset_mult` | `limitOffsetMult` | 4.2a | float | 0.75 |
+| `sl_mult` | `slMultiplier` | 2, 4.1a, 4.2a, 6 | float | 1.0–1.5 |
+| `T_deadline` | `deadlineSeconds` | 2, 3a, 4.x, 6 | int (seconds) | 60s |
+| — | `mainSide` | 6 | enum `long`/`short` | *(required)* |
+| — | `funding_threshold` | 6 | float (percent, **signed**) | 0 |
+| — | `tpMultiplier` | 6 | float | 0.5 |
+
+### Sizing Parameters (every strategy)
+
+| Live config key | Live value | Meaning |
+|---|---|---|
+| `amountUsd` (`mainAmountUsd` on strategy 6) | 10 | Notional per intent, in USD. Quantity = `amountUsd / price / contractSize`, floored to the exchange lot step. |
+| `leverage` | 5 (**okx strategy_1: 4**) | Set via `setLeverage` before entry; failure is a hard reject. Leverage does **not** scale position size — notional is always `amountUsd`; leverage only sets the margin posted (`amountUsd / leverage`). |
+| `enabled` | `true` | Strategy is skipped entirely when `false`. |
+
+Code reference: `src/execution/strategies/shared/sizing.ts`.
 
 ### Output Variables (per trade)
 
@@ -153,6 +162,38 @@ Code reference: `src/execution/execution/manager.ts` (`sweepReduceOnlyOrders`).
 
 ---
 
+## Live Engine Behavior
+
+These are engine-level behaviors that are **not** exposed as YAML parameters but
+materially change which trades are taken and how they are executed. They apply to
+every strategy.
+
+### Order path
+
+- **WS-mandatory strategies.** `strategy_1_ws`, `strategy_2`, and `strategy_6`
+  place orders over the WebSocket order adapter and throw at startup if no
+  adapter is available. OKX falls back to REST on `WS_TIMEOUT`; other exchanges
+  do not.
+- **Submission stagger.** Order submissions are serialized per exchange with a
+  gap of 150 ms (bybit) or 100 ms (binance) to stay inside rate limits.
+- **Rate-limit reservation.** 10% of each exchange's rate budget is reserved for
+  critical calls (order submit / cancel) so a burst of market-data polling cannot
+  starve execution.
+
+### Fallbacks and hygiene
+
+- **REST fill-poll.** If the WS misses a fill, the engine polls `getOrder` (10 s
+  timeout, up to 15 polls) and circuit-opens on consecutive errors.
+- **REST funding-fee poll.** For the WS-gated strategies, a REST poll fires at
+  `T_funding + 3 s` with an 8 s grace period, catching a missed `ws.funding_fee`
+  event.
+- **Funding-fee event matching** tolerates a **±5 s** difference between the
+  event's `fundingTime` and the expected `T_funding`.
+- **Orphan-position auto-flatten** and a **stale reduce-only sweep before entry**
+  clean up state left behind by a crash or a desync.
+
+---
+
 ## Hard Parameter Bounds
 
 These are enforced by the config loader (`src/backtesting/config/loader.ts`).
@@ -165,17 +206,4 @@ reverted:
 - `ladder_count >= 2`
 - `sl_mult` (strategies 2, 4.1): >= 0.5 AND <= 4.0
 - `sl_mult` (strategy 4.2): >= 1.0 AND <= 4.0; MUST be > `limit_offset_mult`
-- `sl_mult` (strategy 4.3): >= 0.5 AND <= 4.0; MUST be > `entry_mult`
 
-### strategy_spot_futures bounds
-
-- `F_threshold`:                 0.0002 – 0.004
-- `entry_offset_seconds`:        1 – 5, integer only
-- `exit_offset_seconds`:         1 – 5, integer only
-- `minTotalProfit`:              -0.005 – 0.005
-- `fundingConvergenceThreshold`: 0 – F_threshold (strictly less than F_threshold)
-- `spreadWideningThreshold`:     0.005 – 0.03
-- `spreadTakeProfit`:            0.005 – 0.02
-- `max_carry_funding_events`:    1 – 336, integer only
-
-**Coupling:** `fundingConvergenceThreshold < F_threshold` is enforced by the loader.

@@ -9,31 +9,39 @@ file. For global variables and hard bounds, see `_globals.md`.
 
 ## Strategy 1: Negative Funding LONG — Instant Exit
 
+**Status:** deployed on all 6 exchanges.
+
 **Thesis:** Collect funding fee by holding a long position through the settlement event, then immediately exit to minimize delta exposure.
 
 ### Parameters
 
-| Parameter | Variable | Default |
-|---|---|---|
-| Funding threshold | `F_threshold` | 0.4% |
-| Entry offset | `T_entry` | `T_funding − 5s` |
-| Exit time | `T_exit` | `T_funding + 2s` |
+| Parameter | Doc variable | Live config key | Live value | Schema default |
+|---|---|---|---|---|
+| Funding threshold | `F_threshold` | `negativeFundingThresholdPercent` | **−0.1** | −0.5 |
+| Entry offset | `T_entry` | `entryOffsetSeconds` | **3** (`T_funding − 3s`) | 10 |
+| Exit offset | `T_exit` | `exitOffsetSeconds` | **4** (`T_funding + 4s`) | 2 |
+| Notional | — | `amountUsd` | 10 | 20 |
+| Leverage | — | `leverage` | 5 (**okx: 4**) | 4 |
+
+Strategy 1 is the only strategy with a purely **timed** exit — no SL, no TP, no
+deadline. Exit reason is always `timed`.
 
 ### Selection Logic
 
 ```
-IF current_time == T_funding - 5s
-AND predicted_funding_rate < -F_threshold
+IF current_time == T_funding - entryOffsetSeconds
+AND funding_rate_percent <= -abs(negativeFundingThresholdPercent)    # i.e. <= -0.1%
+AND market.status == 'trading'
 THEN trigger strategy
 ```
 
 ### Execution Flow
 
 ```
-1. AT T_funding - 5s:
+1. AT T_funding - entryOffsetSeconds (live: -3s):
    → ENTRY: BUY MARKET at best ask
 
-2. AT T_funding + 2s:
+2. AT T_funding + exitOffsetSeconds (live: +4s):
    → EXIT: SELL MARKET (reduce-only) at best bid
 ```
 
@@ -57,8 +65,8 @@ F > |DELTA_PNL| + FEES
 
 ### Backtesting Variables to Extract
 
-- `P` at `T_funding - 5s` (entry)
-- `P` at `T_funding + 2s` (exit)
+- `P` at `T_funding - entryOffsetSeconds` (entry)
+- `P` at `T_funding + exitOffsetSeconds` (exit)
 - `F` at settlement
 
 ---
@@ -67,7 +75,7 @@ F > |DELTA_PNL| + FEES
 
 | | Direction | Entry | Exit | Profits From | Costs | Key Risk |
 |---|---|---|---|---|---|---|
-| **S1** | LONG | Market (−5s) | Market (+2s) | Funding fee | Delta drop + fees | Drop > funding |
+| **S1** | LONG | Market (−3s) | Market (+4s), timed | Funding fee | Delta drop + fees | Drop > funding |
 
 ---
 

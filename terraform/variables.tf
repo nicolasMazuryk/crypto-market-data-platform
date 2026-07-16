@@ -12,7 +12,7 @@ variable "ssh_public_key" {
 variable "server_type" {
   description = "Hetzner server type"
   type        = string
-  default     = "cpx62"
+  default     = "cpx32"
 }
 
 variable "location" {
@@ -30,5 +30,5 @@ variable "image" {
 variable "volume_size" {
   description = "Size of the data volume in GB"
   type        = number
-  default     = 200
+  default     = 50
 }
