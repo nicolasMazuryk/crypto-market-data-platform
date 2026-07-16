@@ -25,10 +25,6 @@ credited.
 | Notional | — | `amountUsd` | 10 | 20 |
 | Leverage | — | `leverage` | 5 | 4 |
 
-> **OKX runs a 45s timeout** rather than 10s, because its private funding-fee event
-> is materially slower to arrive. Setting it to 10s there would cause routine false
-> timeouts.
-
 ### Selection Logic
 
 ```

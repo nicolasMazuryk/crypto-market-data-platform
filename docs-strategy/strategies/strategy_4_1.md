@@ -21,19 +21,12 @@ to this strategy. For global variables, engine behavior, and hard bounds, see
 | Ladder count | `ladder_count` | `ladderCount` | **5** | 5 (min 2) |
 | Ladder top | `ladder_top_mult` | `ladderTopMult` | **0.7** | 0.5 |
 | Ladder bottom | `ladder_bottom_mult` | `ladderBottomMult` | **1.8** | 1.5 |
-| Take-profit | `TP` | `takeProfitPct` | **0.003** ⚠️ see below | 0.2 |
+| Take-profit | `TP` | `takeProfitPct` | **0.3** | 0.2 |
 | Stop-loss multiplier | `sl_mult` | `slMultiplier` | **2.5** | 1.0 |
 | Deadline | `T_deadline` | `deadlineSeconds` | **1800** (30 min) | 60 |
 | Notional | — | `amountUsd` | 10 (split across rungs) | 20 |
 | Leverage | — | `leverage` | 5 | 4 |
 
-> ⚠️ **`takeProfitPct: 0.003` is very likely a unit error.** The engine computes
-> `tpPrice = fill × (1 + takeProfitPct / 100)`, so this value means **0.003 percent
-> ≈ 0.3 basis points** above the average fill — a take-profit essentially at the
-> entry price. It looks like a decimal fraction (`0.003` = 0.3%) mis-ported from the
-> backtest schema, where the same concept is expressed as a fraction rather than a
-> percent. The value is documented here as it actually runs; **it is not a
-> recommendation.** Verify against backtest intent before changing.
 
 `ladderBottomMult` MUST be greater than `ladderTopMult` — enforced by the config loader.
 

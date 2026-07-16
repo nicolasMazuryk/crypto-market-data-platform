@@ -30,20 +30,6 @@ and hard bounds, see `_globals.md`.
 | Main position size | `mainAmountUsd` | **10** | *(required)* |
 | Leverage | `leverage` | **5** | *(required)* |
 
-> **The live fleet goes LONG on POSITIVE funding.** `mainSide: long` with
-> `funding_threshold: +0.1` means the strategy fires when funding is **≥ +0.1%** —
-> the opposite regime from every other strategy in this document, which trigger on
-> funding ≤ −0.1%. The bet is that the post-settlement move on a positively-funded
-> symbol is upward, not that funding is collected. Do not assume the negative-funding
-> framing of Strategies 1–4 applies here.
-
-> Note `funding_threshold` is the only **snake_case** strategy key in the whole config
-> schema; every other param is camelCase. The size key is `mainAmountUsd`, not
-> `amountUsd`.
-
-> **OKX runs a 45s WS timeout** rather than 10s — its private funding-fee event is
-> materially slower to arrive.
-
 ### Selection Logic
 
 ```

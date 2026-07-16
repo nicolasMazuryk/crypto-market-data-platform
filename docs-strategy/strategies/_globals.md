@@ -207,15 +207,3 @@ reverted:
 - `sl_mult` (strategies 2, 4.1): >= 0.5 AND <= 4.0
 - `sl_mult` (strategy 4.2): >= 1.0 AND <= 4.0; MUST be > `limit_offset_mult`
 
-### strategy_spot_futures bounds
-
-- `F_threshold`:                 0.0002 – 0.004
-- `entry_offset_seconds`:        1 – 5, integer only
-- `exit_offset_seconds`:         1 – 5, integer only
-- `minTotalProfit`:              -0.005 – 0.005
-- `fundingConvergenceThreshold`: 0 – F_threshold (strictly less than F_threshold)
-- `spreadWideningThreshold`:     0.005 – 0.03
-- `spreadTakeProfit`:            0.005 – 0.02
-- `max_carry_funding_events`:    1 – 336, integer only
-
-**Coupling:** `fundingConvergenceThreshold < F_threshold` is enforced by the loader.

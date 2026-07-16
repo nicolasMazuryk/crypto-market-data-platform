@@ -10,15 +10,6 @@ to this strategy. For global variables, engine behavior, and hard bounds, see
 
 **Status:** implemented, **not deployed** — and its live config is unusable as written.
 
-> **⚠️ The `live-configs/strategies/strategy_4_2a-<exchange>.yaml` files are written
-> in the flat *backtest* schema** (`strategy_id`, `direction`, `funding_threshold`,
-> `limit_offset_mult`, `take_profit`, `funding_applied_on_same_second`), not the
-> execution engine's schema (a `strategies:` list of camelCase keys). The fleet
-> config generator would reject them with *"produced no strategies"*. This has gone
-> unnoticed because `strategy_4_2a` is absent from `live-configs/fleet.yaml` and
-> therefore runs in no container. **These files must be rewritten into the execution
-> schema before this strategy can be deployed.**
-
 **Thesis:** Simplified version of 4.1a — single limit buy instead of a ladder. The position opens *after* settlement, so **no funding fee is received**; the edge is the delta recovery off the drop.
 
 ### Parameters
