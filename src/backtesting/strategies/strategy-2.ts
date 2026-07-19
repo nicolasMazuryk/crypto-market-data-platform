@@ -40,7 +40,7 @@ export class Strategy2 implements BaseStrategy {
   }
 
   shouldTrigger(event: FundingEvent): boolean {
-    return event.funding_rate < 0 && Math.abs(event.funding_rate) >= this.config.funding_threshold
+    return event.funding_rate * 100 <= -Math.abs(this.config.negative_funding_threshold_percent)
   }
 
   execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
@@ -58,7 +58,7 @@ export class Strategy2 implements BaseStrategy {
     const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry')
     if (!entryFill) return null
 
-    const slPrice = entryFill.price * (1 - absF * this.config.sl_mult)
+    const slPrice = entryFill.price * (1 - absF * this.config.sl_multiplier)
 
     const fundingCandle = data.getRowAt(fundingTs)
     if (fundingCandle?.bid_open == null) return null

@@ -11,16 +11,8 @@ import type {
   SchedulerConfig,
   TestingConfig,
 } from './types.js'
-import type {
-  StrategyConfig,
-  Strategy1Config,
-  Strategy1WsConfig,
-  Strategy2Config,
-  Strategy3aConfig,
-  Strategy4_1aConfig,
-  Strategy4_2aConfig,
-  Strategy6Config,
-} from '../strategies/types.js'
+import type { StrategyConfig, Strategy3aConfig } from '../strategies/types.js'
+import { GeneratedLiveStrategySchema } from '../../config/canonical/generate-live.js'
 
 export class ConfigError extends Error {
   constructor(
@@ -62,98 +54,11 @@ const ExchangeConfigRawSchema = z.object({
   fundingPullMs: z.number().default(15_000),
 })
 
-const Strategy3SharedFields = {
-  enabled: z.boolean().default(false),
-  negativeFundingThresholdPercent: z.number().default(-0.5),
-  entryOffsetSeconds: z.number().default(10),
-  stopLossPercent: z.number().default(1),
-  tpVariantAMultiplier: z.number().default(1.5),
-  tpVariantBOffsetPercent: z.number().default(0.4),
-  deadlineSeconds: z.number().default(300),
-  amountUsd: z.number().default(20),
-  leverage: z.number().default(4),
-}
-
-const StrategyRawSchema = z.discriminatedUnion('id', [
-  z.object({
-    id: z.literal('strategy_1'),
-    enabled: z.boolean().default(false),
-    negativeFundingThresholdPercent: z.number().default(-0.5),
-    entryOffsetSeconds: z.number().default(10),
-    exitOffsetSeconds: z.number().default(2),
-    amountUsd: z.number().default(20),
-    leverage: z.number().default(4),
-  }),
-  z.object({
-    id: z.literal('strategy_1_ws'),
-    enabled: z.boolean().default(false),
-    negativeFundingThresholdPercent: z.number().default(-0.5),
-    entryOffsetSeconds: z.number().default(10),
-    fundingFeeTimeoutSeconds: z.number().default(30),
-    amountUsd: z.number().default(20),
-    leverage: z.number().default(4),
-  }),
-  z.object({
-    id: z.literal('strategy_2'),
-    enabled: z.boolean().default(false),
-    negativeFundingThresholdPercent: z.number().default(-0.4),
-    entryOffsetSeconds: z.number().default(5),
-    retracementPct: z.number().min(0).max(1).default(0.5),
-    deadlineSeconds: z.number().default(60),
-    slMultiplier: z.number().default(1.0),
-    fundingFeeTimeoutSeconds: z.number().positive().default(30),
-    amountUsd: z.number().default(20),
-    leverage: z.number().default(4),
-  }),
-  z.object({ id: z.literal('strategy_3a'), ...Strategy3SharedFields }),
-  z
-    .object({
-      id: z.literal('strategy_4_1a'),
-      enabled: z.boolean().default(false),
-      negativeFundingThresholdPercent: z.number().default(-0.4),
-      entryOffsetSeconds: z.number().default(5),
-      ladderCount: z.number().int().min(2).default(5),
-      ladderTopMult: z.number().default(0.5),
-      ladderBottomMult: z.number().default(1.5),
-      takeProfitPct: z.number().default(0.2),
-      deadlineSeconds: z.number().default(60),
-      slMultiplier: z.number().default(1.0),
-      amountUsd: z.number().default(20),
-      leverage: z.number().default(4),
-    })
-    .refine(c => c.ladderBottomMult > c.ladderTopMult, {
-      message: 'ladderBottomMult must be greater than ladderTopMult',
-    }),
-  z
-    .object({
-      id: z.literal('strategy_4_2a'),
-      enabled: z.boolean().default(false),
-      negativeFundingThresholdPercent: z.number().default(-0.4),
-      entryOffsetSeconds: z.number().default(5),
-      limitOffsetMult: z.number().default(0.75),
-      takeProfitPct: z.number().default(0.2),
-      deadlineSeconds: z.number().default(60),
-      slMultiplier: z.number().default(1.5),
-      amountUsd: z.number().default(20),
-      leverage: z.number().default(4),
-    })
-    .refine(c => c.slMultiplier > c.limitOffsetMult, {
-      message: 'slMultiplier must be greater than limitOffsetMult',
-    }),
-  z.object({
-    id: z.literal('strategy_6'),
-    enabled: z.boolean().default(false),
-    mainSide: z.enum(['long', 'short']),
-    funding_threshold: z.number().default(0),
-    entryOffsetSeconds: z.number().positive().default(10),
-    fundingFeeTimeoutSeconds: z.number().positive().default(30),
-    tpMultiplier: z.number().positive().default(0.5),
-    slMultiplier: z.number().positive().default(1.0),
-    deadlineSeconds: z.number().positive().default(3300),
-    mainAmountUsd: z.number().positive(),
-    leverage: z.number().positive(),
-  }),
-])
+// Generated from the canonical registry (src/config/canonical/) — the single source of
+// truth shared with the backtest schema. See CANONICAL_PARAMS/STRATEGY_DEFS for per-field
+// names, units, and defaults; OQ-7 fixed the -0.5 -> -0.4 negativeFundingThresholdPercent
+// drift that previously affected strategy_1/strategy_1_ws/strategy_3a here.
+const StrategyRawSchema = GeneratedLiveStrategySchema
 
 const PersistenceRawSchema = z.object({
   postgresUrl: z.string().default(''),
@@ -330,9 +235,7 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
   // (they would offset each other within the same funding window).
   const has3a = parsed.strategies.some(s => s.id === 'strategy_3a' && s.enabled)
   const hasLong = parsed.strategies.some(
-    s =>
-      ['strategy_1', 'strategy_1_ws', 'strategy_2', 'strategy_4_1a', 'strategy_4_2a'].includes(s.id) &&
-      s.enabled
+    s => ['strategy_1', 'strategy_1_ws', 'strategy_2', 'strategy_4_1a', 'strategy_4_2a'].includes(s.id) && s.enabled
   )
   if (has3a && hasLong) {
     throw new ConfigError(
@@ -373,13 +276,7 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
 
   const strategies: StrategyConfig[] = parsed.strategies.map(s => {
     if (s.id === 'strategy_3a') return { ...s, tpVariant: 'A' as const } as Strategy3aConfig
-    return s as
-      | Strategy1Config
-      | Strategy1WsConfig
-      | Strategy2Config
-      | Strategy4_1aConfig
-      | Strategy4_2aConfig
-      | Strategy6Config
+    return s
   })
 
   const result: EngineConfig = {

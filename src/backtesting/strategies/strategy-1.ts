@@ -36,7 +36,7 @@ export class Strategy1 implements BaseStrategy {
   }
 
   shouldTrigger(event: FundingEvent): boolean {
-    return event.funding_rate < 0 && Math.abs(event.funding_rate) >= this.config.funding_threshold
+    return event.funding_rate * 100 <= -Math.abs(this.config.negative_funding_threshold_percent)
   }
 
   execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {

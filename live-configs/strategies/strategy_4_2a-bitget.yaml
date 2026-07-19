@@ -1,11 +1,22 @@
 # Strategy 4.2a: Single Limit LONG - No Funding Applied
-
-strategy_id: "strategy_4_2a"
-direction: "long"
-funding_threshold: 0.001      # 2.0%
-entry_offset_seconds: 3
-limit_offset_mult: 1.1        # Limit at P * (1 - F * 1.4)
-take_profit: 0.004
-deadline_seconds: 1800
-funding_applied_on_same_second: false
-sl_mult: 2                 # SL at entry × (1 − F × 1.55); must be > limit_offset_mult
+#
+# Regenerated per Task 05 OQ-8: this file previously used backtest snake_case keys
+# (strategy_id/direction/funding_threshold/...) under no `strategies:` wrapper, which
+# parsed to an EMPTY strategies array — a silent no-op if ever wired into fleet.yaml.
+# negativeFundingThresholdPercent and takeProfitPct below are canonical registry
+# defaults (-0.4 / 0.2), NOT carried over from the old file: the old funding_threshold:
+# 0.001 (commented "2.0%") and take_profit: 0.004 values were unit-ambiguous under the
+# old schema, so per OQ-8 they were discarded rather than guessed. A human should
+# confirm intended live economics before this strategy starts actually loading (it is
+# not yet referenced by live-configs/fleet.yaml).
+strategies:
+  - id: strategy_4_2a
+    enabled: true
+    negativeFundingThresholdPercent: -0.4
+    entryOffsetSeconds: 3
+    limitOffsetMult: 1.1
+    takeProfitPct: 0.2
+    deadlineSeconds: 1800
+    slMultiplier: 2
+    amountUsd: 20
+    leverage: 4

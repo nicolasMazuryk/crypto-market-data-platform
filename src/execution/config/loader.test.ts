@@ -1,6 +1,6 @@
-import { writeFileSync, unlinkSync, existsSync } from 'node:fs'
+import { writeFileSync, unlinkSync, existsSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { describe, it, expect, afterEach } from 'vitest'
 import YAML from 'yaml'
@@ -189,10 +189,7 @@ describe('loadEngineConfig — registry credential resolution', () => {
       notes: '',
     })
     const registry = {
-      combinations: [
-        makeEntry('strategy_1', 'strategy1-key'),
-        makeEntry('strategy_6', 'strategy6-key'),
-      ],
+      combinations: [makeEntry('strategy_1', 'strategy1-key'), makeEntry('strategy_6', 'strategy6-key')],
     }
     writeFileSync(registryPath, YAML.stringify(registry), 'utf8')
 
@@ -230,6 +227,26 @@ describe('validateForLiveStart', () => {
       strategies: [],
     })
 
-    expect(() => { validateForLiveStart(config); }).toThrow(/1 exchange\(s\) enabled but 0 strategies enabled/)
+    expect(() => {
+      validateForLiveStart(config)
+    }).toThrow(/1 exchange\(s\) enabled but 0 strategies enabled/)
   })
+})
+
+describe('strategy_4_2a live YAMLs (OQ-8 regeneration)', () => {
+  const EXCHANGES = ['binance', 'bitget', 'bybit', 'gateio', 'kucoin', 'okx']
+
+  it.each(EXCHANGES)(
+    'live-configs/strategies/strategy_4_2a-%s.yaml parses to a non-empty strategies array',
+    exchange => {
+      const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', `strategy_4_2a-${exchange}.yaml`)
+      const raw = YAML.parse(readFileSync(yamlPath, 'utf8')) as Record<string, unknown>
+
+      const config = parseEngineConfig({ mode: 'dry_run', exchanges: [], ...raw })
+
+      expect(config.strategies.length).toBeGreaterThan(0)
+      expect(config.strategies[0]?.id).toBe('strategy_4_2a')
+      expect(config.strategies[0]?.enabled).toBe(true)
+    }
+  )
 })

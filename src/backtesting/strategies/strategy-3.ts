@@ -33,7 +33,7 @@ export class Strategy3 implements BaseStrategy {
   }
 
   shouldTrigger(event: FundingEvent): boolean {
-    return event.funding_rate < 0 && Math.abs(event.funding_rate) >= this.config.funding_threshold
+    return event.funding_rate * 100 <= -Math.abs(this.config.negative_funding_threshold_percent)
   }
 
   execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
@@ -60,7 +60,7 @@ export class Strategy3 implements BaseStrategy {
     }
 
     const tpPrice = entryPrice * (1 - tpDistance)
-    const slPrice = entryPrice * (1 + this.config.stop_loss)
+    const slPrice = entryPrice * (1 + this.config.stop_loss_percent / 100)
 
     // Get candles after entry up to deadline
     const deadlineTime = new Date(event.funding_time.getTime() + this.config.deadline_seconds * 1000)

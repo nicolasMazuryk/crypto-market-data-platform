@@ -33,7 +33,7 @@ export class Strategy41 implements BaseStrategy {
   }
 
   shouldTrigger(event: FundingEvent): boolean {
-    return event.funding_rate < 0 && Math.abs(event.funding_rate) >= this.config.funding_threshold
+    return event.funding_rate * 100 <= -Math.abs(this.config.negative_funding_threshold_percent)
   }
 
   execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
@@ -90,8 +90,8 @@ export class Strategy41 implements BaseStrategy {
     const pAvg = totalQtyPrice / totalQty
 
     // SL and TP anchored to P_avg
-    const slPrice = pAvg * (1 - absF * this.config.sl_mult)
-    const tpPrice = pAvg * (1 + this.config.take_profit)
+    const slPrice = pAvg * (1 - absF * this.config.sl_multiplier)
+    const tpPrice = pAvg * (1 + this.config.take_profit_pct / 100)
 
     // Find last fill timestamp
     const firstFill = fills[0]

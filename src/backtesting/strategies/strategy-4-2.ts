@@ -33,7 +33,7 @@ export class Strategy42 implements BaseStrategy {
   }
 
   shouldTrigger(event: FundingEvent): boolean {
-    return event.funding_rate < 0 && Math.abs(event.funding_rate) >= this.config.funding_threshold
+    return event.funding_rate * 100 <= -Math.abs(this.config.negative_funding_threshold_percent)
   }
 
   execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
@@ -69,8 +69,8 @@ export class Strategy42 implements BaseStrategy {
 
     if (!entryFill || entryIdx === -1) return null
 
-    const slPrice = entryFill.price * (1 - absF * this.config.sl_mult)
-    const tpPrice = entryFill.price * (1 + this.config.take_profit)
+    const slPrice = entryFill.price * (1 - absF * this.config.sl_multiplier)
+    const tpPrice = entryFill.price * (1 + this.config.take_profit_pct / 100)
 
     const postEntryRows = windowRows.slice(entryIdx + 1)
 

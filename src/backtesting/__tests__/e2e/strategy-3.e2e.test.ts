@@ -9,14 +9,16 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
       {
         strategy_id: 'strategy_3a',
         direction: 'short',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
-        stop_loss: 0.01,
+        stop_loss_percent: 1.0,
         tp_mode: 'A',
         tp_multiplier: 1.5,
         tp_addend_pct: 0.4,
         deadline_seconds: 60,
         funding_applied_on_same_second: true,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -52,14 +54,16 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
       {
         strategy_id: 'strategy_3a',
         direction: 'short',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
-        stop_loss: 0.01,
+        stop_loss_percent: 1.0,
         tp_mode: 'A',
         tp_multiplier: 1.5,
         tp_addend_pct: 0.4,
         deadline_seconds: 60,
         funding_applied_on_same_second: true,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -93,14 +97,16 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
       {
         strategy_id: 'strategy_3a',
         direction: 'short',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
-        stop_loss: 0.01,
+        stop_loss_percent: 1.0,
         tp_mode: 'A',
         tp_multiplier: 1.5,
         tp_addend_pct: 0.4,
         deadline_seconds: 60,
         funding_applied_on_same_second: true,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -147,14 +153,16 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
       {
         strategy_id: 'strategy_3a',
         direction: 'short',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
-        stop_loss: 0.01,
+        stop_loss_percent: 1.0,
         tp_mode: 'A',
         tp_multiplier: 1.5,
         tp_addend_pct: 0.4,
         deadline_seconds: 60,
         funding_applied_on_same_second: true,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE
@@ -178,5 +186,4 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
     expect(result.exit_price).toBeGreaterThan(0)
     expect(result.hold_duration).toBeCloseTo(65, 0) // 5s entry offset + 60s deadline
   })
-
 })

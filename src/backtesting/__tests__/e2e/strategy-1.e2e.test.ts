@@ -11,10 +11,12 @@ describe('E2E: Strategy 1 — Instant Exit', () => {
     {
       strategy_id: 'strategy_1',
       direction: 'long',
-      funding_threshold: 0.004,
+      negative_funding_threshold_percent: -0.4,
       entry_offset_seconds: 5,
       exit_offset_seconds: 2,
       funding_applied_on_same_second: false,
+      amount_usd: 20,
+      leverage: 4,
     },
     BINANCE_FEES,
     0
@@ -88,16 +90,21 @@ describe('E2E: Strategy 1 — Settlement Detection', () => {
   it('Scenario Settlement: exit anchored to detected settlement + exit_offset', () => {
     // Settlement detected at T+3 (big drop). exit_offset=2.
     // Expected exitTs = T+3+2 = T+5. Funding received since exitTs >= settlementTs.
-    const settlementConfig: FundingSettlementConfig = { detection_window_seconds: 10, tp_post_settlement_buffer_seconds: 1 }
+    const settlementConfig: FundingSettlementConfig = {
+      detection_window_seconds: 10,
+      tp_post_settlement_buffer_seconds: 1,
+    }
     const strat = new Strategy1()
     strat.initialize(
       {
         strategy_id: 'strategy_1',
         direction: 'long',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         exit_offset_seconds: 2,
         funding_applied_on_same_second: false,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       0,
@@ -139,10 +146,12 @@ describe('E2E: Strategy 1 — Settlement Detection', () => {
       {
         strategy_id: 'strategy_1',
         direction: 'long',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         exit_offset_seconds: 2,
         funding_applied_on_same_second: false,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       0,

@@ -1,16 +1,13 @@
 import fs from 'fs'
 import path from 'path'
 import { parse } from 'yaml'
+import { z } from 'zod'
 
-import type {
-  BaseConfig,
-  ResolvedConfig,
-  StrategyConfig,
-  StrategyId,
-  FeeSchedule,
-  FundingSettlementConfig,
-} from './schema.js'
-import { VALID_STRATEGY_IDS } from './schema.js'
+import type { BaseConfig, ResolvedConfig, StrategyConfig, FeeSchedule, FundingSettlementConfig } from './schema.js'
+import {
+  GeneratedBacktestStrategySchema,
+  GeneratedBacktestOnlyBaseSchema,
+} from '../../config/canonical/generate-backtest.js'
 
 /** Deep-merge source into target. Source values take precedence. */
 function deepMerge(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
@@ -168,19 +165,16 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
     post_funding_seconds: requirePositiveInt(wObj, 'post_funding_seconds', `${ctx}.window`),
   }
 
-  // Slippage
-  const slippageRaw = merged.slippage
-  if (
-    slippageRaw === null ||
-    slippageRaw === undefined ||
-    typeof slippageRaw !== 'object' ||
-    Array.isArray(slippageRaw)
-  ) {
-    throw new Error(`${ctx}: 'slippage' must be an object`)
-  }
-  const sObj = slippageRaw as Record<string, unknown>
-  const slippage = {
-    stop_order_slippage: requireNonNegativeNumber(sObj, 'stop_order_slippage', `${ctx}.slippage`),
+  // Backtest-only simulation params (§10.2) — generated from the canonical registry
+  let backtestOnly: z.infer<typeof GeneratedBacktestOnlyBaseSchema>
+  try {
+    backtestOnly = GeneratedBacktestOnlyBaseSchema.parse(merged)
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      const first = err.issues[0]
+      throw new Error(`${ctx}: ${first ? `'${first.path.join('.')}' ${first.message}` : err.message}`)
+    }
+    throw err
   }
 
   // Reporting
@@ -222,90 +216,29 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
     fees,
     validation,
     window,
-    slippage,
     reporting,
     funding_settlement,
+    ...backtestOnly,
   }
 }
 
+/**
+ * Validate the strategy portion of a merged config against the canonical-registry-
+ * generated backtest schema (see src/config/canonical/). Per-field hard bounds
+ * (entry_offset_seconds ranges, ladder_count minimums, etc.) are intentionally NOT
+ * enforced here — Task 06 layers those on top of the generated shapes using the
+ * `bounds` data on CANONICAL_PARAMS. Until Task 06 lands, only shape/type is validated.
+ */
 function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig {
-  const strategyId = requireString(merged, 'strategy_id', 'strategy') as StrategyId
-  if (!VALID_STRATEGY_IDS.includes(strategyId)) {
-    throw new Error(`Invalid strategy_id: '${strategyId}'. Must be one of: ${VALID_STRATEGY_IDS.join(', ')}`)
+  const result = GeneratedBacktestStrategySchema.safeParse(merged)
+  if (!result.success) {
+    const first = result.error.issues[0]
+    const strategyId = typeof merged.strategy_id === 'string' ? merged.strategy_id : 'unknown'
+    const path = first ? first.path.join('.') : 'strategy_id'
+    const message = first ? first.message : result.error.message
+    throw new Error(`strategy[${strategyId}]: '${path}' ${message}`)
   }
-
-  const ctx = `strategy[${strategyId}]`
-
-  switch (strategyId) {
-    case 'strategy_1':
-      return {
-        strategy_id: strategyId,
-        direction: 'long',
-        funding_threshold: requirePositiveNumber(merged, 'funding_threshold', ctx),
-        entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
-        exit_offset_seconds: requireIntInRange(merged, 'exit_offset_seconds', 2, 5, ctx),
-        funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
-      }
-
-    case 'strategy_2':
-      return {
-        strategy_id: strategyId,
-        direction: 'long',
-        funding_threshold: requirePositiveNumber(merged, 'funding_threshold', ctx),
-        entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
-        retracement_pct: requirePositiveNumber(merged, 'retracement_pct', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 5, 900, ctx),
-        sl_mult: requirePositiveNumber(merged, 'sl_mult', ctx),
-        funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
-      }
-
-    case 'strategy_3a': {
-      const tp_mode = requireString(merged, 'tp_mode', ctx)
-      if (tp_mode !== 'A' && tp_mode !== 'B') {
-        throw new Error(`${ctx}: 'tp_mode' must be 'A' or 'B', got '${tp_mode}'`)
-      }
-      return {
-        strategy_id: strategyId,
-        direction: 'short',
-        funding_threshold: requirePositiveNumber(merged, 'funding_threshold', ctx),
-        entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
-        stop_loss: requirePositiveNumber(merged, 'stop_loss', ctx),
-        tp_mode,
-        tp_multiplier: requirePositiveNumber(merged, 'tp_multiplier', ctx),
-        tp_addend_pct: requirePositiveNumber(merged, 'tp_addend_pct', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 3, 900, ctx),
-        funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
-      }
-    }
-
-    case 'strategy_4_1a':
-      return {
-        strategy_id: strategyId,
-        direction: 'long',
-        funding_threshold: requirePositiveNumber(merged, 'funding_threshold', ctx),
-        entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
-        ladder_count: requireIntInRange(merged, 'ladder_count', 2, 8, ctx),
-        ladder_top_mult: requirePositiveNumber(merged, 'ladder_top_mult', ctx),
-        ladder_bottom_mult: requirePositiveNumber(merged, 'ladder_bottom_mult', ctx),
-        take_profit: requirePositiveNumber(merged, 'take_profit', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 10, 900, ctx),
-        funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
-        sl_mult: requirePositiveNumber(merged, 'sl_mult', ctx),
-      }
-
-    case 'strategy_4_2a':
-      return {
-        strategy_id: strategyId,
-        direction: 'long',
-        funding_threshold: requirePositiveNumber(merged, 'funding_threshold', ctx),
-        entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
-        limit_offset_mult: requirePositiveNumber(merged, 'limit_offset_mult', ctx),
-        take_profit: requirePositiveNumber(merged, 'take_profit', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 10, 900, ctx),
-        funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
-        sl_mult: requirePositiveNumber(merged, 'sl_mult', ctx),
-      }
-  }
+  return result.data
 }
 
 /**

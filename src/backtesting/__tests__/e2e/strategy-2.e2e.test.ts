@@ -11,12 +11,14 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       {
         strategy_id: 'strategy_2',
         direction: 'long',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         retracement_pct: 0.5,
         deadline_seconds: 60,
-        sl_mult: 1.5, // SL at ~50005 * 0.985 = ~49254 — far below test drop of 49800
+        sl_multiplier: 1.5, // SL at ~50005 * 0.985 = ~49254 — far below test drop of 49800
         funding_applied_on_same_second: false,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       0
@@ -74,12 +76,14 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       {
         strategy_id: 'strategy_2',
         direction: 'long',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         retracement_pct: 0.5,
         deadline_seconds: 60,
-        sl_mult: 1.5, // SL at ~50005 * 0.985 = ~49255 — max drop is 50000 - 60*5 = 49700 > 49255
+        sl_multiplier: 1.5, // SL at ~50005 * 0.985 = ~49255 — max drop is 50000 - 60*5 = 49700 > 49255
         funding_applied_on_same_second: false,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       0
@@ -120,7 +124,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
 
   it('Scenario Settlement (buffer=1): TP gated to settlement+1s, not T_low+1s', () => {
     // Design:
-    //   entry T-5s, askOpen=50005, f=-0.01, sl_mult=1.0 → slPrice=50005*0.99≈49505
+    //   entry T-5s, askOpen=50005, f=-0.01, sl_multiplier=1.0 → slPrice=50005*0.99≈49505
     //   T+0: bidOpen=50000, bidLow=49990 (drop=10)
     //   T+1: bidOpen=49990, bidLow=49970 (drop=20) ← T_low, T_low+1=T+2
     //   T+4: bidOpen=50000, bidLow=49972 (drop=28, biggest → settlement detected)
@@ -135,12 +139,14 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       {
         strategy_id: 'strategy_2',
         direction: 'long',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         retracement_pct: 0.5,
         deadline_seconds: 60,
-        sl_mult: 1.0,
+        sl_multiplier: 1.0,
         funding_applied_on_same_second: false,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       0,
@@ -178,12 +184,14 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       {
         strategy_id: 'strategy_2',
         direction: 'long',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         retracement_pct: 0.5,
         deadline_seconds: 60,
-        sl_mult: 1.0,
+        sl_multiplier: 1.0,
         funding_applied_on_same_second: false,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       0,
@@ -220,12 +228,14 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       {
         strategy_id: 'strategy_2',
         direction: 'long',
-        funding_threshold: 0.004,
+        negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         retracement_pct: 0.5,
         deadline_seconds: 60,
-        sl_mult: 1.5,
+        sl_multiplier: 1.5,
         funding_applied_on_same_second: false,
+        amount_usd: 20,
+        leverage: 4,
       },
       BINANCE_FEES,
       DEFAULT_SLIPPAGE

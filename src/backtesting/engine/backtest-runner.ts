@@ -38,7 +38,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
 
   // Create and initialize strategy
   const strategy = createStrategy(strategyId)
-  strategy.initialize(strategyConfig, feeSchedule, base.slippage.stop_order_slippage, base.funding_settlement)
+  strategy.initialize(strategyConfig, feeSchedule, base.market_slippage_pct / 100, base.funding_settlement)
 
   const trades: TradeResult[] = []
   const allSkipReasons: SkipReason[] = []
@@ -47,7 +47,10 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   let totalEventsScanned = 0
   let totalDataRows = 0
 
-  const fundingThreshold = 'funding_threshold' in strategyConfig ? strategyConfig.funding_threshold : 0
+  const fundingThreshold =
+    'negative_funding_threshold_percent' in strategyConfig
+      ? Math.abs(strategyConfig.negative_funding_threshold_percent) / 100
+      : 0
 
   const events = await queryFundingEvents(base.exchange, base.symbol, base.start_date, base.end_date, fundingThreshold)
 

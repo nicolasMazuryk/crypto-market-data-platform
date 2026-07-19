@@ -45,8 +45,7 @@ window:
   pre_funding_seconds: 60
   post_funding_seconds: 120
 
-slippage:
-  stop_order_slippage: 0.0001  # 0.01%
+market_slippage_pct: 0.01  # 0.01% (formerly slippage.stop_order_slippage: 0.0001)
 
 reporting:
   include_trade_log: true
