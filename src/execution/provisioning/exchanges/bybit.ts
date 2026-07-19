@@ -119,6 +119,30 @@ export class BybitProvisioningAdapter implements ProvisioningAdapter {
     return { apiKey, apiSecret }
   }
 
+  async ensureApiKeyPermissions(
+    _subAccountId: string,
+    apiKey: string,
+    _apiPassphrase: string | null,
+    ipAllowList: string[]
+  ): Promise<void> {
+    const response = (await this.client.privatePostV5UserUpdateSubApi({
+      apikey: apiKey,
+      readOnly: 0,
+      ips: ipAllowList.join(','),
+      permissions: {
+        ContractTrade: ['Order', 'Position'],
+        Spot: ['SpotTrade'],
+        Wallet: ['AccountTransfer', 'SubMemberTransferList'],
+        Options: ['OptionsTrade'],
+        Exchange: ['ExchangeHistory'],
+      },
+    })) as { retCode?: number; retMsg?: string }
+
+    if (typeof response.retCode === 'number' && response.retCode !== 0) {
+      throw new Error(`Bybit ensureApiKeyPermissions failed: ${response.retMsg ?? JSON.stringify(response)}`)
+    }
+  }
+
   async listSubAccounts(): Promise<DiscoveredSubAccount[]> {
     const response = (await this.client.privateGetV5UserQuerySubMembers({})) as {
       result?: { subMembers?: unknown[]; members?: unknown[]; list?: unknown[] }

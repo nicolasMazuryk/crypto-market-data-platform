@@ -42,6 +42,39 @@ function makeAdapter(balance: number): ProvisioningAdapter & {
   } as unknown as ProvisioningAdapter & { transferUsdt: ReturnType<typeof vi.fn> }
 }
 
+describe('BybitProvisioningAdapter.ensureApiKeyPermissions', () => {
+  function bybitWithClient(updateFn: ReturnType<typeof vi.fn>): BybitProvisioningAdapter {
+    const adapter = new BybitProvisioningAdapter(fakeCreds)
+    ;(adapter as unknown as { client: { privatePostV5UserUpdateSubApi: unknown } }).client = {
+      privatePostV5UserUpdateSubApi: updateFn,
+    }
+    return adapter
+  }
+
+  it('pushes the sub key + IP allow-list via /v5/user/update-sub-api', async () => {
+    const updateFn = vi.fn().mockResolvedValue({ retCode: 0 })
+    const adapter = bybitWithClient(updateFn)
+
+    await adapter.ensureApiKeyPermissions('999', 'sub-key', null, ['1.1.1.1', '2.2.2.2'])
+
+    expect(updateFn).toHaveBeenCalledTimes(1)
+    const args = updateFn.mock.calls[0][0] as Record<string, unknown>
+    expect(args.apikey).toBe('sub-key')
+    expect(args.ips).toBe('1.1.1.1,2.2.2.2')
+    expect(args.readOnly).toBe(0)
+    expect(args.permissions).toMatchObject({ ContractTrade: ['Order', 'Position'] })
+  })
+
+  it('throws when the response carries a non-zero retCode', async () => {
+    const updateFn = vi.fn().mockResolvedValue({ retCode: 10001, retMsg: 'params error' })
+    const adapter = bybitWithClient(updateFn)
+
+    await expect(adapter.ensureApiKeyPermissions('999', 'sub-key', null, ['1.1.1.1', '2.2.2.2'])).rejects.toThrow(
+      /params error/
+    )
+  })
+})
+
 describe('reconcileCapital', () => {
   it('tops up master → sub when balance is below target', async () => {
     const adapter = makeAdapter(50)

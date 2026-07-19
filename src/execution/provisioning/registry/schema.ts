@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const REQUIRED_IP_ALLOW_LIST = ['203.0.113.10', '203.0.113.12'] as const
+export const REQUIRED_IP_ALLOW_LIST = ['203.0.113.10', '203.0.113.11'] as const
 
 // okx and kucoin always require a passphrase; bitget is optional (depends on account setup)
 const PASSPHRASE_REQUIRED_EXCHANGES = new Set(['okx', 'kucoin'])

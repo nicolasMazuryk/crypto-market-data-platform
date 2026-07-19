@@ -41,7 +41,7 @@ Build a provisioning subsystem that:
 - **Creates sub-accounts programmatically** where the exchange API supports it
 - **Falls back to a "manual creation + register existing" path** for exchanges that require UI steps. First action: audit each target exchange and classify it as `full_api` vs `manual_register`
 - **Generates API keys with the FULL permission set** — including spot trading, perpetual/futures trading, withdrawals, transfers, and any other capability the exchange offers. Do not minimize scopes.
-- **IP-restricts every API key** to the following allow-list: `203.0.113.10` and `203.0.113.12`. Keys must not be usable from any other IP.
+- **IP-restricts every API key** to the following allow-list: `203.0.113.10` and `203.0.113.11`. Keys must not be usable from any other IP.
 - **Transfers a configurable USDT allocation** from the master account to the sub-account
 - **Respects exchange-imposed sub-account caps** (hard limit per exchange — surface these in config)
 - **Persists everything in one centralized registry**: a structured, source-controlled mapping of `{strategy, exchange, sub_account_id, api_key, api_secret, allocated_capital, status, created_at, ...}`. For simplicity, **API keys and secrets may be stored in plain config** alongside the rest of the registry — no separate secret manager required at this stage.
@@ -98,7 +98,7 @@ The pipeline must comfortably handle redeploying any subset (one, several, or al
 
 - One process/container per strategy-exchange combination — non-negotiable.
 - Sub-account isolation per combination — non-negotiable.
-- API keys are full-permission and IP-restricted to `203.0.113.10` and `203.0.113.12`.
+- API keys are full-permission and IP-restricted to `203.0.113.10` and `203.0.113.11`.
 - API keys/secrets stored in plain config (no secret manager at this stage).
 - Live configs live in `./live-configs/`, separate from `autoresearch/best-configs/`.
 - GitOps-driven, manual deploy command — no auto-deploy on merge.
