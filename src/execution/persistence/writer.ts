@@ -179,7 +179,10 @@ export async function writeRowToDb(
       // the clientOrderId before submission (e.g. Binance adds 'x-r1wQQsTn' prefix), causing the
       // REST/WS response clientOrderId to differ from what we stored.
       const whereClause = exchangeOrderId
-        ? and(eq(orders.exchange, exchange), or(eq(orders.clientOrderId, clientOrderId), eq(orders.exchangeOrderId, exchangeOrderId)))
+        ? and(
+            eq(orders.exchange, exchange),
+            or(eq(orders.clientOrderId, clientOrderId), eq(orders.exchangeOrderId, exchangeOrderId))
+          )
         : and(eq(orders.exchange, exchange), eq(orders.clientOrderId, clientOrderId))
       await db
         .update(orders)
@@ -196,9 +199,7 @@ export async function writeRowToDb(
       break
 
     case 'fills_dead_letter':
-      await db
-        .insert(fillsDeadLetter)
-        .values({ ...row, ts: toDate(row.ts) } as typeof fillsDeadLetter.$inferInsert)
+      await db.insert(fillsDeadLetter).values({ ...row, ts: toDate(row.ts) } as typeof fillsDeadLetter.$inferInsert)
       break
 
     case 'balances_history':
@@ -211,7 +212,11 @@ export async function writeRowToDb(
     case 'funding_attributions':
       await db
         .insert(fundingAttributions)
-        .values({ ...row, fundingTime: toDate(row.fundingTime), ts: toDate(row.ts) } as typeof fundingAttributions.$inferInsert)
+        .values({
+          ...row,
+          fundingTime: toDate(row.fundingTime),
+          ts: toDate(row.ts),
+        } as typeof fundingAttributions.$inferInsert)
         .onConflictDoNothing()
       break
 
@@ -610,7 +615,10 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
                 .where(eq(fills.orderId, orderRow.id))
                 .limit(1)
               if (existingFill) {
-                logger.debug({ exchangeFillId: event.exchangeFillId, orderId: orderRow.id }, 'persistence: skipping poll fill — WS fill already exists')
+                logger.debug(
+                  { exchangeFillId: event.exchangeFillId, orderId: orderRow.id },
+                  'persistence: skipping poll fill — WS fill already exists'
+                )
                 return
               }
             }
@@ -790,10 +798,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
                   eq(tradeIntents.subAccountId, stamp.subAccountId),
                   // strategy_6: pre-funding fill predates fundingTime; MAIN fill arrives after.
                   // Accept either entryFilledAt OR preFundingFilledAt as the position-open anchor.
-                  or(
-                    lte(tradeIntents.entryFilledAt, fundingTime),
-                    lte(tradeIntents.preFundingFilledAt, fundingTime)
-                  ),
+                  or(lte(tradeIntents.entryFilledAt, fundingTime), lte(tradeIntents.preFundingFilledAt, fundingTime)),
                   or(
                     isNull(tradeIntents.exitFilledAt),
                     gte(tradeIntents.exitFilledAt, new Date(event.fundingTime - TOLERANCE_MS))

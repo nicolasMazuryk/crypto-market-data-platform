@@ -16,9 +16,11 @@ Read **only** these files, in order:
 
    **Credential bootstrap (mandatory before any exchange-skill or CLI call):**
    Run immediately after registry lookup:
+
    ```bash
    source <(bash scripts/exchange-subkey.sh <exchange> <strategy>)
    ```
+
    This exports the correct env vars for the exchange's skill/CLI into the current shell — safe for parallel runs because each `claude -p` subprocess has an isolated env.
    Do **not** use `--profile`, `binance-cli profile create`, `okx config init`, or any command that writes to a shared config file — those will race when multiple agents run simultaneously.
 
@@ -31,6 +33,7 @@ Read **only** these files, in order:
    | `okx` | `OKX_API_KEY`, `OKX_SECRET_KEY`, `OKX_PASSPHRASE` |
    | `bitget` | `BITGET_API_KEY`, `BITGET_API_SECRET`, `BITGET_API_PASSPHRASE` |
    | `kucoin` | `KUCOIN_API_KEY`, `KUCOIN_API_SECRET`, `KUCOIN_API_PASSPHRASE` |
+
 4. `checklists/_cursors.yaml` — read `last_checked_utc` for key `<exchange>__<strategy>`. If absent or file missing, use `last_assigned_at` from the matched registry row as the window start (the moment the combo became active — everything since activation is in scope). Set `window = [last_checked_utc, now_utc]`. Do **not** assume a fixed funding interval; the prompt runs ad hoc and the window can span hours, days, or longer.
 5. Strategy spec **only when needed** for a specific checklist item: `docs-strategy/strategies/strategy_<N>.md`.
 6. Strategy code **only when needed**: `src/execution/strategies/strategy_<N>.ts`, `src/execution/execution/manager.ts`, `src/execution/execution/monitor.ts`. The checklist's `code_refs` point to exact lines — read only those.
@@ -204,16 +207,19 @@ Create parent directories if absent. Replace colons in the timestamp with hyphen
 
 ```markdown
 # Live verification — <exchange>/<strategy> — <utc-ts>
+
 Window: <last_checked_utc> → <now_utc>
 Sub-account: <sub_account_id>
 Data sources used: postgres, journald[, exchange-skill][, clickhouse]
 
 ## Trades (<N>)
+
 | intent_id (short) | symbol | side | entry_at | exit_at | filled_qty | entry_px | exit_px | pnl_usd | status |
-|---|---|---|---|---|---|---|---|---|---|
-| ... | ... | ... | ... | ... | ... | ... | ... | ... | ... |
+| ----------------- | ------ | ---- | -------- | ------- | ---------- | -------- | ------- | ------- | ------ |
+| ...               | ...    | ...  | ...      | ...     | ...        | ...      | ...     | ...     | ...    |
 
 ## Checklist progress
+
 - Items at window start: <X>
 - Items verified and removed this run: <Y> (list ids)
 - Items remaining: <X - Y>
@@ -225,6 +231,7 @@ Each issue **must** be written with enough detail to be handed directly to a cod
 For every issue (from Step 3 anomalies and Step 4 audit flags):
 
 ### Issue: <short-tag>
+
 - **Severity**: critical | high | medium | low
 - **Category**: ORDER_LIFECYCLE | TIMING | OCO | WEBSOCKET | FUNDING_GATE | RECOVERY | WAL_DURABILITY | TRADE_QUALITY
 - **Description**: One sentence — what failed and why it matters.
@@ -235,17 +242,18 @@ For every issue (from Step 3 anomalies and Step 4 audit flags):
   - Postgres: table `<table>`, row `id=<uuid>` — field `<field>=<actual_value>` (expected: `<expected_value>`)
   - Journald: event `<event_name>` at `<ts>` — raw: `<paste relevant JSON fields>`
   - Exchange-side: order `<exchange_order_id>` — `<field>=<value>` (source: exchange skill)
-  - *(include every data point that demonstrates the problem — raw values, not paraphrases)*
+  - _(include every data point that demonstrates the problem — raw values, not paraphrases)_
 - **Expected behavior** (from checklist `<checklist_item_id>` or trade-quality rule):
   - `<exact observability_contract clause or audit rule that was violated>`
 - **Code refs**:
   - `<file>:<line>` — `<what this line does, why it's relevant>`
-  - *(cite all `code_refs` from the checklist item; add extra refs if anomaly tracing revealed more)*
+  - _(cite all `code_refs` from the checklist item; add extra refs if anomaly tracing revealed more)_
 - **Spec ref**: `<docs-strategy/strategies/strategy_N.md — section>`
 - **Reproduction window**: `<last_checked_utc>` → `<now_utc>`
 - **Hypothesis**: `<one-sentence root cause if obvious from evidence; omit if speculative>`
 
 ## Notes
+
 <one paragraph max, only if non-trivial context — omit section if nothing to add>
 ```
 
@@ -253,6 +261,7 @@ If no trades **and** no issues, write a 3-line "no activity" report instead:
 
 ```markdown
 # Live verification — <exchange>/<strategy> — <utc-ts>
+
 Window: <last_checked_utc> → <now_utc> — no activity.
 Sub-account: <sub_account_id>
 ```
@@ -266,7 +275,7 @@ Keep the Trades table and Checklist progress sections concise. Issues section ha
 After the report is written, update `checklists/_cursors.yaml`. If file exists, edit the single line for this key. If file does not exist, create it with all known pair keys (alphabetical order).
 
 ```yaml
-<exchange>__<strategy>: <now_utc>  # ISO-8601 UTC, e.g. 2026-05-15T14:32:00Z
+<exchange>__<strategy>: <now_utc> # ISO-8601 UTC, e.g. 2026-05-15T14:32:00Z
 ```
 
 Do **not** advance the cursor if the run aborted (SSH failure, no active combo, etc.).
@@ -286,5 +295,5 @@ Nothing else.
 1. **No broad exploration.** Only read files listed in Step 1. No Glob/Grep across `src/` unless an anomaly requires tracing a specific line cited in `code_refs`.
 2. **Read only the files listed in Step 1.** No arbitrary docs, READMEs, or sibling checklists.
 3. **Deletion is irreversible.** Verify all observability-contract clauses + timing + exchange agreement before deleting.
-5. **Reports contain only real, observed facts.** No "consider monitoring X". No "could improve Y".
-7. **Cursor advances only on success.** Abort → no cursor update.
+4. **Reports contain only real, observed facts.** No "consider monitoring X". No "could improve Y".
+5. **Cursor advances only on success.** Abort → no cursor update.

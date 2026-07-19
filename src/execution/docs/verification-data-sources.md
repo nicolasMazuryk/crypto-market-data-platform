@@ -3,16 +3,16 @@
 Contract between the execution engine and the downstream verifier agent.
 After each funding event, the verifier queries these sources to mark checklist scenarios ✅/⏳/❌.
 
-| Category | Postgres | Log event (journald) | Prometheus metric |
-|---|---|---|---|
-| ORDER_LIFECYCLE | `orders`, `fills`, `fills_dead_letter` | `fill.unmatched`, `preflight.rejected` | `rest_orders_total`, `persistence_dropped_total` |
-| TIMING | `intent_lifecycle_events` (latency_ms, context), `exit_triggers` (latency_ms, context) | — | — |
-| OCO | — | `oco.cancel.start`, `oco.cancel.attempt` (strategy A/B/C), `oco.cancel.success`, `oco.cancel.exhausted`, `oco.sweep.complete` (foundOrderIds, failedCount) | — |
-| WEBSOCKET | — | `ws.connection` (state, prevState, downtimeMs) | `ws_reconnect_total` |
-| FUNDING_GATE | — | `intent.funding_gate_opened`, `intent.funding_gate_closed` (openedAt, closedAt, durationMs, reason) | — |
-| RECOVERY | `ops_events` WHERE event_type IN ('recovery.orphan_order_cancelled', 'recovery.orphan_order_cancel_failed', 'recovery.orphan_position_flattened', 'recovery.orphan_position_flatten_failed', 'recovery.exchange_fetch_failed') | — | `recovery_orphans_cancelled_total`, `recovery_orphans_flattened_total` |
-| STRATEGY_SPECIFIC | `orders` WHERE kind='pre_funding' (s6), `intent_lifecycle_events`, `funding_attributions.intent_id` | — | — |
-| WAL_DURABILITY | — | `persistence.wal.discarded` (table, pgErrorCode, pgErrorText) | — |
+| Category          | Postgres                                                                                                                                                                                                                       | Log event (journald)                                                                                                                                       | Prometheus metric                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| ORDER_LIFECYCLE   | `orders`, `fills`, `fills_dead_letter`                                                                                                                                                                                         | `fill.unmatched`, `preflight.rejected`                                                                                                                     | `rest_orders_total`, `persistence_dropped_total`                       |
+| TIMING            | `intent_lifecycle_events` (latency_ms, context), `exit_triggers` (latency_ms, context)                                                                                                                                         | —                                                                                                                                                          | —                                                                      |
+| OCO               | —                                                                                                                                                                                                                              | `oco.cancel.start`, `oco.cancel.attempt` (strategy A/B/C), `oco.cancel.success`, `oco.cancel.exhausted`, `oco.sweep.complete` (foundOrderIds, failedCount) | —                                                                      |
+| WEBSOCKET         | —                                                                                                                                                                                                                              | `ws.connection` (state, prevState, downtimeMs)                                                                                                             | `ws_reconnect_total`                                                   |
+| FUNDING_GATE      | —                                                                                                                                                                                                                              | `intent.funding_gate_opened`, `intent.funding_gate_closed` (openedAt, closedAt, durationMs, reason)                                                        | —                                                                      |
+| RECOVERY          | `ops_events` WHERE event_type IN ('recovery.orphan_order_cancelled', 'recovery.orphan_order_cancel_failed', 'recovery.orphan_position_flattened', 'recovery.orphan_position_flatten_failed', 'recovery.exchange_fetch_failed') | —                                                                                                                                                          | `recovery_orphans_cancelled_total`, `recovery_orphans_flattened_total` |
+| STRATEGY_SPECIFIC | `orders` WHERE kind='pre_funding' (s6), `intent_lifecycle_events`, `funding_attributions.intent_id`                                                                                                                            | —                                                                                                                                                          | —                                                                      |
+| WAL_DURABILITY    | —                                                                                                                                                                                                                              | `persistence.wal.discarded` (table, pgErrorCode, pgErrorText)                                                                                              | —                                                                      |
 
 ## Journald query pattern
 
@@ -35,6 +35,7 @@ journalctl -u execution --output=json --since '4h ago' | jq 'select(.event=="<ev
 ## OCO cancel event sequence
 
 `cancelSiblingExit` emits in order:
+
 1. `oco.cancel.start` — cancel attempt begins
 2. `oco.cancel.attempt {strategy: "A"|"B"|"C"}` — per-strategy attempt
 3. `oco.cancel.already_gone` (if exchange returns not-found) OR `oco.cancel.strategy_failed` (if still open after cancel)

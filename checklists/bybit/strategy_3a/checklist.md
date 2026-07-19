@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_3a.ts`, `src/execution/execution/manage
 ---
 
 **Bybit-specific notes (CRITICAL):**
+
 - REST entry (no WS adapter for strategy_3a)
 - Bybit WS event timestamps in **microseconds (μs)** → adapter divides by 1000 for ms
 - Bybit echoes `clientOrderId` for market fills → WS routing is primary for entry fill

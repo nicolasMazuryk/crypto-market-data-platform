@@ -6,14 +6,19 @@ import { loadMarketsIfStale } from './ccxtMarkets.js'
 import { mapCcxtFundingRate } from './mapper.js'
 import type { ExchangeFundingPuller, FundingSnapshot } from './types.js'
 
-interface OkxMarkEntry { instId: string; markPx: string }
-interface OkxMarkPriceResp { data: OkxMarkEntry[] }
+interface OkxMarkEntry {
+  instId: string
+  markPx: string
+}
+interface OkxMarkPriceResp {
+  data: OkxMarkEntry[]
+}
 
 // OKX's fetchFundingRates response omits markPrice — fetch it from the dedicated mark-price endpoint.
 async function fetchOkxMarkPrices(ccxtExchange: CcxtExchange): Promise<Map<string, number>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
   const resp = (await (ccxtExchange as any).publicGetPublicMarkPrice({ instType: 'SWAP' })) as OkxMarkPriceResp
-  const entries = resp.data ?? []
+  const entries = resp.data
   const map = new Map<string, number>()
   for (const d of entries) {
     const price = parseFloat(d.markPx)

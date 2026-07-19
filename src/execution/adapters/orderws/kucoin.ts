@@ -12,7 +12,11 @@ export interface KucoinOrderWsAdapterOptions {
 function withTimeout<T>(p: Promise<T>): Promise<T> {
   return Promise.race([
     p,
-    new Promise<never>((_, reject) => setTimeout(() => { reject(new Error('WS_TIMEOUT')); }, ACK_TIMEOUT_MS)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        reject(new Error('WS_TIMEOUT'))
+      }, ACK_TIMEOUT_MS)
+    ),
   ])
 }
 
@@ -99,8 +103,10 @@ export function createKucoinOrderWsAdapter(opts: KucoinOrderWsAdapterOptions): E
     async cancelOrder(ref: OrderRef): Promise<void> {
       // cancelFuturesOrder accepts either {orderId} or {clientOid, symbol}
       if (ref.clientOrderId && ref.symbol) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-non-null-assertion
-        await withTimeout(sdkClient!.cancelFuturesOrder({ clientOid: ref.clientOrderId, symbol: ref.symbol }) as Promise<unknown>)
+        await withTimeout(
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-non-null-assertion
+          sdkClient!.cancelFuturesOrder({ clientOid: ref.clientOrderId, symbol: ref.symbol }) as Promise<unknown>
+        )
       } else if (ref.exchangeOrderId) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-non-null-assertion
         await withTimeout(sdkClient!.cancelFuturesOrder({ orderId: ref.exchangeOrderId }) as Promise<unknown>)
@@ -110,10 +116,7 @@ export function createKucoinOrderWsAdapter(opts: KucoinOrderWsAdapterOptions): E
     },
 
     // KuCoin Futures WS API does not expose an amend-order channel; cancel+replace is required
-    amendOrder(
-      ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>,
-      _patch: OrderAmendPatch
-    ): Promise<OrderAck> {
+    amendOrder(ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>, _patch: OrderAmendPatch): Promise<OrderAck> {
       void ref
       return Promise.resolve(rejectAck(ref.clientOrderId, new Error('amendOrder not supported via KuCoin WS')))
     },

@@ -1,57 +1,57 @@
 # Base configuration for all backtesting strategies
 # Strategy-specific configs are deep-merged on top of this
 
-exchange: "binance"
+exchange: 'binance'
 # symbol: "HANAUSDT"  # Omit to run for all symbols on the exchange
-start_date: "2026-04-17 00:00:00"
-end_date: "2026-05-13 00:00:00"
+start_date: '2026-04-17 00:00:00'
+end_date: '2026-05-13 00:00:00'
 
 fees:
   binance:
-    taker_fee: 0.0005   # 0.05%
-    maker_fee: 0.0002   # 0.02%
+    taker_fee: 0.0005 # 0.05%
+    maker_fee: 0.0002 # 0.02%
   binanceusdm:
-    taker_fee: 0.0005   # 0.05%
-    maker_fee: 0.0002   # 0.02%
+    taker_fee: 0.0005 # 0.05%
+    maker_fee: 0.0002 # 0.02%
   bybit:
-    taker_fee: 0.001    # 0.10%
-    maker_fee: 0.00036  # 0.036%
+    taker_fee: 0.001 # 0.10%
+    maker_fee: 0.00036 # 0.036%
   okx:
-    taker_fee: 0.0005   # 0.05%
-    maker_fee: 0.0002   # 0.02%
+    taker_fee: 0.0005 # 0.05%
+    maker_fee: 0.0002 # 0.02%
   mexc:
-    taker_fee: 0.0004   # 0.04%
-    maker_fee: 0.0001   # 0.01%
+    taker_fee: 0.0004 # 0.04%
+    maker_fee: 0.0001 # 0.01%
   bitget:
-    taker_fee: 0.001    # 0.10%
-    maker_fee: 0.00036  # 0.036%
+    taker_fee: 0.001 # 0.10%
+    maker_fee: 0.00036 # 0.036%
   gateio:
-    taker_fee: 0.0005   # 0.05%
-    maker_fee: 0.0002   # 0.02%
+    taker_fee: 0.0005 # 0.05%
+    maker_fee: 0.0002 # 0.02%
   kucoinfutures:
-    taker_fee: 0.0006   # 0.06%
-    maker_fee: 0.0002   # 0.02%
+    taker_fee: 0.0006 # 0.06%
+    maker_fee: 0.0002 # 0.02%
   kucoin:
-    taker_fee: 0.0006   # 0.06%
-    maker_fee: 0.0002   # 0.02%
+    taker_fee: 0.0006 # 0.06%
+    maker_fee: 0.0002 # 0.02%
 
 validation:
   required_seconds_before: 3
   required_seconds_after: 3
   max_gap_seconds: 3
-  max_price_change_pct: 0.20  # 20%
+  max_price_change_pct: 0.20 # 20%
 
 window:
   pre_funding_seconds: 60
   post_funding_seconds: 120
 
-market_slippage_pct: 0.01  # 0.01% (formerly slippage.stop_order_slippage: 0.0001)
+market_slippage_pct: 0.01 # 0.01% (formerly slippage.stop_order_slippage: 0.0001)
 
 reporting:
   include_trade_log: true
-  output_dir: "reports"
+  output_dir: 'reports'
 
-funding_time_tolerance_seconds: 60  # Max seconds between exchanges' funding timestamps to be treated as the same event
+funding_time_tolerance_seconds: 60 # Max seconds between exchanges' funding timestamps to be treated as the same event
 
 funding_settlement:
   detection_window_seconds: 10

@@ -26,15 +26,15 @@ npm run execution:live -- --health-port 9467 --metrics-port 9465
 npm run execution:dry-run -- --funding 08:00:00
 ```
 
-| Flag | Type | Required | Default | Effect |
-|---|---|---|---|---|
-| `--config` | string | yes | `config/execution.live.yaml` (set by npm script) | Config file path |
-| `--exchange` | string (repeatable) | no | all enabled exchanges | Restrict evaluation to these exchanges |
-| `--symbol` | string (repeatable) | no | all symbols | Restrict evaluation to these symbols |
-| `--funding` | string (`HH:MM:SS`) | no | — | Override next funding event time for testing |
-| `--ack-live-funding-override` | boolean | no | — | Required when `--funding` is used in live mode |
-| `--metrics-port` | number | no | config `observability.metricsPort` (default 9464) | Prometheus metrics port |
-| `--health-port` | number | no | config `observability.healthPort` (default 9466) | Health/ready HTTP port |
+| Flag                          | Type                | Required | Default                                           | Effect                                         |
+| ----------------------------- | ------------------- | -------- | ------------------------------------------------- | ---------------------------------------------- |
+| `--config`                    | string              | yes      | `config/execution.live.yaml` (set by npm script)  | Config file path                               |
+| `--exchange`                  | string (repeatable) | no       | all enabled exchanges                             | Restrict evaluation to these exchanges         |
+| `--symbol`                    | string (repeatable) | no       | all symbols                                       | Restrict evaluation to these symbols           |
+| `--funding`                   | string (`HH:MM:SS`) | no       | —                                                 | Override next funding event time for testing   |
+| `--ack-live-funding-override` | boolean             | no       | —                                                 | Required when `--funding` is used in live mode |
+| `--metrics-port`              | number              | no       | config `observability.metricsPort` (default 9464) | Prometheus metrics port                        |
+| `--health-port`               | number              | no       | config `observability.healthPort` (default 9466)  | Health/ready HTTP port                         |
 
 **Prerequisites**: `db:postgres:up`, `execution:migrate` applied, exchange API credentials in `.env`.
 
@@ -71,10 +71,10 @@ npm run config:validate -- --config config/execution.live.yaml
 npm run config:validate -- --config config/execution.live.yaml --base config/execution.base.yaml
 ```
 
-| Flag | Type | Required | Default | Effect |
-|---|---|---|---|---|
-| `--config` | string | yes | — | Path to YAML config to validate |
-| `--base` | string | no | auto-detects `execution.base.yaml` in same directory | Explicit base config path |
+| Flag       | Type   | Required | Default                                              | Effect                          |
+| ---------- | ------ | -------- | ---------------------------------------------------- | ------------------------------- |
+| `--config` | string | yes      | —                                                    | Path to YAML config to validate |
+| `--base`   | string | no       | auto-detects `execution.base.yaml` in same directory | Explicit base config path       |
 
 Exit 0 on pass; exit 1 with all errors printed on failure.
 
@@ -90,13 +90,13 @@ Reuse or create a sub-account, ensure API keys, and reconcile it to the requeste
 npm run provision -- --strategy strategy_1 --exchange bybit --capital 200
 ```
 
-| Flag | Required | Default | Effect |
-|------|----------|---------|--------|
-| `--strategy` | yes | — | Strategy ID |
-| `--exchange` | yes | — | Exchange name |
-| `--capital` | yes | — | Target USDT balance for the sub-account |
-| `--label` | no | `{strategy}-{exchange}` | Sub-account display name on the exchange |
-| `--registry` | no | `live-configs/registry.yaml` | Registry file path |
+| Flag         | Required | Default                      | Effect                                   |
+| ------------ | -------- | ---------------------------- | ---------------------------------------- |
+| `--strategy` | yes      | —                            | Strategy ID                              |
+| `--exchange` | yes      | —                            | Exchange name                            |
+| `--capital`  | yes      | —                            | Target USDT balance for the sub-account  |
+| `--label`    | no       | `{strategy}-{exchange}`      | Sub-account display name on the exchange |
+| `--registry` | no       | `live-configs/registry.yaml` | Registry file path                       |
 
 Resolution order is assigned entry, LRU idle pool entry, then new sub-account creation. Re-running the same command is intended to be a no-op except for capital reconciliation and verification.
 
@@ -112,11 +112,11 @@ Drain capital back to master and return the sub-account to the idle pool. API ke
 npm run provision:release -- --strategy strategy_1 --exchange bybit
 ```
 
-| Flag | Required | Default | Effect |
-|------|----------|---------|--------|
-| `--strategy` | yes | — | Strategy ID |
-| `--exchange` | yes | — | Exchange name |
-| `--registry` | no | `live-configs/registry.yaml` | Registry file path |
+| Flag         | Required | Default                      | Effect             |
+| ------------ | -------- | ---------------------------- | ------------------ |
+| `--strategy` | yes      | —                            | Strategy ID        |
+| `--exchange` | yes      | —                            | Exchange name      |
+| `--registry` | no       | `live-configs/registry.yaml` | Registry file path |
 
 ---
 
@@ -187,10 +187,10 @@ npm run alerts:test -- --severity page
 npm run alerts:test -- --severity notify --message "smoke test after deploy"
 ```
 
-| Flag | Type | Required | Default | Effect |
-|---|---|---|---|---|
-| `--severity` | `notify` \| `page` | no | `notify` | `page` adds `<!channel>` mention |
-| `--message` | string | no | `'smoke test from alerts:test'` | Alert body text |
+| Flag         | Type               | Required | Default                         | Effect                           |
+| ------------ | ------------------ | -------- | ------------------------------- | -------------------------------- |
+| `--severity` | `notify` \| `page` | no       | `notify`                        | `page` adds `<!channel>` mention |
+| `--message`  | string             | no       | `'smoke test from alerts:test'` | Alert body text                  |
 
 **Prerequisites**: `SLACK_WEBHOOK_URL` in `.env`.
 
@@ -247,12 +247,12 @@ npm run execution:replay -- --run <run-id>
 npm run execution:replay -- --intent <intent-id> --reevaluate
 ```
 
-| Flag | Type | Required | Default | Effect |
-|---|---|---|---|---|
-| `--intent` | string | one of `--intent`/`--run` | — | Replay a single intent by ID |
-| `--run` | string | one of `--intent`/`--run` | — | Replay all intents from a run |
-| `--reevaluate` | boolean | no | `false` | Compare persisted funding snapshot against reevaluated rate; reports divergence |
-| `--format` | `json` \| `table` | no | `json` | Output format |
+| Flag           | Type              | Required                  | Default | Effect                                                                          |
+| -------------- | ----------------- | ------------------------- | ------- | ------------------------------------------------------------------------------- |
+| `--intent`     | string            | one of `--intent`/`--run` | —       | Replay a single intent by ID                                                    |
+| `--run`        | string            | one of `--intent`/`--run` | —       | Replay all intents from a run                                                   |
+| `--reevaluate` | boolean           | no                        | `false` | Compare persisted funding snapshot against reevaluated rate; reports divergence |
+| `--format`     | `json` \| `table` | no                        | `json`  | Output format                                                                   |
 
 Output fields: `intentId`, `exchange`, `symbol`, `strategy`, `side`, `status`, `entryFills`, `exitFills`, `fundingAttribAmount`, `estimatedPnlUsdt`.
 
@@ -275,11 +275,11 @@ tsx src/execution/cli/flatten.ts --config config/execution.live.yaml --exchange 
 tsx src/execution/cli/flatten.ts --config config/execution.live.yaml --dry-run
 ```
 
-| Flag | Type | Required | Default | Effect |
-|---|---|---|---|---|
-| `--config` | string | yes | — | Path to live config (must contain real credentials) |
-| `--exchange` | string (repeatable) | no | all enabled | Restrict to specific exchange(s) |
-| `--dry-run` | boolean | no | `false` | Log actions without submitting orders |
+| Flag         | Type                | Required | Default     | Effect                                              |
+| ------------ | ------------------- | -------- | ----------- | --------------------------------------------------- |
+| `--config`   | string              | yes      | —           | Path to live config (must contain real credentials) |
+| `--exchange` | string (repeatable) | no       | all enabled | Restrict to specific exchange(s)                    |
+| `--dry-run`  | boolean             | no       | `false`     | Log actions without submitting orders               |
 
 **Prerequisites**: live exchange credentials in `.env` for all targeted exchanges.
 
@@ -446,12 +446,12 @@ tsx --env-file=.env src/execution/scripts/live-strategy-3.ts \
   --symbol ETHUSDT
 ```
 
-| Flag | Type | Required | Default | Effect |
-|---|---|---|---|---|
-| `--config` | string | yes | — | Path to execution config |
-| `--symbol` | string | yes | — | Trading symbol (e.g., `BTCUSDT`) |
-| `--timeout-minutes` | number | no | `20` | Kill the driver after this many minutes |
-| `--funding-fee-grace-seconds` | number | no | `10` | Wait this many seconds after funding event before shutdown |
+| Flag                          | Type   | Required | Default | Effect                                                     |
+| ----------------------------- | ------ | -------- | ------- | ---------------------------------------------------------- |
+| `--config`                    | string | yes      | —       | Path to execution config                                   |
+| `--symbol`                    | string | yes      | —       | Trading symbol (e.g., `BTCUSDT`)                           |
+| `--timeout-minutes`           | number | no       | `20`    | Kill the driver after this many minutes                    |
+| `--funding-fee-grace-seconds` | number | no       | `10`    | Wait this many seconds after funding event before shutdown |
 
 `live-strategy-3.ts` requires `strategy_3a` enabled in config.
 
@@ -479,6 +479,6 @@ Test phases: startup → private WS connect → state reconcile → intent submi
 
 ## Related docs
 
-- **Configuration reference** (all YAML keys, defaults, secrets): [configuration.md](./configuration.md) *(Step 3)*
-- **Infrastructure and deployment context**: [infrastructure.md](./infrastructure.md) *(Step 3)*
-- **Full operational runbook**: [runbook.md](./runbook.md) *(Step 4)*
+- **Configuration reference** (all YAML keys, defaults, secrets): [configuration.md](./configuration.md) _(Step 3)_
+- **Infrastructure and deployment context**: [infrastructure.md](./infrastructure.md) _(Step 3)_
+- **Full operational runbook**: [runbook.md](./runbook.md) _(Step 4)_

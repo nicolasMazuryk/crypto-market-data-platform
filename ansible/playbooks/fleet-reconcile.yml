@@ -25,10 +25,10 @@
   tasks:
     - name: Stop and disable removed combinations
       ansible.builtin.include_tasks: ../roles/execution-engine/tasks/stop-instance.yml
-      loop: "{{ toStop | default([]) }}"
+      loop: '{{ toStop | default([]) }}'
       loop_control:
         loop_var: combo_id
-        label: "{{ combo_id }}"
+        label: '{{ combo_id }}'
 
 - name: Fleet reconcile — redeploy changed combinations
   hosts: servers
@@ -41,19 +41,19 @@
   tasks:
     - name: Stop combinations before redeploy
       ansible.builtin.include_tasks: ../roles/execution-engine/tasks/stop-instance.yml
-      loop: "{{ toRedeploy | default([]) }}"
+      loop: '{{ toRedeploy | default([]) }}'
       loop_control:
         loop_var: _redeploy_combo
-        label: "{{ _redeploy_combo.id }}"
+        label: '{{ _redeploy_combo.id }}'
       vars:
-        combo_id: "{{ _redeploy_combo.id }}"
+        combo_id: '{{ _redeploy_combo.id }}'
 
     - name: Deploy redeployed combinations
       ansible.builtin.include_tasks: ../roles/execution-engine/tasks/deploy-instance.yml
-      loop: "{{ toRedeploy | default([]) }}"
+      loop: '{{ toRedeploy | default([]) }}'
       loop_control:
         loop_var: combo_entry
-        label: "{{ combo_entry.id }}"
+        label: '{{ combo_entry.id }}'
 
 - name: Fleet reconcile — start new combinations
   hosts: servers
@@ -66,7 +66,7 @@
   tasks:
     - name: Deploy new combinations
       ansible.builtin.include_tasks: ../roles/execution-engine/tasks/deploy-instance.yml
-      loop: "{{ toStart | default([]) }}"
+      loop: '{{ toStart | default([]) }}'
       loop_control:
         loop_var: combo_entry
-        label: "{{ combo_entry.id }}"
+        label: '{{ combo_entry.id }}'

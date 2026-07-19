@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_4_2a.ts`, `src/execution/execution/mana
 ---
 
 **Bitget-specific notes:**
+
 - REST limit entry (no WS adapter)
 - Bitget 'orders' WS channel for fill events; timestamps in ms (no conversion)
 - Bitget echoes `clientOrderId` for limit fills → WS routing is primary

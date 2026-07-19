@@ -4,13 +4,13 @@ KuCoin uses HMAC-SHA256 to authenticate API requests. Every authenticated reques
 
 ## Required Headers
 
-| Header | Description |
-|--------|-------------|
-| `KC-API-KEY` | Your API key, obtained from the KuCoin API management page. |
-| `KC-API-SIGN` | Base64-encoded HMAC-SHA256 signature of the prehash string, using your API secret as the key. |
-| `KC-API-TIMESTAMP` | Request timestamp in **milliseconds** since Unix epoch (e.g., `1718000000000`). The server rejects requests where the timestamp differs from server time by more than 5 seconds. |
-| `KC-API-PASSPHRASE` | The passphrase you specified when creating the API key. For API Key Version 2, this must be encrypted: Base64(HMAC-SHA256(passphrase, secretKey)). For Version 1, send the plain passphrase. |
-| `KC-API-KEY-VERSION` | API key version. Use `"2"` for keys created after a certain date (recommended). Use `"1"` for legacy keys. |
+| Header               | Description                                                                                                                                                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KC-API-KEY`         | Your API key, obtained from the KuCoin API management page.                                                                                                                                  |
+| `KC-API-SIGN`        | Base64-encoded HMAC-SHA256 signature of the prehash string, using your API secret as the key.                                                                                                |
+| `KC-API-TIMESTAMP`   | Request timestamp in **milliseconds** since Unix epoch (e.g., `1718000000000`). The server rejects requests where the timestamp differs from server time by more than 5 seconds.             |
+| `KC-API-PASSPHRASE`  | The passphrase you specified when creating the API key. For API Key Version 2, this must be encrypted: Base64(HMAC-SHA256(passphrase, secretKey)). For Version 1, send the plain passphrase. |
+| `KC-API-KEY-VERSION` | API key version. Use `"2"` for keys created after a certain date (recommended). Use `"1"` for legacy keys.                                                                                   |
 
 ## Signature Construction
 
@@ -20,12 +20,12 @@ KuCoin uses HMAC-SHA256 to authenticate API requests. Every authenticated reques
 prehash = timestamp + method + endpoint + body
 ```
 
-| Component | Description | Example |
-|-----------|-------------|---------|
-| `timestamp` | Same value sent in `KC-API-TIMESTAMP` (milliseconds). | `1718000000000` |
-| `method` | HTTP method in **uppercase**. | `GET`, `POST`, `DELETE` |
-| `endpoint` | Request path including query string (no host). | `/api/v1/accounts?currency=BTC` |
-| `body` | JSON request body as a string. Empty string `""` for GET/DELETE requests with no body. | `{"currency":"BTC","amount":"0.1"}` |
+| Component   | Description                                                                            | Example                             |
+| ----------- | -------------------------------------------------------------------------------------- | ----------------------------------- |
+| `timestamp` | Same value sent in `KC-API-TIMESTAMP` (milliseconds).                                  | `1718000000000`                     |
+| `method`    | HTTP method in **uppercase**.                                                          | `GET`, `POST`, `DELETE`             |
+| `endpoint`  | Request path including query string (no host).                                         | `/api/v1/accounts?currency=BTC`     |
+| `body`      | JSON request body as a string. Empty string `""` for GET/DELETE requests with no body. | `{"currency":"BTC","amount":"0.1"}` |
 
 **Examples:**
 
@@ -222,16 +222,16 @@ print("POST /api/v3/withdrawals:", response.json())
 
 If authentication fails, KuCoin returns one of the following error codes:
 
-| Code | Message | Description |
-|------|---------|-------------|
-| `400001` | Any of KC-API-KEY, KC-API-SIGN, KC-API-TIMESTAMP, KC-API-PASSPHRASE is missing in your request header. | A required authentication header is missing. |
-| `400002` | KC-API-TIMESTAMP Invalid. | The timestamp is missing or not a valid number. |
-| `400003` | KC-API-KEY not exists. | The API key does not exist or has been deleted. |
-| `400004` | KC-API-PASSPHRASE error. | The passphrase is incorrect or not properly encrypted. |
-| `400005` | Signature not correct. | The HMAC-SHA256 signature does not match. Verify the prehash string construction. |
-| `400006` | The requested ip address is not in the api whitelist. | The request IP is not in the API key's IP whitelist. |
-| `400007` | Access Denied. | The API key does not have permission for this endpoint. |
-| `429000` | Too Many Requests. | Rate limit exceeded. Implement backoff and retry logic. |
+| Code     | Message                                                                                                | Description                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------- |
+| `400001` | Any of KC-API-KEY, KC-API-SIGN, KC-API-TIMESTAMP, KC-API-PASSPHRASE is missing in your request header. | A required authentication header is missing.                                      |
+| `400002` | KC-API-TIMESTAMP Invalid.                                                                              | The timestamp is missing or not a valid number.                                   |
+| `400003` | KC-API-KEY not exists.                                                                                 | The API key does not exist or has been deleted.                                   |
+| `400004` | KC-API-PASSPHRASE error.                                                                               | The passphrase is incorrect or not properly encrypted.                            |
+| `400005` | Signature not correct.                                                                                 | The HMAC-SHA256 signature does not match. Verify the prehash string construction. |
+| `400006` | The requested ip address is not in the api whitelist.                                                  | The request IP is not in the API key's IP whitelist.                              |
+| `400007` | Access Denied.                                                                                         | The API key does not have permission for this endpoint.                           |
+| `429000` | Too Many Requests.                                                                                     | Rate limit exceeded. Implement backoff and retry logic.                           |
 
 ## Security Notes
 

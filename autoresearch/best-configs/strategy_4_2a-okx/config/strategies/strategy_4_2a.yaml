@@ -1,11 +1,11 @@
 # Strategy 4.2a: Single Limit LONG - No Funding Applied
 
-strategy_id: "strategy_4_2a"
-direction: "long"
-funding_threshold: 0.010      # 1.0%
+strategy_id: 'strategy_4_2a'
+direction: 'long'
+funding_threshold: 0.010 # 1.0%
 entry_offset_seconds: 3
-limit_offset_mult: 1.28       # Limit at P * (1 - F * 1.28)
+limit_offset_mult: 1.28 # Limit at P * (1 - F * 1.28)
 take_profit: 0.0025
 deadline_seconds: 45
 funding_applied_on_same_second: false
-sl_mult: 2.0                  # SL at entry × (1 − F × 2.0); must be > limit_offset_mult
+sl_mult: 2.0 # SL at entry × (1 − F × 2.0); must be > limit_offset_mult

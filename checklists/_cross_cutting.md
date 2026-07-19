@@ -11,6 +11,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 **Code:** `src/execution/state/store.ts:214-222`
 
 **Flow:**
+
 1. WS drops (network blip, keepalive timeout, exchange-side close).
 2. WS adapter re-establishes connection and emits `ws.connection {state:'connected'}`.
 3. State store listener detects the transition from non-connected → connected.
@@ -19,6 +20,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 6. Any actively armed monitor timer is NOT reset — it continues to fire at the original `exitAt`.
 
 **Observable signals:**
+
 - Bus event: `ws.connection {state:'connected'}` — now also a structured `logger.info` line: `log: event='ws.connection' {exchange: "<exchange>", state: "connected", prevState: "reconnecting"|"disconnected", downtimeMs: ">0"}`
 - REST activity: `getOpenOrders` + `getPositions` calls visible in exchange rate-limit counters or network logs
 - State maps should reflect consistent values after reconcile
@@ -26,6 +28,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 **Telemetry:** Reconcile completion is logged at INFO as `store.reconcile.complete` with `durationMs` and `desyncCount`. A `reconcile_failed` fatal opsEvent fires on unexpected error.
 
 **What to verify:**
+
 - State maps are not stale after reconnect (position qty matches exchange REST)
 - No duplicate exit is triggered by reconcile (monitor timer survives reconnect)
 - No intent status regression (e.g. monitoring → working)
@@ -41,6 +44,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 **Code:** `src/execution/recovery/index.ts:87-360`
 
 **Flow:**
+
 1. `runRecovery()` is called on startup.
 2. `findLatestOpenRun()` checks DB for a prior open run. If found, logs `'recovery: found open run, resuming'` and resumes it.
 3. `loadActiveIntents()` reads all non-terminal intents from DB, rehydrates `IntentState` maps, and restores `byEntryOrderId` / `byCloseOrderId` lookup maps.
@@ -51,6 +55,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 8. `manager.start()` re-arms monitors for all intents in `monitoring`, `exiting`, or `working` states.
 
 **Observable signals:**
+
 - `log: 'recovery: found open run, resuming'` or `'recovery: started new run'`
 - `log: 'recovery: rehydrated intent states' {rehydratedCount: N}`
 - `log: 'recovery: orphan order found, cancelling'` (if applicable)
@@ -73,6 +78,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 **Code:** `src/execution/execution/manager.ts:2707` (createOrder catch → `setError('create_order_failed')`)
 
 **Flow:**
+
 1. Preflight passes. `createOrder` REST call is made.
 2. Exchange returns HTTP 429 or an API-level rate-limit code.
 3. CCXT wraps this as a `RateLimitExceeded` exception.
@@ -80,6 +86,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 5. Intent transitions to error (terminal). No retry is attempted at this level.
 
 **Observable signals:**
+
 - `log: 'intent.error' {code:'create_order_failed'}` — the `err.message` field contains the exchange-specific code
 - `db:intentLifecycleEvents` transition: `submitted → error`
 - `db:orders` row may exist in `status=pending` (durability write runs before `createOrder`)
@@ -87,12 +94,12 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 **Exchange-specific rate-limit codes:**
 | Exchange | Code |
 |----------|------|
-| Binance  | -1003 |
-| Bybit    | 10006 |
-| OKX      | 50011 |
-| Gate.io  | `RateLimitExceeded` (CCXT class) |
-| KuCoin   | 429 |
-| Bitget   | 429 / `Too Many Requests` |
+| Binance | -1003 |
+| Bybit | 10006 |
+| OKX | 50011 |
+| Gate.io | `RateLimitExceeded` (CCXT class) |
+| KuCoin | 429 |
+| Bitget | 429 / `Too Many Requests` |
 
 **Applies to:** All 6 exchanges × all 7 strategies (entry and close order placement)
 
@@ -105,6 +112,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 **Code:** `src/execution/execution/preflight.ts:32`, `src/execution/execution/manager.ts:2044-2052`
 
 **Flow:**
+
 1. Strategy evaluates condition and calls `manager.submit()`.
 2. Preflight runs as the first gate — before balance check, market check, or any REST call.
 3. `killSwitch.canPlaceOrder()` returns `false` (kill switch mode is not `'off'`).
@@ -112,6 +120,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 5. Intent is terminal. No order reaches the exchange.
 
 **Observable signals:**
+
 - `log: 'intent.created' {status:'decided'}`
 - `log: 'intent.error' {code:'kill_switch'}`
 - `db:intentLifecycleEvents` transition: `decided → error`
@@ -130,6 +139,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 **Code:** `src/execution/execution/manager.ts:2680-2685` (entry order durability), `src/execution/execution/manager.ts:329` (SL order durability)
 
 **Flow:**
+
 1. `beforeCreateOrder()` is called with the pending order record.
 2. DB write fails (ClickHouse unreachable, connection timeout, schema error).
 3. Manager logs a **warn** and continues — the REST `createOrder` call proceeds anyway.
@@ -137,6 +147,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 5. If process then crashes before the fill WS event updates the DB, recovery sees this order as an orphan and cancels it.
 
 **Observable signals:**
+
 - `log: 'manager: durability write failed — proceeding without pre-submit persistence'` (warn level)
 - If crash follows: `log: 'recovery: orphan order found, cancelling'` on restart
 
@@ -153,6 +164,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 **Code:** `src/execution/state/store.ts:231-237` (`checkSeqGap` → `emitDesync` + `store.reconcile`)
 
 **Flow:**
+
 1. Inbound WS event carries a sequence number lower or non-contiguous with the expected next sequence.
 2. `checkSeqGap` detects the gap.
 3. `emitDesync` is called — a `desync` event is emitted on the internal bus.
@@ -160,6 +172,7 @@ These scenarios apply across all 6 exchanges × all 7 strategies. They are not s
 5. Any in-flight intent that was updated by the dropped WS event will be corrected by the REST snapshot.
 
 **Observable signals:**
+
 - Bus: `desync` event (internal bus only — no `logger.info`)
 - Reconcile-level REST activity (same as scenario 1 above)
 - Brief window of potentially stale in-memory state between gap and reconcile completion

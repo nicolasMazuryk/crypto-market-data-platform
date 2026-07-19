@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
 ---
 
 **KuCoin-specific notes:**
+
 - REST limit orders for all rungs (no WS adapter for ladder entry)
 - KuCoin LIMIT order WS fills DO echo `clientOrderId` → WS routing works for rung fills
 - KuCoin market order fills lack clientOrderId (but ladder rungs are limits — not affected)

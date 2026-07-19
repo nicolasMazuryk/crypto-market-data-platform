@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { mapAccountUpdate, mapFundingFee, mapOrderTradeUpdate } from './mapping.js'
 import type { BinanceAccountUpdateRaw, BinanceOrderUpdateRaw } from './mapping.js'

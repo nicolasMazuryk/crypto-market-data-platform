@@ -10,7 +10,7 @@ import type {
   Strategy6Config,
 } from '../../execution/strategies/types.js'
 import { CANONICAL_PARAMS, defaultFor } from './params.js'
-import { STRATEGY_DEFS, ALL_STRATEGY_IDS } from './strategies.js'
+import { STRATEGY_DEFS, ALL_STRATEGY_IDS, applyCrossFieldBounds } from './strategies.js'
 import { zodNumberFor } from './zod-field.js'
 
 /**
@@ -40,7 +40,7 @@ function liveShapeFor(strategyId: (typeof ALL_STRATEGY_IDS)[number]): Record<str
     const param = paramsByName.get(paramName)
     if (!param) throw new Error(`Unknown canonical param '${paramName}' referenced by ${strategyId}`)
     if (!param.liveKey) continue // backtest-only param — no live representation
-    shape[param.liveKey] = zodNumberFor(param, defaultFor(param, strategyId))
+    shape[param.liveKey] = zodNumberFor(param, defaultFor(param, strategyId), strategyId)
   }
 
   if (def.liveExtra) Object.assign(shape, def.liveExtra)
@@ -50,11 +50,7 @@ function liveShapeFor(strategyId: (typeof ALL_STRATEGY_IDS)[number]): Record<str
 // zod v4's .refine() returns `this` (same concrete object type), so every entry stays a
 // plain ZodObject — no separate "refined" wrapper type to union over.
 function objectFor(strategyId: (typeof ALL_STRATEGY_IDS)[number]) {
-  const def = STRATEGY_DEFS[strategyId]
-  const base = z.object(liveShapeFor(strategyId))
-  if (!def.liveRefine) return base
-  const refine = def.liveRefine
-  return base.refine(c => refine(c as unknown as Record<string, unknown>), { message: def.liveRefineMessage })
+  return applyCrossFieldBounds(z.object(liveShapeFor(strategyId)), strategyId, 'live')
 }
 
 const liveObjects = ALL_STRATEGY_IDS.map(id => objectFor(id))

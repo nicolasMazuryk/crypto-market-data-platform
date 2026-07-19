@@ -1,7 +1,3 @@
-
-
-
-
 Crypto Perpetual Futures Funding Rate Backtesting Suite
 
 Role
@@ -59,15 +55,15 @@ You are provided with a **Strategy Specification Document** (attached separately
 
 The strategies are:
 
-| ID | Name | Direction | Entry | Exit |
-|---|---|---|---|---|
-| S1 | Negative Funding LONG — Instant Exit | LONG | Market (T-5s) | Market (T+2s) |
-| S2 | Negative Funding LONG — Retracement Exit | LONG | Market (T-5s) | Limit (retracement target) or Market (deadline) |
-| S3 | Negative Funding SHORT — Ride the Drop | SHORT | Market (T-5s) | Limit (TP) or Stop (SL) — two TP variants: 3A and 3B |
-| S4.1a/b | Ladder LONG — Post-Funding Entry | LONG | Ladder of limits (T-5s) | Limit (TP) or Market (deadline) — a: no funding, b: with funding |
-| S4.2a/b | Single Limit LONG — Post-Funding Entry | LONG | Single limit (T-5s) | Limit (TP) or Market (deadline) — a: no funding, b: with funding |
-| S4.3a/b | Limit LONG with SL/TP | LONG | Limit (T-2s) | Limit (TP) / Stop (SL) / Market (deadline) — a: no funding, b: with funding |
-| S5 | Cross-Exchange Funding Arbitrage | SHORT (Exch B) | Market (T-3s on Exch B) | Limit (TP) or Market (deadline) |
+| ID      | Name                                     | Direction      | Entry                   | Exit                                                                        |
+| ------- | ---------------------------------------- | -------------- | ----------------------- | --------------------------------------------------------------------------- |
+| S1      | Negative Funding LONG — Instant Exit     | LONG           | Market (T-5s)           | Market (T+2s)                                                               |
+| S2      | Negative Funding LONG — Retracement Exit | LONG           | Market (T-5s)           | Limit (retracement target) or Market (deadline)                             |
+| S3      | Negative Funding SHORT — Ride the Drop   | SHORT          | Market (T-5s)           | Limit (TP) or Stop (SL) — two TP variants: 3A and 3B                        |
+| S4.1a/b | Ladder LONG — Post-Funding Entry         | LONG           | Ladder of limits (T-5s) | Limit (TP) or Market (deadline) — a: no funding, b: with funding            |
+| S4.2a/b | Single Limit LONG — Post-Funding Entry   | LONG           | Single limit (T-5s)     | Limit (TP) or Market (deadline) — a: no funding, b: with funding            |
+| S4.3a/b | Limit LONG with SL/TP                    | LONG           | Limit (T-2s)            | Limit (TP) / Stop (SL) / Market (deadline) — a: no funding, b: with funding |
+| S5      | Cross-Exchange Funding Arbitrage         | SHORT (Exch B) | Market (T-3s on Exch B) | Limit (TP) or Market (deadline)                                             |
 
 Your task is to build a **complete, production-grade, end-to-end backtesting suite** that tests each strategy separately against historical data stored in ClickHouse.
 
@@ -85,10 +81,10 @@ ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
 
 Database: `arbinet`
 
-| Table | Description |
-|---|---|
+| Table                   | Description                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------- |
 | `arbinet.funding_rates` | Historical perpetual funding rates per token, per exchange, per funding interval. |
-| `arbinet.orderbooks` | 1-second OHLC snapshots for bid and ask independently. |
+| `arbinet.orderbooks`    | 1-second OHLC snapshots for bid and ask independently.                            |
 
 **Before writing any code**, you MUST connect to ClickHouse via SSH and introspect every table you will use:
 
@@ -126,13 +122,14 @@ Every strategy's P&L MUST decompose into exactly these components, as defined in
 NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 ```
 
-| Component | Long Position | Short Position |
-|---|---|---|
-| `DELTA_PNL` | `(P_exit - P_entry) / P_entry` | `(P_entry - P_exit) / P_entry` |
-| `FUNDING_PNL` (negative F) | `+F` (longs receive) | `−F` (shorts pay) |
-| `FEES` | `entry_fee + exit_fee` (depends on order types used) | same |
+| Component                  | Long Position                                        | Short Position                 |
+| -------------------------- | ---------------------------------------------------- | ------------------------------ |
+| `DELTA_PNL`                | `(P_exit - P_entry) / P_entry`                       | `(P_entry - P_exit) / P_entry` |
+| `FUNDING_PNL` (negative F) | `+F` (longs receive)                                 | `−F` (shorts pay)              |
+| `FEES`                     | `entry_fee + exit_fee` (depends on order types used) | same                           |
 
 **Critical Rules:**
+
 - Fee types (maker vs taker) are determined by the order type used at entry and exit and MUST match what each strategy specifies.
 - For ladder strategies (S4.1), fees scale with the number of filled limit orders: `FEES = (num_filled × maker_fee) + exit_fee`.
 - For strategies with the funding sub-scenario split (S4.x a vs b), `FUNDING_PNL` is either `0` or `+F` based on configuration — never hardcoded.
@@ -143,28 +140,33 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 ## Order Simulation Rules
 
 ### Market Orders
+
 - Fill at the 1-second OHLC price for the relevant side:
   - BUY MARKET → fills at the **ask** price at entry second
   - SELL MARKET → fills at the **bid** price at entry second
 
 ### Limit Orders
+
 - A BUY LIMIT at price `P_limit` is filled when the **ask low** of any 1-second candle < `P_limit` within the valid time window.
 - A SELL LIMIT at price `P_limit` is filled when the **bid high** of any 1-second candle > `P_limit` within the valid time window.
 - Fill price = the limit price (not the candle price), which is the standard assumption for limit orders in backtesting.
 - For ladder orders (S4.1), process each limit order independently against the price series.
 
 ### Stop-Market Orders
+
 - A BUY STOP at price `P_stop` is triggered when the **ask high** ≥ `P_stop`.
 - A SELL STOP at price `P_stop` is triggered when the **bid low** ≤ `P_stop`.
 - Fill price = `P_stop` (+ slippage, must be configured).
 
 ### Priority When SL and TP Could Both Fill in the Same Second
+
 - If a single 1-second candle contains prices that would trigger BOTH the stop-loss and the take-profit, use **worst-case fill** (conservative / pessimistic assumption):
   - For longs: assume the SL was hit first (take the loss).
   - For shorts: assume the SL was hit first (take the loss).
 - Log a warning for every such ambiguous event.
 
 ### P_low Identification for Strategy 2 (Retracement)
+
 - In backtesting: `P_low` is the lowest bid price observed in the window `[T_funding, T_deadline]`.
 - Record `T_low` (the timestamp of this minimum).
 - The limit order for the retracement exit is only valid AFTER `T_low` — you cannot fill at the retracement target at or before the low point, because the order hasn't been placed yet.
@@ -175,12 +177,14 @@ NET_PNL = DELTA_PNL + FUNDING_PNL - FEES
 ## Data Pipeline Requirements
 
 ### Query Strategy
+
 - **Do NOT load all data into memory at once.** For 1-year backtests, stream data in per-funding-event windows.
 - For each funding event, pull a data window: `[T_funding - 60s, T_funding + 120s]` (or `T_deadline`, whichever is larger) from `arbinet.orderbooks`.
 - Pull funding rates from `arbinet.funding_rates` matching the funding interval.
 - Use parameterised queries. No string interpolation of user values into SQL.
 
 ### Data Validation (Per Event)
+
 Before running any strategy on a funding event's data window, validate:
 
 1. **Completeness (Required Seconds):** For the funding event timestamp `T_funding`, you MUST have **every 1-second row** for the interval **[`T_funding - 5s`, `T_funding + 10s`] inclusive**. If ANY second is missing in that required interval, **skip this event** and log a warning. Do NOT fill gaps with synthetic data.
@@ -199,13 +203,13 @@ For each strategy, implement a class that extends `BaseStrategy` and implements:
 ```typescript
 interface StrategyLifecycle {
   // Called once at init with merged config
-  initialize(config: StrategyConfig): void;
+  initialize(config: StrategyConfig): void
 
   // Given a funding event + data window, decide whether to trigger
-  shouldTrigger(event: FundingEvent, data: OHLCWindow): boolean;
+  shouldTrigger(event: FundingEvent, data: OHLCWindow): boolean
 
   // Execute the strategy logic: place orders, simulate fills, compute P&L
-  execute(event: FundingEvent, data: OHLCWindow): TradeResult | null;
+  execute(event: FundingEvent, data: OHLCWindow): TradeResult | null
 }
 ```
 
@@ -214,11 +218,13 @@ interface StrategyLifecycle {
 ### Strategy-Specific Notes
 
 **S1 (Instant Exit):**
+
 - Entry = BUY MARKET at `T_funding - entry_offset_seconds`, fill at ask.
 - Exit = SELL MARKET at `T_funding + exit_offset_seconds`, fill at bid.
 - Simple: two market orders, two taker fees.
 
 **S2 (Retracement Exit):**
+
 - Entry = BUY MARKET at `T_funding - entry_offset_seconds`, fill at ask.
 - After `T_funding`, find `P_low` and `T_low` in the window.
 - Compute retracement target: `P_target = P_low + (P_funding - P_low) × retracement_pct`.
@@ -226,12 +232,14 @@ interface StrategyLifecycle {
 - If filled: exit fee = maker. If deadline: exit fee = taker.
 
 **S3 (Ride the Drop — two TP variants):**
+
 - Entry = SELL MARKET at `T_funding - entry_offset_seconds`, fill at bid.
 - TP_a = `F × 1.5`, TP_b = `F + 0.004` (0.4%). Controlled by config `tp_mode`.
 - SL and TP are checked each second. Worst-case fill on ambiguous seconds.
 - Shorts PAY funding (`FUNDING_PNL = -F`).
 
 **S4.1 (Ladder LONG):**
+
 - At `T_funding - 5s`, record `P_current` from ask price.
 - Compute ladder: `ladder_top = P_current × (1 - F × ladder_top_mult)`, `ladder_bottom = P_current × (1 - F × ladder_bottom_mult)`.
 - Place `ladder_count` BUY LIMIT orders evenly spaced from `ladder_top` to `ladder_bottom`.
@@ -241,16 +249,19 @@ interface StrategyLifecycle {
 - Sub-scenario a/b controlled by config `include_funding: true|false`.
 
 **S4.2 (Single Limit LONG):**
+
 - Same as S4.1 but single order at `P_current × (1 - F × limit_offset_mult)`.
 - If not filled → no trade.
 
 **S4.3 (Limit with SL/TP):**
+
 - Entry at `T_funding - 2s` (not 5s). BUY LIMIT at `P_current × (1 - F × entry_mult)`.
 - SL = SELL STOP at `P_current × (1 - F × sl_mult)`.
 - TP = SELL LIMIT at `P_fill × (1 + TP)`.
 - If not filled → no trade.
 
 **S5 (Cross-Exchange Arb):**
+
 - Requires data from TWO exchanges simultaneously.
 - Selection logic checks `F_A`, `F_B`, `F_spread`, and volume conditions.
 - Entry on Exchange B: SELL MARKET at `T_funding - 3s`.
@@ -279,6 +290,7 @@ Generate a comprehensive report per strategy run. The report MUST include:
 ### Per-Strategy Summary
 
 **Trade Statistics:**
+
 - Total funding events evaluated
 - Events skipped (data quality) — with breakdown by skip reason
 - Events triggered (met selection criteria)
@@ -286,6 +298,7 @@ Generate a comprehensive report per strategy run. The report MUST include:
 - Unfilled events (for limit-entry strategies: triggered but no fill)
 
 **Return Metrics:**
+
 - Total net P&L (%)
 - Mean net P&L per trade (%)
 - Median net P&L per trade (%)
@@ -295,18 +308,21 @@ Generate a comprehensive report per strategy run. The report MUST include:
 - Cumulative P&L over time (equity curve data)
 
 **Win/Loss:**
+
 - Win rate (%)
 - Average win (%), average loss (%)
 - Profit factor = gross profits / gross losses
 - Expectancy = (win_rate × avg_win) - (loss_rate × avg_loss)
 
 **P&L Decomposition:**
+
 - Aggregate delta P&L
 - Aggregate funding P&L
 - Aggregate fees paid
 - Ratio: funding P&L / total net P&L (how much of the edge comes from funding)
 
 **Risk Metrics:**
+
 - Maximum drawdown (%)
 - Maximum drawdown duration (time)
 - Sharpe ratio (annualised, assuming risk-free = 0)
@@ -314,9 +330,11 @@ Generate a comprehensive report per strategy run. The report MUST include:
 - Calmar ratio = annualised return / max drawdown
 
 **Exit Reason Distribution:**
+
 - Count and % by: `TP_HIT`, `SL_HIT`, `DEADLINE`, `MARKET_EXIT`, `UNFILLED`
 
 **Strategy-Specific Metrics:**
+
 - S2: Average retracement achieved, % of events that hit retracement target vs deadline
 - S3: Win/loss ratio by TP variant (A vs B)
 - S4.1: Average fill count per event, distribution of partial fills
@@ -324,15 +342,18 @@ Generate a comprehensive report per strategy run. The report MUST include:
 - S5: Average funding spread captured, correlation lag between exchanges
 
 **Per-Trade Log (optional, controlled by config):**
+
 - Timestamp, symbol, exchange, funding rate, entry price, exit price, delta P&L, funding P&L, fees, net P&L, exit reason, hold duration
 
 ### Data Quality Section
+
 - Total events scanned
 - Events skipped by reason (gap, staleness, missing funding rate, price anomaly)
 - Data coverage % per symbol/exchange
 - Date range actually backtested vs configured
 
 ### Reproducibility Section
+
 - Config hash (SHA-256 of merged config)
 - Data hash (hash of query results or row counts)
 - Run timestamp
@@ -384,6 +405,7 @@ Create synthetic test fixtures (small, hand-crafted data sets) with known expect
 18. **Empty data window:** No crash, event is skipped cleanly.
 
 Each E2E test provides the input data fixture, runs the full pipeline, and asserts on:
+
 - Whether a trade was generated (yes/no)
 - Exact entry price, exit price, exit reason
 - Exact net P&L (within 1e-10 tolerance)
@@ -413,17 +435,20 @@ Before declaring the system complete, ALL of the following must be true:
 Follow this sequence strictly:
 
 ### Phase 1: Discovery
+
 1. SSH into the server.
 2. Introspect the ClickHouse schema (`DESCRIBE TABLE`, `SELECT ... LIMIT`, distinct values, date ranges, row counts).
 3. Document the actual schema in a comment block at the top of `queries.ts`.
 4. Identify any discrepancies between assumed and actual data (e.g., funding rate format: is it already a decimal like 0.015 or a percentage like 1.5?).
 
 ### Phase 2: Config + Scaffolding
+
 5. Create the full directory structure.
 6. Write `base_config.yaml` and all strategy configs using ACTUAL column names and data formats discovered in Phase 1.
 7. Implement the config loader with validation.
 
 ### Phase 3: Data Layer
+
 8. Implement SSH tunnel management.
 9. Implement ClickHouse client with connection pooling.
 10. Implement parameterised queries.
@@ -431,21 +456,25 @@ Follow this sequence strictly:
 12. Write integration tests for the data layer.
 
 ### Phase 4: Engine + Strategies
+
 13. Implement the order simulator.
 14. Implement the backtest engine event loop.
 15. Implement each strategy one at a time, with unit tests, before moving to the next.
 16. Implement the lookahead guard.
 
 ### Phase 5: Reporting
+
 17. Implement all metric calculations with unit tests.
 18. Implement the report generator.
 
 ### Phase 6: E2E Tests
+
 19. Create all synthetic test fixtures.
 20. Write and run all E2E test scenarios.
 21. Fix any failures.
 
 ### Phase 7: Quality Gates
+
 22. Run the full quality gate checklist.
 23. Fix any violations.
 24. Do a final full run against real ClickHouse data for all strategies one-by-one and review the reports for sanity.

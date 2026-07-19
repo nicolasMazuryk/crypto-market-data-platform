@@ -3,6 +3,7 @@
 ## Architecture
 
 Single Hetzner CPX62 server (16 vCPU / 32 GB) running:
+
 - **ClickHouse** — persistent Docker container, data on attached Hetzner volume (`/data`)
 - **Workers** — one-shot Docker containers; market sync and incremental funding sync are driven by systemd timers (not auto-started on provisioning — activate manually when ready); quote sync and funding backfill are started manually
 - **Monitoring** — health check script on a 3-minute systemd timer
@@ -212,6 +213,7 @@ ssh -i ~/.ssh/nicolas -L 8123:localhost:8123 -L 9000:localhost:9000 -N nicolas@$
 ## Health Check
 
 Runs every 3 minutes. Checks:
+
 - ClickHouse ping
 - Docker running
 - Disk usage < 80%
@@ -244,11 +246,11 @@ ClickHouse data survives because it lives on the separate Hetzner volume.
 
 All dashboards are publicly accessible over HTTPS via Caddy reverse proxy (nip.io wildcard TLS).
 
-| Service | URL | Auth |
-|---|---|---|
-| Grafana | https://grafana.203-0-113-10.nip.io | admin / `<OBSERVABILITY_PASSWORD>` |
-| Prometheus | https://prometheus.203-0-113-10.nip.io | ops / `<OBSERVABILITY_PASSWORD>` (HTTP Basic Auth) |
-| Jaeger | https://jaeger.203-0-113-10.nip.io | ops / `<OBSERVABILITY_PASSWORD>` (HTTP Basic Auth) |
+| Service      | URL                                        | Auth                                           |
+| ------------ | ------------------------------------------ | ---------------------------------------------- |
+| Grafana      | https://grafana.203-0-113-10.nip.io      | admin / `<OBSERVABILITY_PASSWORD>`                 |
+| Prometheus   | https://prometheus.203-0-113-10.nip.io   | ops / `<OBSERVABILITY_PASSWORD>` (HTTP Basic Auth) |
+| Jaeger       | https://jaeger.203-0-113-10.nip.io       | ops / `<OBSERVABILITY_PASSWORD>` (HTTP Basic Auth) |
 | Alertmanager | https://alertmanager.203-0-113-10.nip.io | ops / `<OBSERVABILITY_PASSWORD>` (HTTP Basic Auth) |
 
 To rotate the basic-auth password, re-run `caddy hash-password` on the server, update `observability_basicauth_password_hash` in `ansible/group_vars/all.yml`, then `npm run setup`.

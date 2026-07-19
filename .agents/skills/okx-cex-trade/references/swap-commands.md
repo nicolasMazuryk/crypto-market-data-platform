@@ -4,15 +4,15 @@
 
 This CLI uses **space-separated subcommands** (`okx swap algo place`). The MCP tool names surfaced to AI agents use a **single underscored identifier** (`swap_place_algo_order`). They are the same feature on two different surfaces. Mapping examples:
 
-| CLI command | MCP tool name |
-|---|---|
-| `okx swap place` | `swap_place_order` |
-| `okx swap algo place` | `swap_place_algo_order` |
-| `okx swap algo trail` | `swap_place_move_stop_order` (deprecated alias) / `swap_place_algo_order` w/ `ordType=move_order_stop` |
-| `okx swap cancel` | `swap_cancel_order` |
-| `okx swap algo cancel` | `swap_cancel_algo_order` |
-| `okx swap amend` | `swap_amend_order` |
-| `okx swap algo amend` | `swap_amend_algo_order` |
+| CLI command            | MCP tool name                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `okx swap place`       | `swap_place_order`                                                                                     |
+| `okx swap algo place`  | `swap_place_algo_order`                                                                                |
+| `okx swap algo trail`  | `swap_place_move_stop_order` (deprecated alias) / `swap_place_algo_order` w/ `ordType=move_order_stop` |
+| `okx swap cancel`      | `swap_cancel_order`                                                                                    |
+| `okx swap algo cancel` | `swap_cancel_algo_order`                                                                               |
+| `okx swap amend`       | `swap_amend_order`                                                                                     |
+| `okx swap algo amend`  | `swap_amend_algo_order`                                                                                |
 
 **Do NOT convert MCP tool names to hyphen-joined CLI commands.** `okx swap place-algo` is **not** a valid command — the CLI will reject it with "Unknown command". Use `okx swap algo place` instead.
 
@@ -28,26 +28,26 @@ okx swap place --instId <id> --side <buy|sell> --ordType <type> --sz <n> \
   [--clOrdId <id>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | Swap instrument (e.g., `BTC-USDT-SWAP`) |
-| `--side` | Yes | - | `buy` or `sell` |
-| `--ordType` | Yes | - | `market`, `limit`, `post_only`, `fok`, `ioc` |
-| `--sz` | Yes | - | Order size — unit depends on `--tgtCcy` |
-| `--tdMode` | Yes | - | `cross` or `isolated` |
-| `--tgtCcy` | No | base_ccy | `base_ccy`: sz in contracts; `quote_ccy`: sz in USDT notional value; `margin`: sz in USDT margin cost (position = sz * leverage) |
-| `--posSide` | Cond. | - | `long` or `short` — required in hedge mode |
-| `--px` | Cond. | - | Price — required for limit orders |
-| `--reduceOnly` | No | false | Close-only; will not open a new position if one doesn't exist |
-| `--tpTriggerPx` | No | - | Attached take-profit trigger price |
-| `--tpOrdPx` | No | - | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`) |
-| `--tpOrdKind` | No | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase) |
-| `--tpTriggerPxType` | No | last | Price source for TP trigger: `last` (default), `index`, `mark` |
-| `--slTriggerPx` | No | - | Attached stop-loss trigger price |
-| `--slOrdPx` | No | - | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`) |
-| `--slTriggerPxType` | No | last | Price source for SL trigger: `last` (default), `index`, `mark` |
-| `--stpMode` | No | - | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both` |
-| `--clOrdId` | No | - | Client-assigned order ID (max 32 chars alphanumeric + `-` `_`) |
+| Param               | Required | Default   | Description                                                                                                                       |
+| ------------------- | -------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `--instId`          | Yes      | -         | Swap instrument (e.g., `BTC-USDT-SWAP`)                                                                                           |
+| `--side`            | Yes      | -         | `buy` or `sell`                                                                                                                   |
+| `--ordType`         | Yes      | -         | `market`, `limit`, `post_only`, `fok`, `ioc`                                                                                      |
+| `--sz`              | Yes      | -         | Order size — unit depends on `--tgtCcy`                                                                                           |
+| `--tdMode`          | Yes      | -         | `cross` or `isolated`                                                                                                             |
+| `--tgtCcy`          | No       | base_ccy  | `base_ccy`: sz in contracts; `quote_ccy`: sz in USDT notional value; `margin`: sz in USDT margin cost (position = sz \* leverage) |
+| `--posSide`         | Cond.    | -         | `long` or `short` — required in hedge mode                                                                                        |
+| `--px`              | Cond.    | -         | Price — required for limit orders                                                                                                 |
+| `--reduceOnly`      | No       | false     | Close-only; will not open a new position if one doesn't exist                                                                     |
+| `--tpTriggerPx`     | No       | -         | Attached take-profit trigger price                                                                                                |
+| `--tpOrdPx`         | No       | -         | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`)                                                 |
+| `--tpOrdKind`       | No       | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase)                                     |
+| `--tpTriggerPxType` | No       | last      | Price source for TP trigger: `last` (default), `index`, `mark`                                                                    |
+| `--slTriggerPx`     | No       | -         | Attached stop-loss trigger price                                                                                                  |
+| `--slOrdPx`         | No       | -         | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`)                                                 |
+| `--slTriggerPxType` | No       | last      | Price source for SL trigger: `last` (default), `index`, `mark`                                                                    |
+| `--stpMode`         | No       | -         | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both`                                                              |
+| `--clOrdId`         | No       | -         | Client-assigned order ID (max 32 chars alphanumeric + `-` `_`)                                                                    |
 
 ---
 
@@ -77,12 +77,12 @@ okx swap close --instId <id> --mgnMode <cross|isolated> \
   [--posSide <long|short>] [--autoCxl] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | Swap instrument |
-| `--mgnMode` | Yes | - | `cross` or `isolated` |
-| `--posSide` | Cond. | - | `long` or `short` — required in hedge mode |
-| `--autoCxl` | No | false | Auto-cancel pending orders before closing |
+| Param       | Required | Default | Description                                |
+| ----------- | -------- | ------- | ------------------------------------------ |
+| `--instId`  | Yes      | -       | Swap instrument                            |
+| `--mgnMode` | Yes      | -       | `cross` or `isolated`                      |
+| `--posSide` | Cond.    | -       | `long` or `short` — required in hedge mode |
+| `--autoCxl` | No       | false   | Auto-cancel pending orders before closing  |
 
 Closes the **entire** position at market price.
 
@@ -95,12 +95,12 @@ okx swap leverage --instId <id> --lever <n> --mgnMode <cross|isolated> \
   [--posSide <long|short>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | Swap instrument |
-| `--lever` | Yes | - | Positive number, e.g., `10`. Max allowed depends on the instrument (query `okx market instruments`). |
-| `--mgnMode` | Yes | - | `cross` or `isolated` |
-| `--posSide` | Cond. | - | `long` or `short` — required for `isolated` in hedge (`long_short_mode`) pos mode. Each side must be set **separately** (setting `long` does NOT auto-apply to `short`). Omit for net mode or for `cross`. |
+| Param       | Required | Default | Description                                                                                                                                                                                                |
+| ----------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--instId`  | Yes      | -       | Swap instrument                                                                                                                                                                                            |
+| `--lever`   | Yes      | -       | Positive number, e.g., `10`. Max allowed depends on the instrument (query `okx market instruments`).                                                                                                       |
+| `--mgnMode` | Yes      | -       | `cross` or `isolated`                                                                                                                                                                                      |
+| `--posSide` | Cond.    | -       | `long` or `short` — required for `isolated` in hedge (`long_short_mode`) pos mode. Each side must be set **separately** (setting `long` does NOT auto-apply to `short`). Omit for net mode or for `cross`. |
 
 **Not supported**: Portfolio-margin accounts cannot adjust `cross` leverage for SWAP — OKX always rejects. If unsure of account mode, run `okx account config` first and check `acctLv`.
 
@@ -134,33 +134,34 @@ okx swap algo place --instId <id> --side <buy|sell> \
   [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | Swap instrument (e.g., `BTC-USDT-SWAP`) |
-| `--side` | Yes | - | `buy` or `sell` |
-| `--ordType` | Yes | - | `oco`, `conditional`, or `move_order_stop` |
-| `--sz` | Yes | - | Number of contracts |
-| `--tdMode` | Yes | - | `cross` or `isolated` |
-| `--clOrdId` | No | - | Client-assigned algo order ID (max 32 chars alphanumeric + `-` `_`) |
-| `--tgtCcy` | No | base_ccy | `base_ccy`: sz in contracts; `quote_ccy`: sz in USDT notional value; `margin`: sz in USDT margin cost (position = sz * leverage) |
-| `--posSide` | Cond. | - | `long` or `short` — required in hedge mode |
-| `--reduceOnly` | No | false | Close-only; will not open a new position if one doesn't exist |
-| `--tpTriggerPx` | Cond. | - | Take-profit trigger price |
-| `--tpOrdPx` | Cond. | - | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`) |
-| `--tpOrdKind` | No | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase) |
-| `--tpTriggerPxType` | No | last | Price source for TP trigger: `last` (default), `index`, `mark` |
-| `--slTriggerPx` | Cond. | - | Stop-loss trigger price |
-| `--slOrdPx` | Cond. | - | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`) |
-| `--slTriggerPxType` | No | last | Price source for SL trigger: `last` (default), `index`, `mark` |
-| `--stpMode` | No | - | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both` |
-| `--cxlOnClosePos` | No | false | Auto-cancel this algo order when the position is closed |
-| `--callbackRatio` | Cond. | - | Trailing callback as a ratio (e.g., `0.02` = 2%); cannot be combined with `--callbackSpread` |
-| `--callbackSpread` | Cond. | - | Trailing callback as fixed price distance; cannot be combined with `--callbackRatio` |
-| `--activePx` | No | - | Price at which trailing stop becomes active |
+| Param               | Required | Default   | Description                                                                                                                       |
+| ------------------- | -------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `--instId`          | Yes      | -         | Swap instrument (e.g., `BTC-USDT-SWAP`)                                                                                           |
+| `--side`            | Yes      | -         | `buy` or `sell`                                                                                                                   |
+| `--ordType`         | Yes      | -         | `oco`, `conditional`, or `move_order_stop`                                                                                        |
+| `--sz`              | Yes      | -         | Number of contracts                                                                                                               |
+| `--tdMode`          | Yes      | -         | `cross` or `isolated`                                                                                                             |
+| `--clOrdId`         | No       | -         | Client-assigned algo order ID (max 32 chars alphanumeric + `-` `_`)                                                               |
+| `--tgtCcy`          | No       | base_ccy  | `base_ccy`: sz in contracts; `quote_ccy`: sz in USDT notional value; `margin`: sz in USDT margin cost (position = sz \* leverage) |
+| `--posSide`         | Cond.    | -         | `long` or `short` — required in hedge mode                                                                                        |
+| `--reduceOnly`      | No       | false     | Close-only; will not open a new position if one doesn't exist                                                                     |
+| `--tpTriggerPx`     | Cond.    | -         | Take-profit trigger price                                                                                                         |
+| `--tpOrdPx`         | Cond.    | -         | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`)                                                 |
+| `--tpOrdKind`       | No       | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase)                                     |
+| `--tpTriggerPxType` | No       | last      | Price source for TP trigger: `last` (default), `index`, `mark`                                                                    |
+| `--slTriggerPx`     | Cond.    | -         | Stop-loss trigger price                                                                                                           |
+| `--slOrdPx`         | Cond.    | -         | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`)                                                 |
+| `--slTriggerPxType` | No       | last      | Price source for SL trigger: `last` (default), `index`, `mark`                                                                    |
+| `--stpMode`         | No       | -         | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both`                                                              |
+| `--cxlOnClosePos`   | No       | false     | Auto-cancel this algo order when the position is closed                                                                           |
+| `--callbackRatio`   | Cond.    | -         | Trailing callback as a ratio (e.g., `0.02` = 2%); cannot be combined with `--callbackSpread`                                      |
+| `--callbackSpread`  | Cond.    | -         | Trailing callback as fixed price distance; cannot be combined with `--callbackRatio`                                              |
+| `--activePx`        | No       | -         | Price at which trailing stop becomes active                                                                                       |
 
 For `move_order_stop`: provide `--callbackRatio` or `--callbackSpread` (one required).
 
 **Example — TP/SL worth 500 USDT notional on BTC perp (auto-convert to contracts):**
+
 ```bash
 okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
   --sz 500 --tgtCcy quote_ccy --tdMode cross --posSide long \
@@ -168,6 +169,7 @@ okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
 ```
 
 **Example — TP/SL with 500 USDT margin cost (leverage-aware, e.g. 10x → 5000 USDT notional):**
+
 ```bash
 okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
   --sz 500 --tgtCcy margin --tdMode cross --posSide long \
@@ -175,6 +177,7 @@ okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
 ```
 
 **Example — Immediate limit-order TP (tpOrdKind limit) — exits at a specific price without waiting for a trigger phase:**
+
 ```bash
 okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
   --sz 1 --tdMode cross --posSide long \
@@ -182,6 +185,7 @@ okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
 ```
 
 **Example — Self-trade prevention (stpMode cancel_maker) — cancel maker side on self-trade:**
+
 ```bash
 okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
   --sz 1 --tdMode cross --posSide long \
@@ -189,6 +193,7 @@ okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
 ```
 
 **Example — Auto-cancel on position close (cxlOnClosePos):**
+
 ```bash
 okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType conditional \
   --sz 1 --tdMode cross --posSide long \
@@ -208,11 +213,11 @@ okx swap algo trail --instId <id> --side <buy|sell> --sz <n> \
   [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--callbackRatio` | Cond. | - | Trailing callback as a ratio (e.g., `0.02` = 2%); cannot be combined with `--callbackSpread` |
-| `--callbackSpread` | Cond. | - | Trailing callback as fixed price distance; cannot be combined with `--callbackRatio` |
-| `--activePx` | No | - | Price at which trailing stop becomes active |
+| Param              | Required | Default | Description                                                                                  |
+| ------------------ | -------- | ------- | -------------------------------------------------------------------------------------------- |
+| `--callbackRatio`  | Cond.    | -       | Trailing callback as a ratio (e.g., `0.02` = 2%); cannot be combined with `--callbackSpread` |
+| `--callbackSpread` | Cond.    | -       | Trailing callback as fixed price distance; cannot be combined with `--callbackRatio`         |
+| `--activePx`       | No       | -       | Price at which trailing stop becomes active                                                  |
 
 ---
 

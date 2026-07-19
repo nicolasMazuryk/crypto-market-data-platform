@@ -34,17 +34,17 @@
 
     - name: Ensure persistent quote validation reports directory exists
       ansible.builtin.file:
-        path: "{{ quotes_validation_reports_dir }}"
+        path: '{{ quotes_validation_reports_dir }}'
         state: directory
         owner: nicolas
         group: nicolas
-        mode: "0755"
+        mode: '0755'
 
     - name: Pull latest code
       ansible.builtin.git:
-        repo: "{{ repo_url }}"
-        dest: "{{ repo_dir }}"
-        version: "{{ repo_branch }}"
+        repo: '{{ repo_url }}'
+        dest: '{{ repo_dir }}'
+        version: '{{ repo_branch }}'
         accept_hostkey: true
         key_file: /home/nicolas/.ssh/github_deploy_key
         force: true
@@ -52,28 +52,28 @@
 
     - name: Build Docker image
       community.docker.docker_image:
-        name: "{{ app_name }}"
+        name: '{{ app_name }}'
         tag: latest
         source: build
         build:
-          path: "{{ repo_dir }}"
+          path: '{{ repo_dir }}'
         force_source: true
 
     - name: Template docker-compose.prod.yml
       ansible.builtin.template:
         src: ../roles/app/templates/docker-compose.prod.yml.j2
-        dest: "{{ docker_compose_file }}"
+        dest: '{{ docker_compose_file }}'
         owner: nicolas
         group: nicolas
-        mode: "0644"
+        mode: '0644'
 
     - name: Template .env
       ansible.builtin.template:
         src: ../roles/app/templates/env.prod.j2
-        dest: "{{ app_dir }}/.env"
+        dest: '{{ app_dir }}/.env'
         owner: nicolas
         group: nicolas
-        mode: "0600"
+        mode: '0600'
 
     # ── Infrastructure restart (safe: execution engine is stopped above) ──────
     - name: Restart ClickHouse
@@ -83,7 +83,7 @@
 
     - name: Wait for ClickHouse to be healthy
       ansible.builtin.uri:
-        url: "http://localhost:{{ clickhouse_http_port }}/ping"
+        url: 'http://localhost:{{ clickhouse_http_port }}/ping'
         return_content: true
       register: healthcheck
       until: healthcheck.status == 200

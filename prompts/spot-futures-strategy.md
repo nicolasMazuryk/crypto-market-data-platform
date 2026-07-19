@@ -25,15 +25,15 @@ Our ClickHouse database currently stores **only perpetual futures market data**.
 
 ## Parameters (configurable)
 
-| Parameter | Default | Meaning |
-|---|---|---|
-| `F_threshold` | `0.15%` | Minimum positive predicted funding rate required to enter a trade. |
-| `T_entry` | `T_funding − 5s` | Entry timing offset: 5 seconds before the funding event. |
-| `T_exit` | `T_next_funding − 5s` | Earliest exit timing offset: 5 seconds before the *next* funding event. |
-| `minTotalProfit` | `0.05%` | Minimum required *expected* round-trip net profit to enter the trade, computed as `predicted_funding_rate + entry_spread − round_trip_fees`. |
-| `fundingConvergenceThreshold` | `0.02%` | Funding floor at which capital is no longer worth locking up; trigger exit. |
-| `spreadWideningThreshold` | `5%` | Stop-loss on the delta-neutral pair: exit if `current_spread − entry_spread` exceeds this. |
-| `spreadTakeProfit` | `0.4%` | Take-profit on spread movement: exit any time spread P&L exceeds this, without waiting for funding convergence. |
+| Parameter                     | Default               | Meaning                                                                                                                                      |
+| ----------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `F_threshold`                 | `0.15%`               | Minimum positive predicted funding rate required to enter a trade.                                                                           |
+| `T_entry`                     | `T_funding − 5s`      | Entry timing offset: 5 seconds before the funding event.                                                                                     |
+| `T_exit`                      | `T_next_funding − 5s` | Earliest exit timing offset: 5 seconds before the _next_ funding event.                                                                      |
+| `minTotalProfit`              | `0.05%`               | Minimum required _expected_ round-trip net profit to enter the trade, computed as `predicted_funding_rate + entry_spread − round_trip_fees`. |
+| `fundingConvergenceThreshold` | `0.02%`               | Funding floor at which capital is no longer worth locking up; trigger exit.                                                                  |
+| `spreadWideningThreshold`     | `5%`                  | Stop-loss on the delta-neutral pair: exit if `current_spread − entry_spread` exceeds this.                                                   |
+| `spreadTakeProfit`            | `0.4%`                | Take-profit on spread movement: exit any time spread P&L exceeds this, without waiting for funding convergence.                              |
 
 ### Timing constraints
 
@@ -61,7 +61,7 @@ AND (predicted_funding_rate + entry_spread − round_trip_fees) >= minTotalProfi
 Exit when **any** of the following becomes true (whichever fires first), but **never before** `T_exit` has been reached for the first time (i.e., we must collect at least one funding payment):
 
 1. `current_funding_rate <= fundingConvergenceThreshold`
-2. `spread_pnl >= spreadTakeProfit` — *this one may fire at any time after entry, including before the first funding event if the system is later configured to allow it; for now, gate it behind `T_exit` as well unless we explicitly decide otherwise — flag this as a config decision.*
+2. `spread_pnl >= spreadTakeProfit` — _this one may fire at any time after entry, including before the first funding event if the system is later configured to allow it; for now, gate it behind `T_exit` as well unless we explicitly decide otherwise — flag this as a config decision._
 3. `(current_spread − entry_spread) >= spreadWideningThreshold` — stop-loss
 
 If none fire and funding remains `> fundingConvergenceThreshold`, **carry the position across multiple funding events** and keep collecting funding until an exit condition triggers.

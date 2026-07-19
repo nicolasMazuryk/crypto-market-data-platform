@@ -31,11 +31,18 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
       void (async () => {
         try {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          const entries = await restClient.getFuturesAccountBook({
+          const entries = (await restClient.getFuturesAccountBook({
             settle: 'usdt',
             type: 'fund',
             limit: 100,
-          }) as { time: number; contract?: string; change?: string; change_type?: string; currency?: string }[]
+          })) as {
+            time: number
+            contract?: string
+            change?: string
+            change_type?: string
+            currency?: string
+            type?: string
+          }[]
 
           const newEntries = entries.filter(e => e.time > lastFundingTime)
           if (newEntries.length === 0) return
@@ -51,11 +58,11 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
           for (const contract of contractsToFetch) {
             try {
               // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-              const rates = await restClient.listFuturesFundingRateHistory({
+              const rates = (await restClient.listFuturesFundingRateHistory({
                 settle: 'usdt',
                 contract,
                 limit: 5,
-              }) as { contract?: string; t?: number; r?: string }[]
+              })) as { contract?: string; t?: number; r?: string }[]
               if (rates.length > 0) {
                 const r = parseFloat(rates[0]?.r ?? '0')
                 if (!isNaN(r)) rateByContract[contract] = r
@@ -70,14 +77,16 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
           const message = {
             channel: 'futures.account_book',
             event: 'update',
-            result: newEntries.map((e: Record<string, unknown>) => ({
+            result: newEntries.map(e => ({
               ...e,
               change_type: e.type,
-              funding_rate: rateByContract[String(e.contract ?? '')] ?? 0,
+              funding_rate: rateByContract[e.contract ?? ''] ?? 0,
             })),
           }
           if (process.env.GATEIO_ACCTBOOK_DEBUG === '1') {
-            process.stdout.write(JSON.stringify({ _debug: 'gateio.acctbook_poll', count: newEntries.length, entries: newEntries }) + '\n')
+            process.stdout.write(
+              JSON.stringify({ _debug: 'gateio.acctbook_poll', count: newEntries.length, entries: newEntries }) + '\n'
+            )
           }
           emitter.emit('message', message)
         } catch {

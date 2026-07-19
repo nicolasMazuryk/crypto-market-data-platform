@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_4_2a.ts`, `src/execution/execution/mana
 ---
 
 **Bybit-specific notes (CRITICAL):**
+
 - REST limit entry (no WS adapter)
 - Bybit WS event timestamps in **microseconds (μs)** → adapter divides by 1000 for ms
 - Bybit echoes `clientOrderId` for limit fills → WS routing works

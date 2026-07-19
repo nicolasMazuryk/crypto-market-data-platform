@@ -412,7 +412,10 @@ describe('FundingEventScheduler (hourly wake)', () => {
 
     evaluateSpy.mockClear()
     vi.setSystemTime(0)
-    configs.set('strategy_6', { ...(configs.get('strategy_6') as Extract<StrategyConfig, { id: 'strategy_6' }>), funding_threshold: 0 })
+    configs.set('strategy_6', {
+      ...(configs.get('strategy_6') as Extract<StrategyConfig, { id: 'strategy_6' }>),
+      funding_threshold: 0,
+    })
     scheduler = createFundingEventScheduler({
       clock: makeClock(),
       evaluator: {

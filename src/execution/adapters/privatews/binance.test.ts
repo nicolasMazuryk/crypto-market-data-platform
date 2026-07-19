@@ -6,7 +6,14 @@ import { createExecutionLogger } from '../../core/logger.js'
 import { MetricsRegistry, registerPrivateWsMetrics } from '../../observability/metrics.js'
 import { createFakeBinanceWsClient } from '../../test-helpers/wsClientMock.js'
 import { createBinancePrivateWsAdapter } from './binance.js'
-import type { ConnectionStateEvent, OrderEvent, BalanceEvent, PositionEvent, FundingFeeEvent, FillEvent } from './types.js'
+import type {
+  ConnectionStateEvent,
+  OrderEvent,
+  BalanceEvent,
+  PositionEvent,
+  FundingFeeEvent,
+  FillEvent,
+} from './types.js'
 import type { ExchangeConfig } from '../../config/types.js'
 import { createFakeWsClient, runWsAdapterConformance } from './__tests__/conformance.js'
 import { createPrivateWsAdapterFromSpec } from './private-ws-base.js'

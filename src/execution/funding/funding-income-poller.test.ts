@@ -5,7 +5,10 @@ import type { ExchangeRestAdapter, FundingIncomeRecord } from '../adapters/rest/
 import type { ExecutionManager } from '../execution/types.js'
 import { createFundingIncomePoller } from './funding-income-poller.js'
 
-function makeAdapter(exchange: ExchangeRestAdapter['exchange'], record: FundingIncomeRecord | null): ExchangeRestAdapter {
+function makeAdapter(
+  exchange: ExchangeRestAdapter['exchange'],
+  record: FundingIncomeRecord | null
+): ExchangeRestAdapter {
   return {
     exchange,
     setLeverage: vi.fn(),
@@ -71,7 +74,9 @@ describe('createFundingIncomePoller', () => {
     expect(binance.fetchFundingFeeIncome).toHaveBeenCalledWith('BTCUSDT', 1_699_999_200_000)
     expect(okx.fetchFundingFeeIncome).toHaveBeenCalledWith('EDENUSDT', 1_699_999_200_000)
     expect(emitted).toHaveLength(2)
-    expect(emitted).toContainEqual(expect.objectContaining({ exchange: 'okx', symbol: 'EDENUSDT', fundingAmount: 0.05 }))
+    expect(emitted).toContainEqual(
+      expect.objectContaining({ exchange: 'okx', symbol: 'EDENUSDT', fundingAmount: 0.05 })
+    )
   })
 
   it('logs not_found without emitting when an adapter has no funding record', async () => {

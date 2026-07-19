@@ -4,14 +4,14 @@ The Strategy Execution Engine evaluates funding-rate arbitrage opportunities acr
 
 ## Doc set
 
-| File | What it covers |
-|------|----------------|
-| [architecture.md](./architecture.md) | Component inventory, roles, data flow narrative, startup sequence, Mermaid lifecycle diagram, external dependencies |
-| [trading-logic.md](./trading-logic.md) | Strategy rules (entry triggers, position direction, sizing, exits), risk controls, per-strategy parameter tables |
-| [commands.md](./commands.md) | Every `npm run` and CLI invocation — purpose, flags, prerequisites, examples |
-| [configuration.md](./configuration.md) | Config file layout, precedence order, secrets matrix, parameter reference, how to add a parameter |
-| [infrastructure.md](./infrastructure.md) | Local vs prod environments, Terraform/Ansible/systemd deployment flow, service inventory, observability hooks |
-| [runbook.md](./runbook.md) | Start locally, deploy, hotfix, rollback, kill-switch response, state recovery, on-call guide |
+| File                                     | What it covers                                                                                                      |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [architecture.md](./architecture.md)     | Component inventory, roles, data flow narrative, startup sequence, Mermaid lifecycle diagram, external dependencies |
+| [trading-logic.md](./trading-logic.md)   | Strategy rules (entry triggers, position direction, sizing, exits), risk controls, per-strategy parameter tables    |
+| [commands.md](./commands.md)             | Every `npm run` and CLI invocation — purpose, flags, prerequisites, examples                                        |
+| [configuration.md](./configuration.md)   | Config file layout, precedence order, secrets matrix, parameter reference, how to add a parameter                   |
+| [infrastructure.md](./infrastructure.md) | Local vs prod environments, Terraform/Ansible/systemd deployment flow, service inventory, observability hooks       |
+| [runbook.md](./runbook.md)               | Start locally, deploy, hotfix, rollback, kill-switch response, state recovery, on-call guide                        |
 
 ## Quick start
 
@@ -21,4 +21,3 @@ The Strategy Execution Engine evaluates funding-rate arbitrage opportunities acr
 
 - **Canonical strategy specs**: [`docs-strategy/funding_rate_strategies.md`](../../../docs-strategy/funding_rate_strategies.md) — original business-level strategy specifications and profit thesis
 - **Pipeline-side ops** (market sync, funding sync, quote sync): [`RUNBOOK.md`](../../../RUNBOOK.md)
-

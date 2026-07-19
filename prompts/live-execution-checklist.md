@@ -102,8 +102,8 @@ Each `checklist.md` contains a YAML list of items following this schema:
 
 ```yaml
 - id: strategy_2.OCO.SL_FIRES_AFTER_TP_REPLACED
-  category: OCO                  # ORDER_LIFECYCLE | TIMING | OCO | WEBSOCKET | RECOVERY | STRATEGY_SPECIFIC | SPEC_DIVERGENCE
-  severity: high                 # critical | high | medium | low
+  category: OCO # ORDER_LIFECYCLE | TIMING | OCO | WEBSOCKET | RECOVERY | STRATEGY_SPECIFIC | SPEC_DIVERGENCE
+  severity: high # critical | high | medium | low
   description: >
     Position is open with SL resting and TP that has been replaced at least once
     due to a new lowest_price. SL then triggers and fills.
@@ -119,15 +119,15 @@ Each `checklist.md` contains a YAML list of items following this schema:
     - deadline timer canceled
     - position transitions to CLOSED exactly once
   observability_contract:
-    - log:       "SL_FILL state=POSITION_OPEN"
-    - log:       "TP_CANCELED reason=SL_FIRED"
+    - log: 'SL_FILL state=POSITION_OPEN'
+    - log: 'TP_CANCELED reason=SL_FIRED'
     - order_log: no resting TP for this symbol after close
     - state_log: POSITION_OPEN -> POSITION_CLOSED (exactly one transition)
   code_refs:
     - src/execution/strategy_2/oco_handler.py:handle_sl_fill
   spec_refs:
     - docs-strategy/strategy_2.md (OCO section)
-  status: ⏳                     # ✅ | ⏳ | ❌
+  status: ⏳ # ✅ | ⏳ | ❌
   natural_occurrence: occasional # routine | occasional | rare
   notes: >
     Free-form notes on this exchange's specifics, e.g. how Bybit reports SL fills

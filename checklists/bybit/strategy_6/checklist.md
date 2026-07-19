@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_6.ts`, `src/execution/execution/manager
 ---
 
 **Bybit-specific notes (CRITICAL):**
+
 - WS entry via WS order adapter (requiresWsOrderAdapter=true)
 - Bybit WS event timestamps in **microseconds (μs)** → adapter divides by 1000 for ms
 - Bybit echoes `clientOrderId` for market fills → WS routing is primary

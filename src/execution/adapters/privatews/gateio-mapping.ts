@@ -90,11 +90,7 @@ export function createGateioMessageParser(
 ): (raw: unknown, receivedAt: number, seq: number) => ParsedWsMessage {
   const prevFilledQtyByOrder = new Map<string, number>()
 
-  return function parseGateioMessageStateful(
-    raw: unknown,
-    receivedAt: number,
-    seq: number
-  ): ParsedWsMessage {
+  return function parseGateioMessageStateful(raw: unknown, receivedAt: number, seq: number): ParsedWsMessage {
     const upd = raw as GateioUpdate
     const channel = upd.channel ?? 'unknown'
     const result = upd.result
@@ -151,7 +147,7 @@ export function createGateioMessageParser(
             symbol: d.contract,
             clientOrderId: d.text ? stripGateioTextPrefix(d.text) : '',
             exchangeOrderId: orderId,
-            exchangeFillId: `${exchange}:${orderId}:${updatedAt}:${filledQty}`,
+            exchangeFillId: `${exchange}:${orderId}:${String(updatedAt)}:${String(filledQty)}`,
             qty: delta,
             price: fillPx > 0 ? fillPx : 0,
             feeAsset: 'USDT',
@@ -218,7 +214,15 @@ export function createGateioMessageParser(
       for (const item of items) {
         const d = item as GateioAccountBookEntry
         if (process.env.GATEIO_ACCTBOOK_DEBUG === '1') {
-          process.stdout.write(JSON.stringify({ _debug: 'gateio.account_book', change_type: d.change_type, contract: d.contract, change: d.change, time: d.time }) + '\n')
+          process.stdout.write(
+            JSON.stringify({
+              _debug: 'gateio.account_book',
+              change_type: d.change_type,
+              contract: d.contract,
+              change: d.change,
+              time: d.time,
+            }) + '\n'
+          )
         }
         if (d.change_type !== 'fund') continue
         if (!d.contract) continue

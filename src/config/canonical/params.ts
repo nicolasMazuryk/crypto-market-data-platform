@@ -32,8 +32,12 @@ export interface CanonicalParam {
    */
   default?: number | Partial<Record<StrategyId, number>>
   hardConstraint?: CanonicalHardConstraint
-  /** DATA ONLY in Task 05 — Task 06 reads this and layers .refine()/.min()/.max() on top. */
-  bounds?: { min?: number; max?: number; note?: string }
+  /** §11.1 hard bounds, enforced on both generated schemas via zodNumberFor/boundsFor. */
+  bounds?: { min?: number; max?: number; exclusiveMin?: boolean; exclusiveMax?: boolean; note?: string }
+  /** Per-strategy override of `bounds` above (e.g. sl_multiplier differs for S4.2a). */
+  perStrategyBounds?: Partial<
+    Record<StrategyId, { min?: number; max?: number; exclusiveMin?: boolean; exclusiveMax?: boolean }>
+  >
   /** True for the 7 §10.2 rows with no liveKey; scoped to BaseConfig, not per-strategy. */
   backtestOnly?: boolean
   perExchangeOverride?: { exchange: string; strategyId?: string; value: number }[]
@@ -46,6 +50,16 @@ export function defaultFor(param: CanonicalParam, strategyId: StrategyId): numbe
   return param.default[strategyId]
 }
 
+/**
+ * Resolve the bounds for a param for a given strategy — perStrategyBounds override wins.
+ * `strategyId` is omitted for backtest-only BaseConfig params, which have no per-strategy
+ * dimension.
+ */
+export function boundsFor(param: CanonicalParam, strategyId?: StrategyId): CanonicalParam['bounds'] {
+  if (strategyId === undefined) return param.bounds
+  return param.perStrategyBounds?.[strategyId] ?? param.bounds
+}
+
 export const CANONICAL_PARAMS: CanonicalParam[] = [
   {
     name: 'negative_funding_threshold_percent',
@@ -56,6 +70,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     // OQ-7: canonicalized to -0.4 for all of strategy_1/1_ws/2/3a/4.1a/4.2a (kills the
     // -0.5 drift previously on strategy_1/1_ws/3a).
     default: -0.4,
+    bounds: { min: -5.0, max: 0, exclusiveMax: true },
   },
   {
     name: 'entry_offset_seconds',
@@ -73,6 +88,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
       strategy_6: 10,
     },
     hardConstraint: { positive: true },
+    bounds: { min: 2 },
   },
   {
     name: 'exit_offset_seconds',
@@ -80,7 +96,9 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     liveKey: 'exitOffsetSeconds',
     unit: 'seconds',
     sign: 'absolute',
-    default: { strategy_1: 2 },
+    // R2: default bumped 2 -> 6 to satisfy the new >=6 bound.
+    default: { strategy_1: 6 },
+    bounds: { min: 6 },
   },
   {
     name: 'retracement_pct',
@@ -90,6 +108,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: { strategy_2: 0.5 },
     hardConstraint: { min: 0, max: 1 },
+    bounds: { min: 0, exclusiveMin: true, max: 1 },
   },
   {
     name: 'deadline_seconds',
@@ -104,6 +123,8 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
       strategy_4_2a: 60,
       strategy_6: 3300,
     },
+    // R3: 10..3600.
+    bounds: { min: 10, max: 3600 },
   },
   {
     name: 'sl_multiplier',
@@ -117,6 +138,8 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
       strategy_4_2a: 1.5,
       strategy_6: 1.0,
     },
+    bounds: { min: 0.5, max: 4.0 },
+    perStrategyBounds: { strategy_4_2a: { min: 1.0, max: 4.0 } },
   },
   {
     name: 'stop_loss_percent',
@@ -125,6 +148,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'percent',
     sign: 'absolute',
     default: { strategy_3a: 1 },
+    bounds: { min: 0.2, max: 5.0 },
   },
   {
     name: 'tp_variant_a_multiplier',
@@ -149,6 +173,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'percent',
     sign: 'absolute',
     default: { strategy_4_1a: 0.2, strategy_4_2a: 0.2 },
+    bounds: { min: 0.05, max: 5.0 },
   },
   {
     name: 'ladder_count',
@@ -158,6 +183,8 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: { strategy_4_1a: 5 },
     hardConstraint: { min: 2 },
+    // hardConstraint.min:2 above is redundant with this bound; left as-is (harmless).
+    bounds: { min: 2, max: 20 },
   },
   {
     name: 'ladder_top_mult',
@@ -191,6 +218,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: { strategy_1_ws: 30, strategy_2: 30, strategy_6: 30 },
     hardConstraint: { positive: true },
+    bounds: { min: 5, max: 120 },
     // Base default 30 already matches current live schema.ts defaults; OKX runs these
     // three strategies at 45s in the deployed per-instance YAMLs. Data only — not
     // applied automatically by generate-live.ts (no exchange dimension in the strategy

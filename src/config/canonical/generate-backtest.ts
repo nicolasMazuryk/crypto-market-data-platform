@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 import type { StrategyConfig, BacktestOnlyConfig } from '../../backtesting/config/schema.js'
 import { CANONICAL_PARAMS, BACKTEST_ONLY_PARAMS, defaultFor } from './params.js'
-import { STRATEGY_DEFS, BACKTEST_STRATEGY_IDS } from './strategies.js'
+import { STRATEGY_DEFS, BACKTEST_STRATEGY_IDS, applyCrossFieldBounds } from './strategies.js'
 import { zodNumberFor } from './zod-field.js'
 
 const paramsByName = new Map(CANONICAL_PARAMS.map(p => [p.name, p]))
@@ -15,14 +15,14 @@ function btShapeFor(strategyId: (typeof BACKTEST_STRATEGY_IDS)[number]): Record<
     const param = paramsByName.get(paramName)
     if (!param) throw new Error(`Unknown canonical param '${paramName}' referenced by ${strategyId}`)
     if (!param.btKey) continue // live-only param — no backtest representation
-    shape[param.btKey] = zodNumberFor(param, defaultFor(param, strategyId))
+    shape[param.btKey] = zodNumberFor(param, defaultFor(param, strategyId), strategyId)
   }
 
   if (def.btExtra) Object.assign(shape, def.btExtra)
   return shape
 }
 
-const backtestObjects = BACKTEST_STRATEGY_IDS.map(id => z.object(btShapeFor(id)))
+const backtestObjects = BACKTEST_STRATEGY_IDS.map(id => applyCrossFieldBounds(z.object(btShapeFor(id)), id, 'bt'))
 
 /**
  * Generated backtest strategy schema: discriminated union over the 5 backtest strategy

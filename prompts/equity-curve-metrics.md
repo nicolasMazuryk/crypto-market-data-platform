@@ -2,11 +2,12 @@
 
 ## Context
 
-You are implementing equity curve analysis metrics for an algorithmic trading strategy backtesting harness. The backtesting engine already computes standard trade-level metrics (Sharpe, Sortino, max drawdown %, win rate, etc.). Your task is to add a new analysis module that takes the raw **equity curve array** as input and computes six structured metrics that measure the *quality and shape* of the equity curve itself — not individual trade statistics.
+You are implementing equity curve analysis metrics for an algorithmic trading strategy backtesting harness. The backtesting engine already computes standard trade-level metrics (Sharpe, Sortino, max drawdown %, win rate, etc.). Your task is to add a new analysis module that takes the raw **equity curve array** as input and computes six structured metrics that measure the _quality and shape_ of the equity curve itself — not individual trade statistics.
 
 The equity curve is an ordered array of cumulative PnL values over time, one value per funding event (e.g., every 8 hours). The index position represents time; the value represents cumulative net PnL at that point.
 
 **Example input shape:**
+
 ```json
 "equity_curve": [-0.000279, 0.000162, 0.002546, ..., 1.9976]
 ```
@@ -16,11 +17,13 @@ The equity curve is an ordered array of cumulative PnL values over time, one val
 ## Module Requirements
 
 ### Input
+
 ```typescript
 equity: number[]   // ordered array of cumulative PnL values, length N
 ```
 
 ### Output
+
 A structured object `EquityCurveMetrics` containing all six metrics described below, plus a top-level `equity_curve_quality_score` (0–100) that aggregates them. See the Output Schema section at the end.
 
 ---
@@ -28,10 +31,12 @@ A structured object `EquityCurveMetrics` containing all six metrics described be
 ## Metric 1 — R² (Log-Linear Smoothness)
 
 ### What it measures
+
 How well the equity curve fits a straight line on a log scale. A perfectly smooth, compounding strategy scores R² = 1.0. Discontinuous jumps, flat plateaus, and crashes all reduce R² toward 0.
 
 ### Why it matters
-A high R² means returns are generated consistently over time, not from a single lucky event. It is the primary measure of *smoothness*.
+
+A high R² means returns are generated consistently over time, not from a single lucky event. It is the primary measure of _smoothness_.
 
 ### Formula
 
@@ -50,21 +55,24 @@ A high R² means returns are generated consistently over time, not from a single
 ```
 
 ### Interpretation
-| R²       | Quality         |
-|----------|-----------------|
-| > 0.98   | Excellent       |
-| 0.95–0.98| Good            |
-| 0.85–0.95| Acceptable      |
-| < 0.85   | Poor            |
+
+| R²        | Quality    |
+| --------- | ---------- |
+| > 0.98    | Excellent  |
+| 0.95–0.98 | Good       |
+| 0.85–0.95 | Acceptable |
+| < 0.85    | Poor       |
 
 ---
 
 ## Metric 2 — K-Ratio (Slope Consistency)
 
 ### What it measures
-Whether the equity grows at a *consistent rate* over time. Unlike R², it explicitly penalizes deviation from slope and normalizes for observation count. Introduced by Lars Kestner (1996).
+
+Whether the equity grows at a _consistent rate_ over time. Unlike R², it explicitly penalizes deviation from slope and normalizes for observation count. Introduced by Lars Kestner (1996).
 
 ### Why it matters
+
 A strategy can have decent R² but a wildly volatile slope in sub-periods. K-Ratio catches this. Negative K-Ratio means the equity trend is downward.
 
 ### Formula
@@ -80,23 +88,26 @@ A strategy can have decent R² but a wildly volatile slope in sub-periods. K-Rat
 ```
 
 ### Interpretation
-| K-Ratio  | Quality         |
-|----------|-----------------|
-| > 0.35   | Excellent       |
-| 0.25–0.35| Good            |
-| 0.10–0.25| Acceptable      |
-| < 0.10   | Poor            |
-| < 0      | Equity declining|
+
+| K-Ratio   | Quality          |
+| --------- | ---------------- |
+| > 0.35    | Excellent        |
+| 0.25–0.35 | Good             |
+| 0.10–0.25 | Acceptable       |
+| < 0.10    | Poor             |
+| < 0       | Equity declining |
 
 ---
 
 ## Metric 3 — Ulcer Index (Sustained Drawdown Pain)
 
 ### What it measures
-The *average* squared depth of drawdown across the entire period — not just the single worst point. It heavily penalizes strategies that stay deep underwater for extended periods.
+
+The _average_ squared depth of drawdown across the entire period — not just the single worst point. It heavily penalizes strategies that stay deep underwater for extended periods.
 
 ### Why it matters
-`max_drawdown_pct` is a single worst-case snapshot. Ulcer Index measures the *ongoing experience* of loss throughout the strategy's life. A strategy can have a low max drawdown but a high Ulcer Index if it spends most of its time in moderate drawdown.
+
+`max_drawdown_pct` is a single worst-case snapshot. Ulcer Index measures the _ongoing experience_ of loss throughout the strategy's life. A strategy can have a low max drawdown but a high Ulcer Index if it spends most of its time in moderate drawdown.
 
 ### Formula
 
@@ -113,21 +124,24 @@ The *average* squared depth of drawdown across the entire period — not just th
 ```
 
 ### Interpretation
-| UI       | Quality         |
-|----------|-----------------|
-| < 2%     | Excellent       |
-| 2–5%     | Good            |
-| 5–10%    | Acceptable      |
-| > 10%    | Poor            |
+
+| UI    | Quality    |
+| ----- | ---------- |
+| < 2%  | Excellent  |
+| 2–5%  | Good       |
+| 5–10% | Acceptable |
+| > 10% | Poor       |
 
 ---
 
 ## Metric 4 — Recovery Factor
 
 ### What it measures
+
 How much net profit the strategy generated per unit of maximum absolute drawdown. A strategy that earns a lot but drawdowns massively is less capital-efficient than one that earns less but stays shallow.
 
 ### Why it matters
+
 Bridges the gap between return and risk. Unlike Sharpe (which uses std dev), Recovery Factor uses actual experienced capital loss.
 
 ### Formula
@@ -150,21 +164,24 @@ Bridges the gap between return and risk. Unlike Sharpe (which uses std dev), Rec
 ```
 
 ### Interpretation
-| Recovery Factor | Quality         |
-|-----------------|-----------------|
-| > 10            | Excellent       |
-| 3–10            | Good            |
-| 1–3             | Acceptable      |
-| < 1             | Poor            |
+
+| Recovery Factor | Quality    |
+| --------------- | ---------- |
+| > 10            | Excellent  |
+| 3–10            | Good       |
+| 1–3             | Acceptable |
+| < 1             | Poor       |
 
 ---
 
 ## Metric 5 — Serenity Ratio (Composite Quality Score)
 
 ### What it measures
-Return per unit of Ulcer pain. Analogous to the Sharpe Ratio but uses Ulcer Index in the denominator instead of standard deviation. Rewards both high return *and* low sustained drawdown.
+
+Return per unit of Ulcer pain. Analogous to the Sharpe Ratio but uses Ulcer Index in the denominator instead of standard deviation. Rewards both high return _and_ low sustained drawdown.
 
 ### Why it matters
+
 Sharpe penalizes upside volatility the same as downside. Serenity Ratio only penalizes actual drawdown pain — making it a purer measure of risk-adjusted equity curve quality.
 
 ### Formula
@@ -184,6 +201,7 @@ Sharpe penalizes upside volatility the same as downside. Serenity Ratio only pen
 ```
 
 ### Interpretation
+
 Higher is always better. Compare across strategies on the same dataset — there is no universal threshold. A negative value means the equity is declining on average relative to its drawdown.
 
 ---
@@ -191,10 +209,12 @@ Higher is always better. Compare across strategies on the same dataset — there
 ## Metric 6 — Gain-to-Pain Ratio (Step-Level Balance)
 
 ### What it measures
-The sum of all positive equity steps divided by the absolute sum of all negative equity steps. Measures how the curve *behaves at each step*, independently of trade-level P&L.
+
+The sum of all positive equity steps divided by the absolute sum of all negative equity steps. Measures how the curve _behaves at each step_, independently of trade-level P&L.
 
 ### Why it matters
-A strategy might have a good win rate on individual trades, but if the losing *steps* on the equity curve are large (e.g., from multiple losing trades hitting consecutively), GPR captures that. It is the cleanest measure of step-by-step directional consistency.
+
+A strategy might have a good win rate on individual trades, but if the losing _steps_ on the equity curve are large (e.g., from multiple losing trades hitting consecutively), GPR captures that. It is the cleanest measure of step-by-step directional consistency.
 
 ### Formula
 
@@ -211,12 +231,13 @@ A strategy might have a good win rate on individual trades, but if the losing *s
 ```
 
 ### Interpretation
-| GPR      | Quality         |
-|----------|-----------------|
-| > 2.0    | Excellent       |
-| 1.5–2.0  | Good            |
-| 1.0–1.5  | Acceptable      |
-| < 1.0    | Poor (losses outweigh gains at step level) |
+
+| GPR     | Quality                                    |
+| ------- | ------------------------------------------ |
+| > 2.0   | Excellent                                  |
+| 1.5–2.0 | Good                                       |
+| 1.0–1.5 | Acceptable                                 |
+| < 1.0   | Poor (losses outweigh gains at step level) |
 
 ---
 
@@ -273,6 +294,7 @@ equity_curve_quality_score =
 ```
 
 Weights rationale:
+
 - R² and K-Ratio together (40%) dominate because smoothness and slope consistency are the most fundamental equity curve properties.
 - Ulcer Index (20%) captures sustained pain better than any single drawdown stat.
 - Recovery and Serenity (30%) together bridge return vs. drawdown.
@@ -284,25 +306,25 @@ Weights rationale:
 
 ```typescript
 interface EquityCurveMetrics {
-  r2: number;                          // 0 to 1
-  k_ratio: number;                     // typically -1 to 1+
-  ulcer_index: number;                 // percentage, e.g. 7.3 means 7.3%
-  recovery_factor: number;             // e.g. 4.2
-  serenity_ratio: number;              // domain-dependent
-  gain_to_pain_ratio: number;          // e.g. 1.8
+  r2: number // 0 to 1
+  k_ratio: number // typically -1 to 1+
+  ulcer_index: number // percentage, e.g. 7.3 means 7.3%
+  recovery_factor: number // e.g. 4.2
+  serenity_ratio: number // domain-dependent
+  gain_to_pain_ratio: number // e.g. 1.8
 
   // Per-metric scores 0–100
   scores: {
-    r2: number;
-    k_ratio: number;
-    ulcer_index: number;
-    recovery_factor: number;
-    serenity_ratio: number;
-    gain_to_pain_ratio: number;
-  };
+    r2: number
+    k_ratio: number
+    ulcer_index: number
+    recovery_factor: number
+    serenity_ratio: number
+    gain_to_pain_ratio: number
+  }
 
   // Aggregate
-  equity_curve_quality_score: number;  // 0 to 100
+  equity_curve_quality_score: number // 0 to 100
 }
 ```
 
@@ -313,19 +335,22 @@ This object should be appended to the existing backtest result JSON at the top l
 ## Implementation Notes
 
 ### Edge Cases to Handle
-| Case | Handling |
-|------|----------|
-| `equity[i] <= 0` | Clamp to `1e-10` before `log()` for R² |
-| `max_abs_dd == 0` | Return `Infinity` for Recovery Factor |
-| `ulcer_index == 0` | Return `Infinity` for Serenity Ratio |
-| `losses == 0` | Return `Infinity` for GPR |
-| `N < 3` | Return `null` for all metrics and log a warning |
-| `NaN` or `Infinity` in equity array | Throw a descriptive error before computing |
+
+| Case                                | Handling                                        |
+| ----------------------------------- | ----------------------------------------------- |
+| `equity[i] <= 0`                    | Clamp to `1e-10` before `log()` for R²          |
+| `max_abs_dd == 0`                   | Return `Infinity` for Recovery Factor           |
+| `ulcer_index == 0`                  | Return `Infinity` for Serenity Ratio            |
+| `losses == 0`                       | Return `Infinity` for GPR                       |
+| `N < 3`                             | Return `null` for all metrics and log a warning |
+| `NaN` or `Infinity` in equity array | Throw a descriptive error before computing      |
 
 ### Testing
+
 Validate the implementation against these known-good inputs:
 
 **Perfectly linear curve** `[0, 1, 2, 3, 4, 5]`:
+
 - R² ≈ 1.0
 - K-Ratio > 0 (positive slope, low SE)
 - Ulcer Index = 0 (never draws down)
@@ -333,6 +358,7 @@ Validate the implementation against these known-good inputs:
 - GPR = Infinity (no negative steps)
 
 **Flat then crash** `[5, 5, 5, 5, 2, 1]`:
+
 - R² << 1
 - K-Ratio < 0 (downward trend)
 - Ulcer Index high
@@ -340,6 +366,7 @@ Validate the implementation against these known-good inputs:
 - GPR < 1 (losses dominate)
 
 **Monotone growing then single spike then crash** (mirrors the provided `iter_0_copy.json` equity curve):
+
 - R² significantly degraded by the discontinuous jump
 - K-Ratio may be near zero or negative due to post-spike collapse
 - Ulcer Index very high (equity spends ~40% of its history in deep drawdown after the spike)

@@ -3,8 +3,8 @@ services:
     image: clickhouse/clickhouse-server:25.5.6
     container_name: arbinet-clickhouse
     ports:
-      - "${CLICKHOUSE_HTTP_PORT}:8123"
-      - "${CLICKHOUSE_NATIVE_PORT}:9000"
+      - '${CLICKHOUSE_HTTP_PORT}:8123'
+      - '${CLICKHOUSE_NATIVE_PORT}:9000'
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ../src/db/migrations:/docker-entrypoint-initdb.d:ro
@@ -13,7 +13,7 @@ services:
       - CLICKHOUSE_USER=${CLICKHOUSE_USER}
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:8123/ping']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -26,7 +26,7 @@ services:
     image: postgres:18-alpine
     container_name: arbinet-postgres
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - '${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql
     environment:
@@ -35,7 +35,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-***REMOVED***}
       - POSTGRES_HOST_AUTH_METHOD=md5
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-arbinet} -d ${POSTGRES_DB:-arbinet}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-arbinet} -d ${POSTGRES_DB:-arbinet}']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -44,7 +44,7 @@ services:
     image: prom/prometheus:v2.54.0
     container_name: arbinet-prometheus
     ports:
-      - "9090:9090"
+      - '9090:9090'
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -53,14 +53,14 @@ services:
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - 'host.docker.internal:host-gateway'
     restart: unless-stopped
 
   grafana:
     image: grafana/grafana:11.1.0
     container_name: arbinet-grafana
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -78,8 +78,8 @@ services:
     image: jaegertracing/all-in-one:latest
     container_name: arbinet-jaeger
     ports:
-      - "16686:16686"
-      - "4318:4318"
+      - '16686:16686'
+      - '4318:4318'
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     restart: unless-stopped
@@ -88,7 +88,7 @@ services:
     image: prom/alertmanager:v0.27.0
     container_name: arbinet-alertmanager
     ports:
-      - "9093:9093"
+      - '9093:9093'
     volumes:
       - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     command:
@@ -100,7 +100,7 @@ services:
     image: grafana/loki:3.0.0
     container_name: arbinet-loki
     ports:
-      - "3100:3100"
+      - '3100:3100'
     volumes:
       - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki

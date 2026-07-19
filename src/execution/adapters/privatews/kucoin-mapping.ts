@@ -140,9 +140,12 @@ export function parseKucoinMessage(
           exchange,
           symbol: d.symbol,
           fundingTime,
-          fundingRate: d.fundingRate !== undefined
-            ? (typeof d.fundingRate === 'string' ? parseFloat(d.fundingRate) : d.fundingRate)
-            : 0,
+          fundingRate:
+            d.fundingRate !== undefined
+              ? typeof d.fundingRate === 'string'
+                ? parseFloat(d.fundingRate)
+                : d.fundingRate
+              : 0,
           fundingAmount,
           asset: d.currency,
           positionQty: 0,

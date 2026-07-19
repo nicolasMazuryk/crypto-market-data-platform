@@ -40,7 +40,20 @@ function makeMinimalAdapter(exchange: 'binance' | 'bybit') {
         ],
       }),
     },
-    { bus, clock, logger, metrics, config: { exchange, enabled: true, credentialsEnvPrefix: '', rateLimits: { criticalReservationFraction: 0.1, criticalWindowSeconds: 1, buckets: [] }, marketRefreshMs: 60000, fundingPullMs: 60000 } }
+    {
+      bus,
+      clock,
+      logger,
+      metrics,
+      config: {
+        exchange,
+        enabled: true,
+        credentialsEnvPrefix: '',
+        rateLimits: { criticalReservationFraction: 0.1, criticalWindowSeconds: 1, buckets: [] },
+        marketRefreshMs: 60000,
+        fundingPullMs: 60000,
+      },
+    }
   )
 
   return { adapter, fakeClient }

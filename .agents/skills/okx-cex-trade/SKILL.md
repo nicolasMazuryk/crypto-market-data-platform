@@ -4,17 +4,17 @@ description: "Use when the user asks to 'buy BTC', 'sell ETH', 'place a limit or
 license: MIT
 metadata:
   author: okx
-  version: "1.3.3"
-  homepage: "https://www.okx.com"
+  version: '1.3.3'
+  homepage: 'https://www.okx.com'
   agent:
     requires:
-      bins: ["okx"]
+      bins: ['okx']
     install:
       - id: npm
         kind: node
-        package: "@okx_ai/okx-trade-cli@1.3.3"
-        bins: ["okx"]
-        label: "Install okx CLI (npm)"
+        package: '@okx_ai/okx-trade-cli@1.3.3'
+        bins: ['okx']
+        label: 'Install okx CLI (npm)'
 ---
 
 # OKX CEX Trading CLI
@@ -68,6 +68,7 @@ Apply **in this order** — first match wins:
 ### Step B — Confirm trading mode
 
 **Resolution rules:**
+
 1. Current message intent is clear (e.g. "real" / "实盘" / "live" → live; "test" / "模拟" / "demo" → demo) → use it and inform the user
 2. Current message has no explicit declaration → check conversation context for a previous choice:
    - Found → reuse it, inform user
@@ -75,10 +76,10 @@ Apply **in this order** — first match wins:
 
 **How to apply the mode depends on auth method (detected in Step A):**
 
-| Auth method | Live (实盘) | Demo (模拟盘) |
-|---|---|---|
-| **API Key** | `--profile <live-profile>` | `--profile <demo-profile>` |
-| **OAuth** | *(no flag needed, live is default)* | `--demo` |
+| Auth method | Live (实盘)                         | Demo (模拟盘)              |
+| ----------- | ----------------------------------- | -------------------------- |
+| **API Key** | `--profile <live-profile>`          | `--profile <demo-profile>` |
+| **OAuth**   | _(no flag needed, live is default)_ | `--demo`                   |
 
 - **API Key users**: run `okx config show --json` to discover available profile names and their `demo` settings. Use `--profile <name>` to select the correct one.
 - **OAuth users**: omit flags for live trading; add `--demo` for simulated trading. Do **not** use `--profile` to switch modes.
@@ -86,6 +87,7 @@ Apply **in this order** — first match wins:
 ### Handling Authentication Errors
 
 **Authentication error** (error contains "401", "Session expired", or "Run `okx auth login` first"):
+
 1. **Stop immediately** — do not retry the same command
 2. Inform the user: "Authentication failed. Your session may have expired."
 3. Load `okx-cex-auth` skill and follow the re-authentication steps
@@ -93,12 +95,13 @@ Apply **in this order** — first match wins:
 
 ## Demo vs Live Mode
 
-| Mode | Funds | API Key param | OAuth param |
-|---|---|---|---|
-| 实盘 (live) | Real money — irreversible | `--profile <live-profile>` | *(default, no flag)* |
-| 模拟盘 (demo) | Simulated — no real funds | `--profile <demo-profile>` | `--demo` |
+| Mode          | Funds                     | API Key param              | OAuth param          |
+| ------------- | ------------------------- | -------------------------- | -------------------- |
+| 实盘 (live)   | Real money — irreversible | `--profile <live-profile>` | _(default, no flag)_ |
+| 模拟盘 (demo) | Simulated — no real funds | `--profile <demo-profile>` | `--demo`             |
 
 **Rules:**
+
 1. Trading mode is **required** on every authenticated command — determined in "Credential & Profile Check" Step B
 2. Every response after a command must append: `[mode: live]` or `[mode: demo]`
 
@@ -120,6 +123,7 @@ Apply **in this order** — first match wins:
 Before placing any SWAP/FUTURES/OPTION order, call `market_get_instruments` to get `ctVal` (contract face value). **Do NOT assume contract sizes** — they vary by instrument (e.g. ETH-USDT-SWAP = 0.1 ETH/contract, BTC-USDT-SWAP = 0.01 BTC/contract).
 
 Use `ctVal` to:
+
 - Calculate the correct number of contracts from user's intended position size
 - Verify margin requirements before submitting the order
 - Show the user the actual position value: `sz × ctVal × price`
@@ -128,17 +132,18 @@ Use `ctVal` to:
 
 **Three tgtCcy modes for USDT-denominated sizing:**
 
-| `--tgtCcy` | sz meaning | Conversion formula | Example: "500U" at 10x lever |
-|---|---|---|---|
-| `base_ccy` (default) | contract count | no conversion | 500 contracts |
-| `quote_ccy` | USDT notional value | `floor(sz / (ctVal * lastPx))` | 500 USDT notional |
-| `margin` | USDT margin cost | `floor(sz * lever / (ctVal * lastPx))` | 500 USDT margin = 5000 USDT notional |
+| `--tgtCcy`           | sz meaning          | Conversion formula                     | Example: "500U" at 10x lever         |
+| -------------------- | ------------------- | -------------------------------------- | ------------------------------------ |
+| `base_ccy` (default) | contract count      | no conversion                          | 500 contracts                        |
+| `quote_ccy`          | USDT notional value | `floor(sz / (ctVal * lastPx))`         | 500 USDT notional                    |
+| `margin`             | USDT margin cost    | `floor(sz * lever / (ctVal * lastPx))` | 500 USDT margin = 5000 USDT notional |
 
 **When user specifies a USDT amount** (e.g. "200U", "500 USDT", "$1000"):
 → **AMBIGUOUS** — this could mean notional value OR margin cost.
-  You MUST ask the user to clarify before proceeding:
-  - **notional value**: sz = position value in USDT (e.g. 500 USDT buys 500 USDT worth of contracts directly)
-  - **margin cost**: actual position = sz × leverage (e.g. 500 USDT margin at 10× = 5000 USDT notional position)
+You MUST ask the user to clarify before proceeding:
+
+- **notional value**: sz = position value in USDT (e.g. 500 USDT buys 500 USDT worth of contracts directly)
+- **margin cost**: actual position = sz × leverage (e.g. 500 USDT margin at 10× = 5000 USDT notional position)
   Wait for the user's answer before continuing.
 - If notional value → use `--tgtCcy quote_ccy`
 - If margin cost → use `--tgtCcy margin`
@@ -148,9 +153,10 @@ Use `ctVal` to:
 
 **When user gives a plain number with no unit** (for swap/futures):
 → **AMBIGUOUS** — You MUST ask the user to clarify before proceeding:
-  - **contract count**: X contracts (each worth ctVal of underlying)
-  - **USDT notional value**: position value in USDT
-  - **USDT margin cost**: margin amount (actual position = X × leverage)
+
+- **contract count**: X contracts (each worth ctVal of underlying)
+- **USDT notional value**: position value in USDT
+- **USDT margin cost**: margin amount (actual position = X × leverage)
   Wait for the user's answer before continuing.
 
 ⚠ **Inverse contracts** (`*-USD-SWAP`, `*-USD-YYMMDD`): `tgtCcy=quote_ccy` and `tgtCcy=margin` also work (note: `quote_ccy` = USD, not USDT, for inverse instruments). Always warn: "This is an inverse contract. Margin and P&L are settled in BTC, not USDT."
@@ -227,97 +233,97 @@ okx event place --instId BTC-ABOVE-DAILY-260224-1600-70000 --side buy --outcome 
 
 ### Spot Orders (12 commands)
 
-| # | Command | Type | Description |
-|---|---|---|---|
-| 1 | `okx spot place` | WRITE | Place spot order (market/limit/post_only/fok/ioc) |
-| 2 | `okx spot cancel` | WRITE | Cancel spot order |
-| 3 | `okx spot amend` | WRITE | Amend spot order price or size |
-| 4 | `okx spot algo place` | WRITE | Place spot TP/SL algo order |
-| 5 | `okx spot algo amend` | WRITE | Amend spot TP/SL levels |
-| 6 | `okx spot algo cancel` | WRITE | Cancel spot algo order |
-| 7 | `okx spot algo trail` | WRITE | Place spot trailing stop order |
-| 8 | `okx spot orders` | READ | List open or historical spot orders |
-| 9 | `okx spot get` | READ | Single spot order details |
-| 10 | `okx spot fills` | READ | Spot trade fill history |
-| 11 | `okx spot algo orders` | READ | List spot TP/SL algo orders |
-| 12 | `okx spot leverage` | WRITE | Set leverage for spot **margin** (borrowing). Pair-level (`--instId`) or currency-level cross (`--ccy`, required for borrow-enabled / multi-ccy / portfolio margin) |
+| #   | Command                | Type  | Description                                                                                                                                                         |
+| --- | ---------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `okx spot place`       | WRITE | Place spot order (market/limit/post_only/fok/ioc)                                                                                                                   |
+| 2   | `okx spot cancel`      | WRITE | Cancel spot order                                                                                                                                                   |
+| 3   | `okx spot amend`       | WRITE | Amend spot order price or size                                                                                                                                      |
+| 4   | `okx spot algo place`  | WRITE | Place spot TP/SL algo order                                                                                                                                         |
+| 5   | `okx spot algo amend`  | WRITE | Amend spot TP/SL levels                                                                                                                                             |
+| 6   | `okx spot algo cancel` | WRITE | Cancel spot algo order                                                                                                                                              |
+| 7   | `okx spot algo trail`  | WRITE | Place spot trailing stop order                                                                                                                                      |
+| 8   | `okx spot orders`      | READ  | List open or historical spot orders                                                                                                                                 |
+| 9   | `okx spot get`         | READ  | Single spot order details                                                                                                                                           |
+| 10  | `okx spot fills`       | READ  | Spot trade fill history                                                                                                                                             |
+| 11  | `okx spot algo orders` | READ  | List spot TP/SL algo orders                                                                                                                                         |
+| 12  | `okx spot leverage`    | WRITE | Set leverage for spot **margin** (borrowing). Pair-level (`--instId`) or currency-level cross (`--ccy`, required for borrow-enabled / multi-ccy / portfolio margin) |
 
 For full command syntax, parameter tables, and edge cases, read `{baseDir}/references/spot-commands.md`.
 
 ### Swap / Perpetual Orders (15 commands)
 
-| # | Command | Type | Description |
-|---|---|---|---|
-| 13 | `okx swap place` | WRITE | Place perpetual swap order |
-| 14 | `okx swap cancel` | WRITE | Cancel swap order |
-| 15 | `okx swap amend` | WRITE | Amend swap order price or size |
-| 16 | `okx swap close` | WRITE | Close entire position at market |
-| 17 | `okx swap leverage` | WRITE | Set leverage for an instrument |
-| 18 | `okx swap algo place` | WRITE | Place swap TP/SL algo order |
-| 19 | `okx swap algo trail` | WRITE | Place swap trailing stop order |
-| 20 | `okx swap algo amend` | WRITE | Amend swap algo order |
-| 21 | `okx swap algo cancel` | WRITE | Cancel swap algo order |
-| 22 | `okx swap positions` | READ | Open perpetual swap positions |
-| 23 | `okx swap orders` | READ | List open or historical swap orders |
-| 24 | `okx swap get` | READ | Single swap order details |
-| 25 | `okx swap fills` | READ | Swap trade fill history |
-| 26 | `okx swap get-leverage` | READ | Current leverage settings |
-| 27 | `okx swap algo orders` | READ | List swap algo orders |
+| #   | Command                 | Type  | Description                         |
+| --- | ----------------------- | ----- | ----------------------------------- |
+| 13  | `okx swap place`        | WRITE | Place perpetual swap order          |
+| 14  | `okx swap cancel`       | WRITE | Cancel swap order                   |
+| 15  | `okx swap amend`        | WRITE | Amend swap order price or size      |
+| 16  | `okx swap close`        | WRITE | Close entire position at market     |
+| 17  | `okx swap leverage`     | WRITE | Set leverage for an instrument      |
+| 18  | `okx swap algo place`   | WRITE | Place swap TP/SL algo order         |
+| 19  | `okx swap algo trail`   | WRITE | Place swap trailing stop order      |
+| 20  | `okx swap algo amend`   | WRITE | Amend swap algo order               |
+| 21  | `okx swap algo cancel`  | WRITE | Cancel swap algo order              |
+| 22  | `okx swap positions`    | READ  | Open perpetual swap positions       |
+| 23  | `okx swap orders`       | READ  | List open or historical swap orders |
+| 24  | `okx swap get`          | READ  | Single swap order details           |
+| 25  | `okx swap fills`        | READ  | Swap trade fill history             |
+| 26  | `okx swap get-leverage` | READ  | Current leverage settings           |
+| 27  | `okx swap algo orders`  | READ  | List swap algo orders               |
 
 For full command syntax, parameter tables, and edge cases, read `{baseDir}/references/swap-commands.md`.
 
 ### Futures / Delivery Orders (15 commands)
 
-| # | Command | Type | Description |
-|---|---|---|---|
-| 28 | `okx futures place` | WRITE | Place delivery futures order |
-| 29 | `okx futures cancel` | WRITE | Cancel delivery futures order |
-| 30 | `okx futures amend` | WRITE | Amend delivery futures order price or size |
-| 31 | `okx futures close` | WRITE | Close entire futures position at market |
-| 32 | `okx futures leverage` | WRITE | Set leverage for a futures instrument |
-| 33 | `okx futures algo place` | WRITE | Place futures TP/SL algo order |
-| 34 | `okx futures algo trail` | WRITE | Place futures trailing stop order |
-| 35 | `okx futures algo amend` | WRITE | Amend futures algo order |
-| 36 | `okx futures algo cancel` | WRITE | Cancel futures algo order |
-| 37 | `okx futures orders` | READ | List delivery futures orders |
-| 38 | `okx futures positions` | READ | Open delivery futures positions |
-| 39 | `okx futures fills` | READ | Delivery futures fill history |
-| 40 | `okx futures get` | READ | Single delivery futures order details |
-| 41 | `okx futures get-leverage` | READ | Current futures leverage settings |
-| 42 | `okx futures algo orders` | READ | List futures algo orders |
+| #   | Command                    | Type  | Description                                |
+| --- | -------------------------- | ----- | ------------------------------------------ |
+| 28  | `okx futures place`        | WRITE | Place delivery futures order               |
+| 29  | `okx futures cancel`       | WRITE | Cancel delivery futures order              |
+| 30  | `okx futures amend`        | WRITE | Amend delivery futures order price or size |
+| 31  | `okx futures close`        | WRITE | Close entire futures position at market    |
+| 32  | `okx futures leverage`     | WRITE | Set leverage for a futures instrument      |
+| 33  | `okx futures algo place`   | WRITE | Place futures TP/SL algo order             |
+| 34  | `okx futures algo trail`   | WRITE | Place futures trailing stop order          |
+| 35  | `okx futures algo amend`   | WRITE | Amend futures algo order                   |
+| 36  | `okx futures algo cancel`  | WRITE | Cancel futures algo order                  |
+| 37  | `okx futures orders`       | READ  | List delivery futures orders               |
+| 38  | `okx futures positions`    | READ  | Open delivery futures positions            |
+| 39  | `okx futures fills`        | READ  | Delivery futures fill history              |
+| 40  | `okx futures get`          | READ  | Single delivery futures order details      |
+| 41  | `okx futures get-leverage` | READ  | Current futures leverage settings          |
+| 42  | `okx futures algo orders`  | READ  | List futures algo orders                   |
 
 For full command syntax, parameter tables, and edge cases, read `{baseDir}/references/futures-commands.md`.
 
 ### Options Orders (10 commands)
 
-| # | Command | Type | Description |
-|---|---|---|---|
-| 43 | `okx option instruments` | READ | Option chain: list available contracts for an underlying |
-| 44 | `okx option greeks` | READ | Implied volatility + Greeks (delta/gamma/theta/vega) by underlying |
-| 45 | `okx option place` | WRITE | Place option order (call or put, buyer or seller) |
-| 46 | `okx option cancel` | WRITE | Cancel unfilled option order |
-| 47 | `okx option amend` | WRITE | Amend option order price or size |
-| 48 | `okx option batch-cancel` | WRITE | Batch cancel up to 20 option orders |
-| 49 | `okx option orders` | READ | List option orders (live / history / archive) |
-| 50 | `okx option get` | READ | Single option order details |
-| 51 | `okx option positions` | READ | Open option positions with live Greeks |
-| 52 | `okx option fills` | READ | Option trade fill history |
+| #   | Command                   | Type  | Description                                                        |
+| --- | ------------------------- | ----- | ------------------------------------------------------------------ |
+| 43  | `okx option instruments`  | READ  | Option chain: list available contracts for an underlying           |
+| 44  | `okx option greeks`       | READ  | Implied volatility + Greeks (delta/gamma/theta/vega) by underlying |
+| 45  | `okx option place`        | WRITE | Place option order (call or put, buyer or seller)                  |
+| 46  | `okx option cancel`       | WRITE | Cancel unfilled option order                                       |
+| 47  | `okx option amend`        | WRITE | Amend option order price or size                                   |
+| 48  | `okx option batch-cancel` | WRITE | Batch cancel up to 20 option orders                                |
+| 49  | `okx option orders`       | READ  | List option orders (live / history / archive)                      |
+| 50  | `okx option get`          | READ  | Single option order details                                        |
+| 51  | `okx option positions`    | READ  | Open option positions with live Greeks                             |
+| 52  | `okx option fills`        | READ  | Option trade fill history                                          |
 
 For full command syntax, USDT-to-contracts conversion formula, tdMode rules, and edge cases, read `{baseDir}/references/options-commands.md`.
 
 ### Event Contract Orders (9 commands)
 
-| # | Command | Type | Description |
-|---|---|---|---|
-| 53 | `okx event browse` | READ | Browse active event contracts grouped by type (series + live markets in one call) |
-| 54 | `okx event series` | READ | List event series (e.g. BTC-ABOVE-DAILY, BTC-UPDOWN-15MIN) |
-| 55 | `okx event events <seriesId>` | READ | List events in a series |
-| 56 | `okx event markets <seriesId>` | READ | List markets; expired includes Outcome and Settlement value |
-| 57 | `okx event place ...` | WRITE | Place event order (outcome required) |
-| 58 | `okx event amend <instId> <ordId>` | WRITE | Amend event order (price/size) |
-| 59 | `okx event cancel <instId> <ordId>` | WRITE | Cancel event order |
-| 60 | `okx event orders` | READ | Pending or historical orders |
-| 61 | `okx event fills` | READ | Fill history |
+| #   | Command                             | Type  | Description                                                                       |
+| --- | ----------------------------------- | ----- | --------------------------------------------------------------------------------- |
+| 53  | `okx event browse`                  | READ  | Browse active event contracts grouped by type (series + live markets in one call) |
+| 54  | `okx event series`                  | READ  | List event series (e.g. BTC-ABOVE-DAILY, BTC-UPDOWN-15MIN)                        |
+| 55  | `okx event events <seriesId>`       | READ  | List events in a series                                                           |
+| 56  | `okx event markets <seriesId>`      | READ  | List markets; expired includes Outcome and Settlement value                       |
+| 57  | `okx event place ...`               | WRITE | Place event order (outcome required)                                              |
+| 58  | `okx event amend <instId> <ordId>`  | WRITE | Amend event order (price/size)                                                    |
+| 59  | `okx event cancel <instId> <ordId>` | WRITE | Cancel event order                                                                |
+| 60  | `okx event orders`                  | READ  | Pending or historical orders                                                      |
+| 61  | `okx event fills`                   | READ  | Fill history                                                                      |
 
 For full command syntax, parameter tables, and edge cases, read `{baseDir}/references/event-commands.md`.
 
@@ -332,12 +338,14 @@ After every command result: append `[mode: live]` or `[mode: demo]`.
 ### Step 1 — Identify instrument type and action
 
 **Spot** (instId format: `BTC-USDT`):
+
 - Place/cancel/amend order → `okx spot place/cancel/amend`
 - TP/SL conditional → `okx spot algo place/amend/cancel`
 - Trailing stop → `okx spot algo trail`
 - Query → `okx spot orders/get/fills/algo orders`
 
 **Swap/Perpetual** (instId format: `BTC-USDT-SWAP`):
+
 - Place/cancel/amend order → `okx swap place/cancel/amend`
 - Close position → `okx swap close`
 - Leverage → `okx swap leverage` / `okx swap get-leverage`
@@ -346,6 +354,7 @@ After every command result: append `[mode: live]` or `[mode: demo]`.
 - Query → `okx swap positions/orders/get/fills/get-leverage/algo orders`
 
 **Futures/Delivery** (instId format: `BTC-USDT-<YYMMDD>`):
+
 - Place/cancel/amend order → `okx futures place/cancel/amend`
 - Close position → `okx futures close`
 - Leverage → `okx futures leverage` / `okx futures get-leverage`
@@ -354,6 +363,7 @@ After every command result: append `[mode: live]` or `[mode: demo]`.
 - Query → `okx futures orders/positions/fills/get/get-leverage/algo orders`
 
 **Options** (instId format: `BTC-USD-250328-95000-C` or `...-P`):
+
 - Step 1 (required): find valid instId → `okx option instruments --uly BTC-USD`
 - Step 2 (recommended): check IV and Greeks → `okx option greeks --uly BTC-USD`
 - Place/cancel/amend → `okx option place/cancel/amend`
@@ -368,6 +378,7 @@ Instrument ID (`instId`, API field) format: `{UNDERLYING}-{TYPE}-{YYMMDD}-{HHMM}
 Series ID (`seriesId`, API field): human-readable (e.g. `BTC-ABOVE-DAILY`, `BTC-UPDOWN-15MIN`) or internal random string (e.g. `FMQRZ`). Both are valid for subsequent commands. Obtain from `okx event series`.
 
 Event contract trading flow:
+
 1. **Discover** → `okx event browse` (preferred, returns series + live markets in one call) or `okx event series` — present results grouped by type; highlight named series; always show the Series ID
 2. **Browse live markets** → `okx event markets <seriesId> --state live` — obtains the instrument ID for each tradeable contract; if a live Price is shown, it is the event contract price (0.01–0.99), not the underlying asset price — reflects the market-implied probability when actively trading
 3. **Check event details** → `okx event events <seriesId>`
@@ -376,6 +387,7 @@ Event contract trading flow:
 6. **Exit or settle** → sell via `okx event place <instId> sell <outcome> <sz>`, or wait for `--state expired`
 
 Edge cases:
+
 - **Settled results**: `okx event markets <seriesId> --state expired` — no separate ended tool
 
 **Event Contract sz Rules:**
@@ -399,8 +411,9 @@ For cross-skill workflows and step-by-step examples, read `{baseDir}/references/
 - `--posSide` for hedge mode: `long` or `short`; omit in net mode
 
 **Write commands** (place, cancel, amend, close, leverage, algo): confirm the key order details once before executing:
+
 - Spot place: confirm `--instId`, `--side`, `--ordType`, `--sz` (and `--tgtCcy quote_ccy` if quote-currency amount)
-- Swap/Futures place: confirm `--instId`, `--side`, `--sz`, `--tdMode`, and **explicitly confirm order mode** when user specifies a USDT amount: `--tgtCcy quote_ccy` (notional value, sz = position value) or `--tgtCcy margin` (margin cost, actual position = sz * leverage). Always state which mode is being used.
+- Swap/Futures place: confirm `--instId`, `--side`, `--sz`, `--tdMode`, and **explicitly confirm order mode** when user specifies a USDT amount: `--tgtCcy quote_ccy` (notional value, sz = position value) or `--tgtCcy margin` (margin cost, actual position = sz \* leverage). Always state which mode is being used.
 - Option place: confirm `--instId`, `--side`, `--sz`, `--tdMode` (and `--tgtCcy quote_ccy` or `--tgtCcy margin` if USDT amount — system auto-converts); do NOT attach TP/SL
 - Event Contract place: confirm `--instId`, `--side`, `--outcome`, `--sz`, `--ordType`; for market orders sz is quote currency amount, for limit orders sz is number of contracts + `--px` required
 - Swap/Futures close: confirm `--instId`, `--mgnMode`, `--posSide`
@@ -420,6 +433,7 @@ When an OKX API error message suggests a fix that involves **write operations** 
 4. **Wait for explicit confirmation** before executing any remediation
 
 This applies to all error codes whose messages suggest destructive actions, including but not limited to:
+
 - Set-leverage blocked by pending algo orders or active bots
 - Account setting changes requiring order/position/strategy cleanup (e.g., error codes 59000, 59002, 59007)
 - Margin mode switches requiring position closure

@@ -20,7 +20,7 @@ describe('Config Loader', () => {
     if (config.strategy.strategy_id === 'strategy_1') {
       expect(config.strategy.negative_funding_threshold_percent).toBe(-1.1)
       expect(config.strategy.entry_offset_seconds).toBe(5)
-      expect(config.strategy.exit_offset_seconds).toBe(5)
+      expect(config.strategy.exit_offset_seconds).toBe(6)
       expect(config.strategy.amount_usd).toBe(20)
       expect(config.strategy.leverage).toBe(4)
     }
@@ -67,11 +67,9 @@ describe('Config Loader', () => {
     expect(() => loadConfig('/nonexistent/strategy.yaml', BASE_CONFIG)).toThrow('Strategy config not found')
   })
 
-  // Numeric-range bounds (e.g. entry_offset_seconds 1..5, deadline_seconds 5..900) are
-  // intentionally NOT enforced by the generated schema yet — Task 06 layers those on via
-  // the `bounds` data on CANONICAL_PARAMS. Only structural constraints that already
-  // existed on the live side (positive(), min(2), etc. — carried over verbatim during
-  // generation) are still enforced here.
+  // §11.1 hard bounds, sourced from CANONICAL_PARAMS `bounds` and enforced by the
+  // generated backtest schema (Task 06). Per-bound coverage lives in bounds.test.ts —
+  // this block keeps the pre-existing structural-constraint regression cases.
   describe('generated-schema structural constraints', () => {
     function writeTempYaml(content: string): string {
       const tmpPath = path.join(os.tmpdir(), `test-strategy-${String(Date.now())}-${String(Math.random())}.yaml`)
@@ -79,16 +77,23 @@ describe('Config Loader', () => {
       return tmpPath
     }
 
-    it('accepts entry_offset_seconds=1', () => {
+    it('rejects entry_offset_seconds=1 (below the new >=2 bound)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 1\nexit_offset_seconds: 2\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 1\nexit_offset_seconds: 6\nfunding_applied_on_same_second: false\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('entry_offset_seconds')
+    })
+
+    it('accepts entry_offset_seconds=2 (minimum)', () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 2\nexit_offset_seconds: 6\nfunding_applied_on_same_second: false\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
     it('rejects entry_offset_seconds=0 (must be positive)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 0\nexit_offset_seconds: 2\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 0\nexit_offset_seconds: 6\nfunding_applied_on_same_second: false\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('entry_offset_seconds')
     })
@@ -105,6 +110,34 @@ describe('Config Loader', () => {
         'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 1\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('ladder_count')
+    })
+
+    it('accepts ladder_count=20 (maximum ladder size)', () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 20\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
+    })
+
+    it('rejects ladder_count=21 (above maximum ladder size of 20)', () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 21\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('ladder_count')
+    })
+
+    it('accepts deadline_seconds=1800 (real live value)', () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 1800\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
+    })
+
+    it('rejects deadline_seconds=5 (below the new >=10 bound)', () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 5\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
     })
   })
 

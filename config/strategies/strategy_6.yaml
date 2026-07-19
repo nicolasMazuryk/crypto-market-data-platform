@@ -1,8 +1,8 @@
 # Strategy 6: Post-funding directional (LONG or SHORT), WS-gated entry.
 
-strategy_id: "strategy_6"
+strategy_id: 'strategy_6'
 enabled: true
-mainSide: "long"
+mainSide: 'long'
 funding_threshold: 0.3
 entryOffsetSeconds: 3
 fundingFeeTimeoutSeconds: 10

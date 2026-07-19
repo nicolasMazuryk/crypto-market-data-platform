@@ -4,34 +4,34 @@
 
 This CLI uses **space-separated subcommands** (`okx spot algo place`). The MCP tool names surfaced to AI agents use a **single underscored identifier** (`spot_place_algo_order`). They are the same feature on two different surfaces. Mapping examples:
 
-| CLI command | MCP tool name |
-|---|---|
-| `okx spot place` | `spot_place_order` |
-| `okx spot algo place` | `spot_place_algo_order` |
-| `okx spot algo trail` | `spot_place_algo_order` w/ `ordType=move_order_stop` |
-| `okx spot cancel` | `spot_cancel_order` |
-| `okx spot algo cancel` | `spot_cancel_algo_order` |
-| `okx spot amend` | `spot_amend_order` |
-| `okx spot algo amend` | `spot_amend_algo_order` |
-| `okx spot orders` | `spot_get_orders` |
-| `okx spot fills` | `spot_get_fills` |
-| `okx spot batch` | `spot_batch_orders` |
-| `okx spot leverage` | `spot_set_leverage` |
+| CLI command            | MCP tool name                                        |
+| ---------------------- | ---------------------------------------------------- |
+| `okx spot place`       | `spot_place_order`                                   |
+| `okx spot algo place`  | `spot_place_algo_order`                              |
+| `okx spot algo trail`  | `spot_place_algo_order` w/ `ordType=move_order_stop` |
+| `okx spot cancel`      | `spot_cancel_order`                                  |
+| `okx spot algo cancel` | `spot_cancel_algo_order`                             |
+| `okx spot amend`       | `spot_amend_order`                                   |
+| `okx spot algo amend`  | `spot_amend_algo_order`                              |
+| `okx spot orders`      | `spot_get_orders`                                    |
+| `okx spot fills`       | `spot_get_fills`                                     |
+| `okx spot batch`       | `spot_batch_orders`                                  |
+| `okx spot leverage`    | `spot_set_leverage`                                  |
 
 **Do NOT convert MCP tool names to hyphen-joined CLI commands.** `okx spot place-order` is **not** a valid command — the CLI will reject it with "Unknown command". Use `okx spot place` instead.
 
 ## Order Type Reference
 
-| `--ordType` | Description | Requires `--px` |
-|---|---|---|
-| `market` | Fill immediately at best price | No |
-| `limit` | Fill at specified price or better | Yes |
-| `post_only` | Limit order; cancelled if it would be a taker | Yes |
-| `fok` | Fill entire order immediately or cancel | Yes |
-| `ioc` | Fill what's available immediately, cancel rest | Yes |
-| `conditional` | Algo: single TP or SL trigger | No (set trigger px) |
-| `oco` | Algo: TP + SL together (one cancels other) | No (set both trigger px) |
-| `move_order_stop` | Trailing stop (spot/swap/futures) | No (set callback) |
+| `--ordType`       | Description                                    | Requires `--px`          |
+| ----------------- | ---------------------------------------------- | ------------------------ |
+| `market`          | Fill immediately at best price                 | No                       |
+| `limit`           | Fill at specified price or better              | Yes                      |
+| `post_only`       | Limit order; cancelled if it would be a taker  | Yes                      |
+| `fok`             | Fill entire order immediately or cancel        | Yes                      |
+| `ioc`             | Fill what's available immediately, cancel rest | Yes                      |
+| `conditional`     | Algo: single TP or SL trigger                  | No (set trigger px)      |
+| `oco`             | Algo: TP + SL together (one cancels other)     | No (set both trigger px) |
+| `move_order_stop` | Trailing stop (spot/swap/futures)              | No (set callback)        |
 
 ---
 
@@ -45,23 +45,23 @@ okx spot place --instId <id> --side <buy|sell> --ordType <type> --sz <n> \
   [--clOrdId <id>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | Spot instrument (e.g., `BTC-USDT`) |
-| `--side` | Yes | - | `buy` or `sell` |
-| `--ordType` | Yes | - | `market`, `limit`, `post_only`, `fok`, `ioc` |
-| `--sz` | Yes | - | Order size — unit depends on `--tgtCcy` |
-| `--tgtCcy` | No | base_ccy | `base_ccy`: sz in base currency (e.g. SOL amount); `quote_ccy`: sz in quote currency (e.g. USDT amount) |
-| `--px` | Cond. | - | Price — required for `limit`, `post_only`, `fok`, `ioc` |
-| `--tpTriggerPx` | No | - | Attached take-profit trigger price |
-| `--tpOrdPx` | No | - | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`) |
-| `--tpOrdKind` | No | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase) |
-| `--tpTriggerPxType` | No | last | Price source for TP trigger: `last` (default), `index`, `mark` |
-| `--slTriggerPx` | No | - | Attached stop-loss trigger price |
-| `--slOrdPx` | No | - | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`) |
-| `--slTriggerPxType` | No | last | Price source for SL trigger: `last` (default), `index`, `mark` |
-| `--stpMode` | No | - | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both` |
-| `--clOrdId` | No | - | Client-assigned order ID (max 32 chars alphanumeric + `-` `_`) |
+| Param               | Required | Default   | Description                                                                                             |
+| ------------------- | -------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| `--instId`          | Yes      | -         | Spot instrument (e.g., `BTC-USDT`)                                                                      |
+| `--side`            | Yes      | -         | `buy` or `sell`                                                                                         |
+| `--ordType`         | Yes      | -         | `market`, `limit`, `post_only`, `fok`, `ioc`                                                            |
+| `--sz`              | Yes      | -         | Order size — unit depends on `--tgtCcy`                                                                 |
+| `--tgtCcy`          | No       | base_ccy  | `base_ccy`: sz in base currency (e.g. SOL amount); `quote_ccy`: sz in quote currency (e.g. USDT amount) |
+| `--px`              | Cond.    | -         | Price — required for `limit`, `post_only`, `fok`, `ioc`                                                 |
+| `--tpTriggerPx`     | No       | -         | Attached take-profit trigger price                                                                      |
+| `--tpOrdPx`         | No       | -         | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`)                       |
+| `--tpOrdKind`       | No       | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase)           |
+| `--tpTriggerPxType` | No       | last      | Price source for TP trigger: `last` (default), `index`, `mark`                                          |
+| `--slTriggerPx`     | No       | -         | Attached stop-loss trigger price                                                                        |
+| `--slOrdPx`         | No       | -         | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`)                       |
+| `--slTriggerPxType` | No       | last      | Price source for SL trigger: `last` (default), `index`, `mark`                                          |
+| `--stpMode`         | No       | -         | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both`                                    |
+| `--clOrdId`         | No       | -         | Client-assigned order ID (max 32 chars alphanumeric + `-` `_`)                                          |
 
 ---
 
@@ -100,29 +100,30 @@ okx spot algo place --instId <id> --side <buy|sell> \
   [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | Spot instrument (e.g., `BTC-USDT`) |
-| `--side` | Yes | - | `buy` or `sell` |
-| `--ordType` | Yes | - | `oco`, `conditional`, or `move_order_stop` |
-| `--sz` | Yes | - | Order size in base currency |
-| `--clOrdId` | No | - | Client-assigned algo order ID (max 32 chars alphanumeric + `-` `_`) |
-| `--tgtCcy` | No | base_ccy | `base_ccy`: sz in base currency; `quote_ccy`: sz in quote currency (e.g. USDT) |
-| `--tpTriggerPx` | Cond. | - | Take-profit trigger price |
-| `--tpOrdPx` | Cond. | - | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`) |
-| `--tpOrdKind` | No | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase) |
-| `--tpTriggerPxType` | No | last | Price source for TP trigger: `last` (default), `index`, `mark` |
-| `--slTriggerPx` | Cond. | - | Stop-loss trigger price |
-| `--slOrdPx` | Cond. | - | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`) |
-| `--slTriggerPxType` | No | last | Price source for SL trigger: `last` (default), `index`, `mark` |
-| `--stpMode` | No | - | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both` |
-| `--callbackRatio` | Cond. | - | Trailing callback as a ratio (e.g., `0.02` = 2%); cannot be combined with `--callbackSpread` |
-| `--callbackSpread` | Cond. | - | Trailing callback as fixed price distance; cannot be combined with `--callbackRatio` |
-| `--activePx` | No | - | Price at which trailing stop becomes active |
+| Param               | Required | Default   | Description                                                                                   |
+| ------------------- | -------- | --------- | --------------------------------------------------------------------------------------------- |
+| `--instId`          | Yes      | -         | Spot instrument (e.g., `BTC-USDT`)                                                            |
+| `--side`            | Yes      | -         | `buy` or `sell`                                                                               |
+| `--ordType`         | Yes      | -         | `oco`, `conditional`, or `move_order_stop`                                                    |
+| `--sz`              | Yes      | -         | Order size in base currency                                                                   |
+| `--clOrdId`         | No       | -         | Client-assigned algo order ID (max 32 chars alphanumeric + `-` `_`)                           |
+| `--tgtCcy`          | No       | base_ccy  | `base_ccy`: sz in base currency; `quote_ccy`: sz in quote currency (e.g. USDT)                |
+| `--tpTriggerPx`     | Cond.    | -         | Take-profit trigger price                                                                     |
+| `--tpOrdPx`         | Cond.    | -         | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`)             |
+| `--tpOrdKind`       | No       | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase) |
+| `--tpTriggerPxType` | No       | last      | Price source for TP trigger: `last` (default), `index`, `mark`                                |
+| `--slTriggerPx`     | Cond.    | -         | Stop-loss trigger price                                                                       |
+| `--slOrdPx`         | Cond.    | -         | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`)             |
+| `--slTriggerPxType` | No       | last      | Price source for SL trigger: `last` (default), `index`, `mark`                                |
+| `--stpMode`         | No       | -         | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both`                          |
+| `--callbackRatio`   | Cond.    | -         | Trailing callback as a ratio (e.g., `0.02` = 2%); cannot be combined with `--callbackSpread`  |
+| `--callbackSpread`  | Cond.    | -         | Trailing callback as fixed price distance; cannot be combined with `--callbackRatio`          |
+| `--activePx`        | No       | -         | Price at which trailing stop becomes active                                                   |
 
 For `oco`: provide both TP and SL params. For `conditional`: provide only TP or only SL. For `move_order_stop`: provide `--callbackRatio` or `--callbackSpread` (one required).
 
 **Example — Immediate limit-order TP (tpOrdKind limit):**
+
 ```bash
 okx spot algo place --instId BTC-USDT --side sell --ordType conditional \
   --sz 0.01 \
@@ -130,6 +131,7 @@ okx spot algo place --instId BTC-USDT --side sell --ordType conditional \
 ```
 
 **Example — Self-trade prevention (stpMode cancel_maker):**
+
 ```bash
 okx spot algo place --instId BTC-USDT --side sell --ordType conditional \
   --sz 0.01 \
@@ -203,14 +205,14 @@ okx spot algo trail --instId <id> --side <buy|sell> --sz <n> \
   [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | Spot instrument (e.g., `BTC-USDT`) |
-| `--side` | Yes | - | `buy` or `sell` — use `sell` to protect a long spot position |
-| `--sz` | Yes | - | Order size in base currency |
-| `--callbackRatio` | Cond. | - | Trailing callback as a ratio (e.g., `0.02` = 2%); cannot be combined with `--callbackSpread` |
-| `--callbackSpread` | Cond. | - | Trailing callback as fixed price distance; cannot be combined with `--callbackRatio` |
-| `--activePx` | No | - | Price at which trailing stop becomes active |
+| Param              | Required | Default | Description                                                                                  |
+| ------------------ | -------- | ------- | -------------------------------------------------------------------------------------------- |
+| `--instId`         | Yes      | -       | Spot instrument (e.g., `BTC-USDT`)                                                           |
+| `--side`           | Yes      | -       | `buy` or `sell` — use `sell` to protect a long spot position                                 |
+| `--sz`             | Yes      | -       | Order size in base currency                                                                  |
+| `--callbackRatio`  | Cond.    | -       | Trailing callback as a ratio (e.g., `0.02` = 2%); cannot be combined with `--callbackSpread` |
+| `--callbackSpread` | Cond.    | -       | Trailing callback as fixed price distance; cannot be combined with `--callbackRatio`         |
+| `--activePx`       | No       | -       | Price at which trailing stop becomes active                                                  |
 
 > Spot trailing stop does not require `--tdMode` or `--posSide` (spot has no margin mode or position side concept).
 
@@ -222,9 +224,9 @@ okx spot algo trail --instId <id> --side <buy|sell> --sz <n> \
 okx spot orders [--instId <id>] [--history] [--json]
 ```
 
-| Flag | Effect |
-|---|---|
-| *(default)* | Open/pending orders |
+| Flag        | Effect                                |
+| ----------- | ------------------------------------- |
+| _(default)_ | Open/pending orders                   |
 | `--history` | Historical (filled, cancelled) orders |
 
 ---
@@ -267,17 +269,18 @@ okx spot leverage ( --instId <pair> | --ccy <ccy> ) --lever <n> --mgnMode <cross
 
 Use this to set leverage for spot **margin** (borrowing) trading. Pass **exactly one** of `--instId` (pair-level) or `--ccy` (currency-level cross).
 
-| Param | Required | Description |
-|---|---|---|
-| `--instId` | Cond. | Pair-level leverage, e.g. `BTC-USDT`. Works with `isolated` or `cross`. Mutually exclusive with `--ccy`. |
-| `--ccy` | Cond. | Currency-level leverage, e.g. `BTC`. Only for borrow-enabled spot / multi-ccy margin / portfolio margin accounts. Requires `--mgnMode cross`. |
-| `--lever` | Yes | Positive number (e.g. `3`). Max depends on the pair / account policy. |
-| `--mgnMode` | Yes | `cross` or `isolated`. Must be `cross` when `--ccy` is used. |
+| Param       | Required | Description                                                                                                                                   |
+| ----------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--instId`  | Cond.    | Pair-level leverage, e.g. `BTC-USDT`. Works with `isolated` or `cross`. Mutually exclusive with `--ccy`.                                      |
+| `--ccy`     | Cond.    | Currency-level leverage, e.g. `BTC`. Only for borrow-enabled spot / multi-ccy margin / portfolio margin accounts. Requires `--mgnMode cross`. |
+| `--lever`   | Yes      | Positive number (e.g. `3`). Max depends on the pair / account policy.                                                                         |
+| `--mgnMode` | Yes      | `cross` or `isolated`. Must be `cross` when `--ccy` is used.                                                                                  |
 
 Scenarios (mirror OKX `POST /api/v5/account/set-leverage`):
+
 - `--instId + --mgnMode isolated` → pair-level isolated margin
-- `--instId + --mgnMode cross`    → pair-level cross margin (contract-mode account)
-- `--ccy    + --mgnMode cross`    → currency-level cross (spot-with-borrow / multi-ccy / portfolio margin)
+- `--instId + --mgnMode cross` → pair-level cross margin (contract-mode account)
+- `--ccy    + --mgnMode cross` → currency-level cross (spot-with-borrow / multi-ccy / portfolio margin)
 
 For SWAP / FUTURES leverage see `okx swap leverage` / `okx futures leverage`.
 

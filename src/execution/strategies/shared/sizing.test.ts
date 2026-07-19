@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { MarketMetadata } from '../../markets/types.js'
-import { alignToLotStep, computeMinOrderQty, computeOrderQty, lotStep, meetsMinNotional } from './sizing.js'
+import { alignToLotStep, computeOrderQty, lotStep, meetsMinNotional } from './sizing.js'
 
 function makeMarket(overrides: Partial<MarketMetadata> = {}): MarketMetadata {
   return {

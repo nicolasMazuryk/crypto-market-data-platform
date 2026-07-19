@@ -142,11 +142,11 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
           const { order } = event
           if (order.status !== 'filled') return
           const matchesSl =
-            (slId && order.clientOrderId === slId) ||
-            (slExchangeId && order.exchangeOrderId === slExchangeId)
+            Boolean(slId && order.clientOrderId === slId) ||
+            Boolean(slExchangeId && order.exchangeOrderId === slExchangeId)
           const matchesTp =
-            (tpId && order.clientOrderId === tpId) ||
-            (tpExchangeId && order.exchangeOrderId === tpExchangeId)
+            Boolean(tpId && order.clientOrderId === tpId) ||
+            Boolean(tpExchangeId && order.exchangeOrderId === tpExchangeId)
           if (matchesSl) {
             const ctx: ExitTriggerContext = {
               triggerTs: order.updatedAt,
@@ -170,7 +170,10 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         entry.unsubs.push(unsub)
 
         logger.debug({ intentId, deadlineDelay, slId, tpId }, 'monitor.armed.sl_tp_deadline')
-      } else if (exitPolicy.kind === 'sl_tp_deadline_retracement' || exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event') {
+      } else if (
+        exitPolicy.kind === 'sl_tp_deadline_retracement' ||
+        exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event'
+      ) {
         // TP is a dynamic retracement order managed by the execution manager's tracker;
         // the tracker handles its own TP fill detection and calls monitor.disarm() + exit handler.
         const slId = state.exitOrderRefs?.sl?.clientOrderId
@@ -192,8 +195,8 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
           const { order } = event
           const matchesSl =
             order.status === 'filled' &&
-            ((slId && order.clientOrderId === slId) ||
-              (slExchangeId && order.exchangeOrderId === slExchangeId))
+            (Boolean(slId && order.clientOrderId === slId) ||
+              Boolean(slExchangeId && order.exchangeOrderId === slExchangeId))
           if (!matchesSl) return
           const ctx: ExitTriggerContext = {
             triggerTs: order.updatedAt,
@@ -239,13 +242,17 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         // REST call can complete before the timeout settles the intent.
         const REST_POLL_GRACE_MS = 8_000
         let restPollDelay: number | undefined
-        if (opts.restFundingFeePoller) {
+        const restFundingFeePoller = opts.restFundingFeePoller
+        if (restFundingFeePoller) {
           restPollDelay = Math.max(0, fundingTs + REST_POLL_DELAY_MS - now - skewMs)
           const restPollHandle = setTOFn(() => {
-            void opts.restFundingFeePoller!({ exchange: intent.exchange, symbol: intent.symbol, fundingTs })
+            void restFundingFeePoller({ exchange: intent.exchange, symbol: intent.symbol, fundingTs })
               .then(fee => {
                 if (fee) {
-                  logger.info({ intentId, symbol: intent.symbol, fundingTs, fundingAmount: fee.fundingAmount }, 'monitor.rest_funding_fee_poll.found')
+                  logger.info(
+                    { intentId, symbol: intent.symbol, fundingTs, fundingAmount: fee.fundingAmount },
+                    'monitor.rest_funding_fee_poll.found'
+                  )
                   settle('funding_fee', {
                     triggerTs: fee.receivedAt,
                     source: 'rest_poll',
@@ -276,7 +283,10 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
         }, effectiveTimeoutDelay)
         entry.timers.push(timeoutHandle)
 
-        logger.debug({ intentId, timeoutDelay, effectiveTimeoutDelay, restPollDelay, fundingTs }, 'monitor.armed.funding_fee_event')
+        logger.debug(
+          { intentId, timeoutDelay, effectiveTimeoutDelay, restPollDelay, fundingTs },
+          'monitor.armed.funding_fee_event'
+        )
       }
     },
 

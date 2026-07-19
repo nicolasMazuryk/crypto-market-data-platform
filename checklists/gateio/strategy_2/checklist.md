@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_2.ts`, `src/execution/execution/manager
 ---
 
 **GateIO-specific notes:**
+
 - WS entry via WS order adapter (requiresWsOrderAdapter=true)
 - `futures.orders` channel for fill events; timestamps in **seconds** (adapter × 1000)
 - Funding fee: GateIO account WS channel with fund bizType → ws.funding_fee bus event

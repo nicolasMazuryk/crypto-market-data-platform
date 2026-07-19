@@ -10,11 +10,11 @@ These commands apply to SWAP, FUTURES, and/or OPTION instruments. Not applicable
 okx market funding-rate <instId> [--history] [--limit <n>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `instId` | Yes | - | Perpetual swap instrument ID, **must end with `-SWAP`** (e.g., `BTC-USDT-SWAP`). Spot IDs like `BTC-USDT` will be rejected. |
-| `--history` | No | false | Return historical funding rates |
-| `--limit` | No | 100 | Number of historical records (only with `--history`) |
+| Param       | Required | Default | Description                                                                                                                 |
+| ----------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `instId`    | Yes      | -       | Perpetual swap instrument ID, **must end with `-SWAP`** (e.g., `BTC-USDT-SWAP`). Spot IDs like `BTC-USDT` will be rejected. |
+| `--history` | No       | false   | Return historical funding rates                                                                                             |
+| `--limit`   | No       | 100     | Number of historical records (only with `--history`)                                                                        |
 
 **Current rate** (no `--history`):
 Returns: `fundingRate` · `nextFundingRate` · `fundingTime` · `nextFundingTime`
@@ -37,10 +37,10 @@ okx market funding-rate BTC-USDT-SWAP --history --limit 10
 okx market mark-price --instType <type> [--instId <id>] [--json]
 ```
 
-| Param | Required | Values |
-|---|---|---|
-| `--instType` | Yes | `SWAP` `FUTURES` `OPTION` |
-| `--instId` | No | Filter to a single instrument |
+| Param        | Required | Values                        |
+| ------------ | -------- | ----------------------------- |
+| `--instType` | Yes      | `SWAP` `FUTURES` `OPTION`     |
+| `--instId`   | No       | Filter to a single instrument |
 
 Returns: `instId` · `instType` · `markPx` · `ts`
 
@@ -75,10 +75,10 @@ okx market price-limit BTC-USDT-SWAP
 okx market open-interest --instType <type> [--instId <id>] [--json]
 ```
 
-| Param | Required | Values |
-|---|---|---|
-| `--instType` | Yes | `SWAP` `FUTURES` `OPTION` |
-| `--instId` | No | Filter to a single instrument |
+| Param        | Required | Values                        |
+| ------------ | -------- | ----------------------------- |
+| `--instType` | Yes      | `SWAP` `FUTURES` `OPTION`     |
+| `--instId`   | No       | Filter to a single instrument |
 
 Returns: `instId` · `oi` (contracts) · `oiCcy` (base currency amount) · `ts`
 
@@ -97,10 +97,10 @@ okx market open-interest --instType SWAP
 okx market index-ticker [--instId <id>] [--quoteCcy <ccy>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Cond. | - | Index ID (e.g., `BTC-USD`). Either this or `--quoteCcy` required. |
-| `--quoteCcy` | Cond. | - | Filter all indices by quote currency (e.g., `USD`, `USDT`) |
+| Param        | Required | Default | Description                                                       |
+| ------------ | -------- | ------- | ----------------------------------------------------------------- |
+| `--instId`   | Cond.    | -       | Index ID (e.g., `BTC-USD`). Either this or `--quoteCcy` required. |
+| `--quoteCcy` | Cond.    | -       | Filter all indices by quote currency (e.g., `USD`, `USDT`)        |
 
 Returns: `instId` · `idxPx` · `high24h` · `low24h`
 

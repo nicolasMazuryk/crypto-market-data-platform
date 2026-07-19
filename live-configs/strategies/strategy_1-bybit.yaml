@@ -4,6 +4,6 @@ strategies:
     enabled: true
     negativeFundingThresholdPercent: -0.1
     entryOffsetSeconds: 3
-    exitOffsetSeconds: 4
+    exitOffsetSeconds: 6
     amountUsd: 10
     leverage: 5

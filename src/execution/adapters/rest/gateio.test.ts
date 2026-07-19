@@ -138,10 +138,7 @@ describe('gateio lossless JSON parsing', () => {
 
   it('parses unsafe Gate.io numeric order IDs as exact strings', () => {
     const { ccxt } = makeAdapter()
-    const parsed = ccxt.parseJson('{"id":292733975903838387,"text":"abc","price":"1.5"}') as Record<
-      string,
-      unknown
-    >
+    const parsed = ccxt.parseJson('{"id":292733975903838387,"text":"abc","price":"1.5"}') as Record<string, unknown>
 
     expect(parsed.id).toBe('292733975903838387')
     expect(parsed.text).toBe('abc')

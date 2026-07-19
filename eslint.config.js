@@ -1,20 +1,19 @@
-import eslint from "@eslint/js";
-import tseslint from "typescript-eslint";
-import eslintConfigPrettier from "eslint-config-prettier";
+import eslint from '@eslint/js'
+import tseslint from 'typescript-eslint'
+import eslintConfigPrettier from 'eslint-config-prettier'
+import globals from 'globals'
 
-const tsFiles = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
+const tsFiles = ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts']
 
-const strictTypeChecked = tseslint.configs.strictTypeChecked.map((config) => ({
+const strictTypeChecked = tseslint.configs.strictTypeChecked.map(config => ({
   ...config,
   files: config.files ?? tsFiles,
-}));
+}))
 
-const stylisticTypeChecked = tseslint.configs.stylisticTypeChecked.map(
-  (config) => ({
-    ...config,
-    files: config.files ?? tsFiles,
-  })
-);
+const stylisticTypeChecked = tseslint.configs.stylisticTypeChecked.map(config => ({
+  ...config,
+  files: config.files ?? tsFiles,
+}))
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -22,7 +21,7 @@ export default tseslint.config(
   ...stylisticTypeChecked,
   eslintConfigPrettier,
   {
-    ignores: ["dist/", "node_modules/", ".sst/", "infra/", "sst.config.ts", "sst-env.d.ts", ".claude/", "scripts/"],
+    ignores: ['dist/', 'node_modules/', '.sst/', 'infra/', 'sst.config.ts', 'sst-env.d.ts', '.claude/', 'scripts/'],
   },
   {
     files: tsFiles,
@@ -33,39 +32,51 @@ export default tseslint.config(
       },
     },
     rules: {
-      "@typescript-eslint/consistent-type-imports": [
-        "error",
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
         {
-          prefer: "type-imports",
-          fixStyle: "separate-type-imports",
+          prefer: 'type-imports',
+          fixStyle: 'separate-type-imports',
         },
       ],
-      "@typescript-eslint/no-unused-vars": [
-        "error",
+      '@typescript-eslint/no-unused-vars': [
+        'error',
         {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
         },
       ],
     },
   },
   {
-    files: ["**/*.test.ts", "**/*.test.tsx"],
+    files: ['**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
     rules: {
-      "@typescript-eslint/no-non-null-assertion": "off",
-      "@typescript-eslint/unbound-method": "off",
-      "@typescript-eslint/no-empty-function": "off",
-      "@typescript-eslint/require-await": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unused-vars": [
-        "error",
+      'no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+    },
+  },
+  {
+    files: ['**/*.test.ts', '**/*.test.tsx'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/unbound-method': 'off',
+      '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/require-await': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
         {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-          caughtErrorsIgnorePattern: "^_",
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
         },
       ],
     },
   }
-);
+)

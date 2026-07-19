@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_3a.ts`, `src/execution/execution/manage
 ---
 
 **KuCoin-specific notes (CRITICAL):**
+
 - REST entry (no WS adapter for strategy_3a)
 - KuCoin does NOT echo `clientOrderId` for market fills in WS events → `pollForEntryFill` is PRIMARY fill path
 - SHORT position: entry=SELL market, SL=buy stop_market, TP=buy limit

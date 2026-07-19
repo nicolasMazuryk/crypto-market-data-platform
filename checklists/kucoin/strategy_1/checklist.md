@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
 ---
 
 **KuCoin-specific notes (CRITICAL):**
+
 - KuCoin does NOT echo `clientOrderId` in market order WS fill events → `byEntryOrderId` lookup by clientOrderId FAILS for market fills
 - KuCoin uses `exchangeOrderId` as the primary fill routing key for market orders
 - `pollForEntryFill` (15×1s REST) is the **PRIMARY** fill detection path for KuCoin market orders (not a fallback)

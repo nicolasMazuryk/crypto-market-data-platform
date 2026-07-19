@@ -176,13 +176,19 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     submissionTails.set(exchange, gate)
 
     // Chain fn after prev completes. Errors in prev don't block us.
-    const p = prev.catch(() => {}).then(() => fn())
+    const p = prev
+      .catch(() => {
+        /* noop */
+      })
+      .then(() => fn())
     // Hold gate for staggerMs after fn settles so next submission waits the full gap.
-    void p.then(() => {
-      setTimeout(releaseGate, staggerMs)
-    }).catch(() => {
-      releaseGate()
-    })
+    void p
+      .then(() => {
+        setTimeout(releaseGate, staggerMs)
+      })
+      .catch(() => {
+        releaseGate()
+      })
     return p
   }
 
@@ -300,7 +306,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         })
         .then(() => true)
         .catch((err: unknown) => {
-          logger.warn({ intentId: s.intent.id, clientOrderId: ref.clientOrderId, err }, 'protective failure cancel failed')
+          logger.warn(
+            { intentId: s.intent.id, clientOrderId: ref.clientOrderId, err },
+            'protective failure cancel failed'
+          )
           return false
         })
       if (cancelled) {
@@ -382,7 +391,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (ack.status === 'accepted') {
         if (ack.exchangeOrderId) {
           byCloseExchangeOrderId.set(ack.exchangeOrderId, s.intent.id)
-          s.exitOrderRefs = { ...s.exitOrderRefs, close: { clientOrderId: closeId, exchangeOrderId: ack.exchangeOrderId } }
+          s.exitOrderRefs = {
+            ...s.exitOrderRefs,
+            close: { clientOrderId: closeId, exchangeOrderId: ack.exchangeOrderId },
+          }
           bus.emit('order.placed', { ...closePlacedPre, exchangeOrderId: ack.exchangeOrderId, ackPending: false })
         }
         if (!TERMINAL.has(s.status)) {
@@ -392,7 +404,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           })
         }
       } else {
-        logger.error({ intentId: s.intent.id, code, rejectReason: ack.rejectReason }, 'protective market close rejected')
+        logger.error(
+          { intentId: s.intent.id, code, rejectReason: ack.rejectReason },
+          'protective market close rejected'
+        )
         byCloseOrderId.delete(canonCloseId)
         setError(s, code, message)
       }
@@ -482,7 +497,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
                 exchange: intent.exchange,
                 symbol: intent.exchangeSymbol,
                 clientOrderId: slId,
-                exchangeOrderId: slResult.exchangeOrderId ?? '',
+                exchangeOrderId: slResult.exchangeOrderId,
                 side: exitSide,
                 type: 'stop_market',
                 qty: exitQty,
@@ -711,7 +726,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               exchange: intent.exchange,
               symbol: intent.exchangeSymbol,
               clientOrderId: slId,
-              exchangeOrderId: slResult.value.exchangeOrderId ?? '',
+              exchangeOrderId: slResult.value.exchangeOrderId,
               side: exitSide,
               type: 'stop_market',
               qty: exitQty,
@@ -733,7 +748,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               exchange: intent.exchange,
               symbol: intent.exchangeSymbol,
               clientOrderId: tpId,
-              exchangeOrderId: tpResult.value.exchangeOrderId ?? '',
+              exchangeOrderId: tpResult.value.exchangeOrderId,
               side: exitSide,
               type: 'limit',
               qty: exitQty,
@@ -942,7 +957,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               exchange: intent.exchange,
               symbol: intent.exchangeSymbol,
               clientOrderId: slId,
-              exchangeOrderId: slResult.value.exchangeOrderId ?? '',
+              exchangeOrderId: slResult.value.exchangeOrderId,
               side: exitSide,
               type: 'stop_market',
               qty: exitQty,
@@ -964,7 +979,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               exchange: intent.exchange,
               symbol: intent.exchangeSymbol,
               clientOrderId: tpId,
-              exchangeOrderId: tpResult.value.exchangeOrderId ?? '',
+              exchangeOrderId: tpResult.value.exchangeOrderId,
               side: exitSide,
               type: 'limit',
               qty: exitQty,
@@ -978,7 +993,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           })
         }
         if (slReject || tpReject) {
-          logger.error({ intentId: intent.id, slReject, tpReject }, 'manager: post-funding protective order placement failed')
+          logger.error(
+            { intentId: intent.id, slReject, tpReject },
+            'manager: post-funding protective order placement failed'
+          )
           await closeAfterProtectionFailure(
             s,
             'post_funding_protective_order_failed',
@@ -1036,7 +1054,12 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           { event: 'handleEntryFilled.no_price_or_qty', intentId: intent.id, price, exitQty },
           'handleEntryFilled: zero price or qty — SL/TP not placed for post_funding intent'
         )
-        await closeAfterProtectionFailure(s, 'post_funding_protective_no_price_or_qty', 'zero price or qty for post-funding SL/TP', [])
+        await closeAfterProtectionFailure(
+          s,
+          'post_funding_protective_no_price_or_qty',
+          'zero price or qty for post-funding SL/TP',
+          []
+        )
         return
       }
     }
@@ -1083,9 +1106,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     const { fundingTs, deadlineAt, retracementPct, anchorPrice } = intent.exitPolicy
     const isFundingEventKind = intent.exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event'
     const timeoutAt =
-      intent.exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event'
-        ? intent.exitPolicy.timeoutAt
-        : fundingTs
+      intent.exitPolicy.kind === 'sl_tp_deadline_retracement_funding_event' ? intent.exitPolicy.timeoutAt : fundingTs
     const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
 
     // For the funding_event variant, P_low tracking begins only when the WS event fires (or
@@ -1263,10 +1284,11 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           // "position is zero / empty" means the SL triggered before the retracement window.
           // Settle immediately as an SL exit rather than waiting for the deadline.
           // Bybit: 110017; Gate.io: INCREASE_POSITION "empty position"; Binance: -2022 ReduceOnly rejected
+          const rejectReason = ack.rejectReason ?? ''
           const emptyPosition =
-            ack.rejectReason?.includes('110017') ||
-            (ack.rejectReason?.includes('INCREASE_POSITION') && ack.rejectReason?.includes('empty position')) ||
-            ack.rejectReason?.includes('-2022')
+            rejectReason.includes('110017') ||
+            (rejectReason.includes('INCREASE_POSITION') && rejectReason.includes('empty position')) ||
+            rejectReason.includes('-2022')
           if (emptyPosition) {
             settled = true
             monitor.disarm(intent.id)
@@ -1608,7 +1630,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             const now = clock.now()
             // Re-check status: WS fast_fill may have advanced the intent while REST was in-flight.
             // Emitting synthetic ws.order/ws.fill after WS already processed the fill causes duplicates.
-             
+
             if (TERMINAL.has(s.status) || (s.status as string) !== 'working') return
             bus.emit('ws.order', {
               exchange: s.intent.exchange,
@@ -1687,7 +1709,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             exchange: s.intent.exchange,
             symbol: s.intent.exchangeSymbol,
             clientOrderId,
-            exchangeOrderId: exchangeOrderId ?? '',
+            exchangeOrderId,
             side: s.intent.side === 'long' ? 'buy' : 'sell',
             type: 'market',
             qty: pos.qty,
@@ -1743,7 +1765,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           emitIntentExited(s)
           transition(s, 'exited')
           const effectiveCid = closeId || order.clientOrderId
-          const effectiveEoid = order.exchangeOrderId || closeExchangeOrderId || ''
+          const effectiveEoid = (order.exchangeOrderId || closeExchangeOrderId) ?? ''
           const now = clock.now()
           bus.emit('ws.order', {
             exchange: s.intent.exchange,
@@ -1768,7 +1790,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             })
           }
           logger.info(
-            { event: 'intent.exited.complete', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, exitReason: s.exitReason },
+            {
+              event: 'intent.exited.complete',
+              intentId: s.intent.id,
+              exchange: s.intent.exchange,
+              symbol: s.intent.symbol,
+              exitReason: s.exitReason,
+            },
             'intent.exited.complete'
           )
           void sweepReduceOnlyOrders(rest, s.intent.exchangeSymbol, s.intent.id)
@@ -1786,8 +1814,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             recordExitMetrics(s, s.exitReason ?? 'error')
             emitIntentExited(s)
             transition(s, 'exited')
-            const effectiveCid = closeId || order?.clientOrderId || ''
-            const effectiveEoid = order?.exchangeOrderId || (closeExchangeOrderId ?? '')
+            const effectiveCid = closeId || (order?.clientOrderId ?? '')
+            const effectiveEoid = (order?.exchangeOrderId ?? '') || (closeExchangeOrderId ?? '')
             const now = clock.now()
             bus.emit('ws.order', {
               exchange: s.intent.exchange,
@@ -1809,7 +1837,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               },
             })
             logger.info(
-              { event: 'intent.exited.complete', intentId: s.intent.id, exchange: s.intent.exchange, symbol: s.intent.symbol, exitReason: s.exitReason },
+              {
+                event: 'intent.exited.complete',
+                intentId: s.intent.id,
+                exchange: s.intent.exchange,
+                symbol: s.intent.symbol,
+                exitReason: s.exitReason,
+              },
               'intent.exited.complete'
             )
             void sweepReduceOnlyOrders(rest, s.intent.exchangeSymbol, s.intent.id)
@@ -1858,7 +1892,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (slOrder?.status === 'filled') {
             if (slOrder.avgFillPrice !== undefined) s.avgExitPrice = slOrder.avgFillPrice
             monitor.disarm(intent.id)
-            const triggerTs = slOrder.updatedAt ?? clock.now()
+            const triggerTs = slOrder.updatedAt
             bus.emit('exit.triggered', {
               intentId: intent.id,
               exchange: intent.exchange,
@@ -1885,7 +1919,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (tpOrder?.status === 'filled') {
             if (tpOrder.avgFillPrice !== undefined) s.avgExitPrice = tpOrder.avgFillPrice
             monitor.disarm(intent.id)
-            const triggerTs = tpOrder.updatedAt ?? clock.now()
+            const triggerTs = tpOrder.updatedAt
             bus.emit('exit.triggered', {
               intentId: intent.id,
               exchange: intent.exchange,
@@ -2291,7 +2325,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         }
         // Cancel residual SL/TP orders in parallel — reduce-only close guarantees no oversell.
         if (siblingRefs.length > 0) {
-          void Promise.all(siblingRefs.map(ref => cancelSiblingExit(rest, intent, ref))).catch(() => {})
+          void Promise.all(siblingRefs.map(ref => cancelSiblingExit(rest, intent, ref))).catch(() => {
+            /* noop */
+          })
         }
         // REST polling fallback for close fill (mirrors entry poll for WS-unreliable exchanges)
         const onCloseExhausted =
@@ -2455,10 +2491,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     const stale = openOrders.filter(o => {
       if (!o.reduceOnly) return false
       const canonical = canonicalize(o.clientOrderId)
-      return (
-        !byCloseOrderId.has(canonical) &&
-        !(o.exchangeOrderId && byCloseExchangeOrderId.has(o.exchangeOrderId))
-      )
+      return !byCloseOrderId.has(canonical) && !(o.exchangeOrderId && byCloseExchangeOrderId.has(o.exchangeOrderId))
     })
     if (stale.length === 0) return
     logger.warn(
@@ -2769,7 +2802,11 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       }
 
       // Market is guaranteed present — preflight already verified it.
-      const market = opts.markets.get(intent.exchange, intent.symbol)!
+      const market = opts.markets.get(intent.exchange, intent.symbol)
+      if (!market) {
+        setError(s, 'no_market', `no market for ${intent.exchange}:${intent.symbol}`)
+        return s
+      }
 
       const rest = restAdapters.get(intent.exchange)
       if (!rest) {
@@ -2848,7 +2885,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           setError(
             s,
             'min_notional',
-            `pre-funding notional ${entryPolicy.preFundingVolume * price} below minCost ${market.minCost}`
+            `pre-funding notional ${String(entryPolicy.preFundingVolume * price)} below minCost ${String(market.minCost)}`
           )
           return s
         }
@@ -2965,115 +3002,115 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           fundingFeeUnsub?.()
           if (timeoutHandle !== null) clearTimeout(timeoutHandle)
           try {
-          const preFundingFilled = await confirmPreFundingFilled()
-          if (!preFundingFilled) {
-            setError(s, 'pre_funding_not_filled', 'pre-funding order was not confirmed filled before MAIN')
-            void closePreFunding()
-            return
-          }
+            const preFundingFilled = await confirmPreFundingFilled()
+            if (!preFundingFilled) {
+              setError(s, 'pre_funding_not_filled', 'pre-funding order was not confirmed filled before MAIN')
+              void closePreFunding()
+              return
+            }
 
-          const mainOrderId = ids.forIntent(intent.id, 0)
-          const canonMainId = canonicalize(intent.exchange, mainOrderId)
-          byEntryOrderId.set(canonMainId, intent.id)
-          s.entryOrderId = mainOrderId
+            const mainOrderId = ids.forIntent(intent.id, 0)
+            const canonMainId = canonicalize(intent.exchange, mainOrderId)
+            byEntryOrderId.set(canonMainId, intent.id)
+            s.entryOrderId = mainOrderId
 
-          if (opts.beforeCreateOrder) {
-            await opts
-              .beforeCreateOrder({
+            if (opts.beforeCreateOrder) {
+              await opts
+                .beforeCreateOrder({
+                  intentId: intent.id,
+                  clientOrderId: mainOrderId,
+                  exchange: intent.exchange,
+                  symbol: intent.exchangeSymbol,
+                  side: mainSide,
+                  kind: 'entry',
+                  orderType: 'market',
+                  qty: entryPolicy.mainVolume,
+                  reduceOnly: false,
+                })
+                .catch((err: unknown) => {
+                  logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for strategy6 main')
+                  bus.emit('ops.event', {
+                    ts: clock.now(),
+                    level: 'fatal',
+                    exchange: intent.exchange,
+                    eventType: 'durability_write_failed',
+                    payload: { intentId: intent.id, kind: 'entry', err: String(err) },
+                  })
+                })
+            }
+
+            let ack
+            try {
+              ack = await createOrderWithOkxWsFallback(intent.strategy, {
                 intentId: intent.id,
                 clientOrderId: mainOrderId,
                 exchange: intent.exchange,
                 symbol: intent.exchangeSymbol,
                 side: mainSide,
-                kind: 'entry',
-                orderType: 'market',
-                qty: entryPolicy.mainVolume,
-                reduceOnly: false,
-              })
-              .catch((err: unknown) => {
-                logger.warn({ intentId: intent.id, err }, 'manager: durability write failed for strategy6 main')
-                bus.emit('ops.event', {
-                  ts: clock.now(),
-                  level: 'fatal',
-                  exchange: intent.exchange,
-                  eventType: 'durability_write_failed',
-                  payload: { intentId: intent.id, kind: 'entry', err: String(err) },
-                })
-              })
-          }
-
-          let ack
-          try {
-            ack = await createOrderWithOkxWsFallback(intent.strategy, {
-              intentId: intent.id,
-              clientOrderId: mainOrderId,
-              exchange: intent.exchange,
-              symbol: intent.exchangeSymbol,
-              side: mainSide,
-              type: 'market',
-              qty: entryPolicy.mainVolume,
-              leverage: intent.leverage,
-            })
-          } catch (err) {
-            byEntryOrderId.delete(canonMainId)
-            setError(s, 'main_order_failed', String(err))
-            void closePreFunding()
-            return
-          }
-
-          if (ack.status === 'rejected') {
-            byEntryOrderId.delete(canonMainId)
-            setError(s, 'main_order_rejected', ack.rejectReason ?? 'main order rejected')
-            const rejectNow = clock.now()
-            bus.emit('ws.order', {
-              exchange: intent.exchange,
-              seq: 0,
-              receivedAt: rejectNow,
-              order: {
-                exchange: intent.exchange,
-                symbol: intent.exchangeSymbol,
-                clientOrderId: mainOrderId,
-                exchangeOrderId: ack.exchangeOrderId,
-                side: mainSide,
                 type: 'market',
                 qty: entryPolicy.mainVolume,
-                filledQty: 0,
-                reduceOnly: false,
-                status: 'rejected',
-                ...(ack.rejectReason !== undefined ? { rejectReason: ack.rejectReason } : {}),
-                submittedAt: rejectNow,
-                updatedAt: rejectNow,
-              },
+                leverage: intent.leverage,
+              })
+            } catch (err) {
+              byEntryOrderId.delete(canonMainId)
+              setError(s, 'main_order_failed', String(err))
+              void closePreFunding()
+              return
+            }
+
+            if (ack.status === 'rejected') {
+              byEntryOrderId.delete(canonMainId)
+              setError(s, 'main_order_rejected', ack.rejectReason ?? 'main order rejected')
+              const rejectNow = clock.now()
+              bus.emit('ws.order', {
+                exchange: intent.exchange,
+                seq: 0,
+                receivedAt: rejectNow,
+                order: {
+                  exchange: intent.exchange,
+                  symbol: intent.exchangeSymbol,
+                  clientOrderId: mainOrderId,
+                  exchangeOrderId: ack.exchangeOrderId,
+                  side: mainSide,
+                  type: 'market',
+                  qty: entryPolicy.mainVolume,
+                  filledQty: 0,
+                  reduceOnly: false,
+                  status: 'rejected',
+                  ...(ack.rejectReason !== undefined ? { rejectReason: ack.rejectReason } : {}),
+                  submittedAt: rejectNow,
+                  updatedAt: rejectNow,
+                },
+              })
+              void closePreFunding()
+              return
+            }
+
+            if (ack.exchangeOrderId) {
+              s.entryExchangeOrderId = ack.exchangeOrderId
+              byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
+            }
+
+            bus.emit('order.placed', {
+              intentId: intent.id,
+              exchange: intent.exchange,
+              symbol: intent.symbol,
+              clientOrderId: mainOrderId,
+              kind: 'entry',
+              side: mainSide,
+              orderType: 'market',
+              qty: entryPolicy.mainVolume,
+              reduceOnly: false,
+              ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
             })
-            void closePreFunding()
-            return
-          }
+            logger.info(
+              { event: 'strategy6.main_placed', intentId: intent.id, qty: entryPolicy.mainVolume },
+              'strategy6.main_placed'
+            )
 
-          if (ack.exchangeOrderId) {
-            s.entryExchangeOrderId = ack.exchangeOrderId
-            byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
-          }
-
-          bus.emit('order.placed', {
-            intentId: intent.id,
-            exchange: intent.exchange,
-            symbol: intent.symbol,
-            clientOrderId: mainOrderId,
-            kind: 'entry',
-            side: mainSide,
-            orderType: 'market',
-            qty: entryPolicy.mainVolume,
-            reduceOnly: false,
-            ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
-          })
-          logger.info(
-            { event: 'strategy6.main_placed', intentId: intent.id, qty: entryPolicy.mainVolume },
-            'strategy6.main_placed'
-          )
-
-          if (!TERMINAL.has(s.status) && s.status === 'working') {
-            void pollForEntryFill(s, mainOrderId, ack.exchangeOrderId, rest)
-          }
+            if (!TERMINAL.has(s.status) && s.status === 'working') {
+              void pollForEntryFill(s, mainOrderId, ack.exchangeOrderId, rest)
+            }
           } finally {
             _resolve()
           }
@@ -3260,101 +3297,103 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         await withSubmissionGate(intent.exchange, () =>
           Promise.allSettled(
             rungs.map(async (rung, i) => {
-            const rungState = ladderRungState[i]
-            if (!rungState) return
-            const rungQty = alignToLotStep(check.qty * rung.qtyFraction, market)
-            const limitPrice =
-              intent.side === 'long' ? price * (1 - rung.priceOffsetPct / 100) : price * (1 + rung.priceOffsetPct / 100)
-            if (rungQty <= 0 || !meetsMinNotional(rungQty, limitPrice, market)) {
-              byEntryOrderId.delete(rungState.canonicalId)
-              logger.warn(
-                { intentId: intent.id, rungIdx: i, rungQty, limitPrice, minCost: market.minCost },
-                'ladder.rung_below_min_notional'
-              )
-              return
-            }
-            try {
-              const ack = await rest.createOrder({
-                intentId: intent.id,
-                clientOrderId: rungState.clientOrderId,
-                exchange: intent.exchange,
-                symbol: intent.exchangeSymbol,
-                side: entrySide,
-                type: 'limit',
-                qty: rungQty,
-                price: limitPrice,
-                leverage: intent.leverage,
-              })
-              if (ack.exchangeOrderId) {
-                byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
-              }
-              if (ack.status === 'rejected') {
-                logger.warn({ intentId: intent.id, rungIdx: i, reason: ack.rejectReason }, 'ladder rung rejected')
+              const rungState = ladderRungState[i]
+              if (!rungState) return
+              const rungQty = alignToLotStep(check.qty * rung.qtyFraction, market)
+              const limitPrice =
+                intent.side === 'long'
+                  ? price * (1 - rung.priceOffsetPct / 100)
+                  : price * (1 + rung.priceOffsetPct / 100)
+              if (rungQty <= 0 || !meetsMinNotional(rungQty, limitPrice, market)) {
                 byEntryOrderId.delete(rungState.canonicalId)
-                const rejectNow = clock.now()
+                logger.warn(
+                  { intentId: intent.id, rungIdx: i, rungQty, limitPrice, minCost: market.minCost },
+                  'ladder.rung_below_min_notional'
+                )
+                return
+              }
+              try {
+                const ack = await rest.createOrder({
+                  intentId: intent.id,
+                  clientOrderId: rungState.clientOrderId,
+                  exchange: intent.exchange,
+                  symbol: intent.exchangeSymbol,
+                  side: entrySide,
+                  type: 'limit',
+                  qty: rungQty,
+                  price: limitPrice,
+                  leverage: intent.leverage,
+                })
+                if (ack.exchangeOrderId) {
+                  byEntryExchangeOrderId.set(ack.exchangeOrderId, intent.id)
+                }
+                if (ack.status === 'rejected') {
+                  logger.warn({ intentId: intent.id, rungIdx: i, reason: ack.rejectReason }, 'ladder rung rejected')
+                  byEntryOrderId.delete(rungState.canonicalId)
+                  const rejectNow = clock.now()
+                  bus.emit('ws.order', {
+                    exchange: intent.exchange,
+                    seq: 0,
+                    receivedAt: rejectNow,
+                    order: {
+                      exchange: intent.exchange,
+                      symbol: intent.exchangeSymbol,
+                      clientOrderId: rungState.clientOrderId,
+                      exchangeOrderId: ack.exchangeOrderId,
+                      side: entrySide,
+                      type: 'limit',
+                      qty: rungQty,
+                      filledQty: 0,
+                      reduceOnly: false,
+                      status: 'rejected',
+                      ...(ack.rejectReason !== undefined ? { rejectReason: ack.rejectReason } : {}),
+                      submittedAt: rejectNow,
+                      updatedAt: rejectNow,
+                    },
+                  })
+                  return
+                }
+                bus.emit('order.placed', {
+                  intentId: intent.id,
+                  exchange: intent.exchange,
+                  symbol: intent.symbol,
+                  clientOrderId: rungState.clientOrderId,
+                  kind: 'entry',
+                  side: entrySide,
+                  orderType: 'limit',
+                  qty: rungQty,
+                  price: limitPrice,
+                  reduceOnly: false,
+                  ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+                })
+                logger.info(
+                  { event: 'ladder.rung_placed', intentId: intent.id, rungIdx: i, limitPrice, rungQty },
+                  'ladder.rung_placed'
+                )
+              } catch (err) {
+                byEntryOrderId.delete(rungState.canonicalId)
+                logger.warn({ intentId: intent.id, rungIdx: i, err }, 'ladder rung placement failed')
+                const failNow = clock.now()
                 bus.emit('ws.order', {
                   exchange: intent.exchange,
                   seq: 0,
-                  receivedAt: rejectNow,
+                  receivedAt: failNow,
                   order: {
                     exchange: intent.exchange,
                     symbol: intent.exchangeSymbol,
                     clientOrderId: rungState.clientOrderId,
-                    exchangeOrderId: ack.exchangeOrderId ?? '',
+                    exchangeOrderId: '',
                     side: entrySide,
                     type: 'limit',
                     qty: rungQty,
                     filledQty: 0,
                     reduceOnly: false,
-                    status: 'rejected',
-                    ...(ack.rejectReason !== undefined ? { rejectReason: ack.rejectReason } : {}),
-                    submittedAt: rejectNow,
-                    updatedAt: rejectNow,
+                    status: 'cancelled',
+                    submittedAt: failNow,
+                    updatedAt: failNow,
                   },
                 })
-                return
               }
-              bus.emit('order.placed', {
-                intentId: intent.id,
-                exchange: intent.exchange,
-                symbol: intent.symbol,
-                clientOrderId: rungState.clientOrderId,
-                kind: 'entry',
-                side: entrySide,
-                orderType: 'limit',
-                qty: rungQty,
-                price: limitPrice,
-                reduceOnly: false,
-                ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
-              })
-              logger.info(
-                { event: 'ladder.rung_placed', intentId: intent.id, rungIdx: i, limitPrice, rungQty },
-                'ladder.rung_placed'
-              )
-            } catch (err) {
-              byEntryOrderId.delete(rungState.canonicalId)
-              logger.warn({ intentId: intent.id, rungIdx: i, err }, 'ladder rung placement failed')
-              const failNow = clock.now()
-              bus.emit('ws.order', {
-                exchange: intent.exchange,
-                seq: 0,
-                receivedAt: failNow,
-                order: {
-                  exchange: intent.exchange,
-                  symbol: intent.exchangeSymbol,
-                  clientOrderId: rungState.clientOrderId,
-                  exchangeOrderId: '',
-                  side: entrySide,
-                  type: 'limit',
-                  qty: rungQty,
-                  filledQty: 0,
-                  reduceOnly: false,
-                  status: 'cancelled',
-                  submittedAt: failNow,
-                  updatedAt: failNow,
-                },
-              })
-            }
             })
           )
         )
@@ -3374,7 +3413,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
                     .cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId: r.clientOrderId })
                     .then(() => r)
                     .catch((err: unknown) => {
-                      logger.warn({ intentId: intent.id, clientOrderId: r.clientOrderId, err }, 'manager: ladder rung cancel failed')
+                      logger.warn(
+                        { intentId: intent.id, clientOrderId: r.clientOrderId, err },
+                        'manager: ladder rung cancel failed'
+                      )
                       throw err
                     })
                 )
@@ -3682,16 +3724,25 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           s.status === 'exiting' ||
           s.status === 'exited'
         logger[isLegitTerminal ? 'debug' : 'warn'](
-          { event: 'market_entry.preempted_in_flight', intentId: intent.id, exchange: intent.exchange, status: s.status },
+          {
+            event: 'market_entry.preempted_in_flight',
+            intentId: intent.id,
+            exchange: intent.exchange,
+            status: s.status,
+          },
           'market order placed but intent preempted in-flight — cancelling orphan order'
         )
         byEntryOrderId.delete(canonEntryId)
-        if (rest && ack.exchangeOrderId) {
-          void rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId, exchangeOrderId: ack.exchangeOrderId })
+        if (ack.exchangeOrderId) {
+          void rest
+            .cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId, exchangeOrderId: ack.exchangeOrderId })
             .catch((err: unknown) => {
               const code = (err as { code?: string }).code ?? String(err)
               const isCancelGone = new Set(['TEXT_DUPLICATED', 'ORDER_NOT_FOUND', 'ORDER_FINISHED']).has(code)
-              logger[isCancelGone ? 'debug' : 'warn']({ intentId: intent.id, err }, 'market_entry: orphan cancel failed')
+              logger[isCancelGone ? 'debug' : 'warn'](
+                { intentId: intent.id, err },
+                'market_entry: orphan cancel failed'
+              )
             })
         }
         return s
@@ -3716,7 +3767,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           symbol: intent.symbol,
           clientOrderId,
           ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
-          placement_latency_ms: placedAt - (s.intent.decidedAt ?? placedAt),
+          placement_latency_ms: placedAt - s.intent.decidedAt,
           ack_latency_ms: clock.now() - placedAt,
         },
         'order.acked'

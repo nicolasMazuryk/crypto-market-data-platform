@@ -4,21 +4,21 @@
 
 This CLI uses **space-separated subcommands** (`okx option place`). The MCP tool names surfaced to AI agents use a **single underscored identifier** (`option_place_order`). They are the same feature on two different surfaces. Mapping examples:
 
-| CLI command | MCP tool name |
-|---|---|
-| `okx option place` | `option_place_order` |
-| `okx option algo place` | `option_place_algo_order` |
-| `okx option cancel` | `option_cancel_order` |
-| `okx option algo cancel` | `option_cancel_algo_orders` |
-| `okx option batch-cancel` | `option_batch_cancel` |
-| `okx option amend` | `option_amend_order` |
-| `okx option algo amend` | `option_amend_algo_order` |
-| `okx option orders` | `option_get_orders` |
-| `okx option get` | `option_get_order` |
-| `okx option positions` | `option_get_positions` |
-| `okx option fills` | `option_get_fills` |
-| `okx option instruments` | `option_get_instruments` |
-| `okx option greeks` | `option_get_greeks` |
+| CLI command               | MCP tool name               |
+| ------------------------- | --------------------------- |
+| `okx option place`        | `option_place_order`        |
+| `okx option algo place`   | `option_place_algo_order`   |
+| `okx option cancel`       | `option_cancel_order`       |
+| `okx option algo cancel`  | `option_cancel_algo_orders` |
+| `okx option batch-cancel` | `option_batch_cancel`       |
+| `okx option amend`        | `option_amend_order`        |
+| `okx option algo amend`   | `option_amend_algo_order`   |
+| `okx option orders`       | `option_get_orders`         |
+| `okx option get`          | `option_get_order`          |
+| `okx option positions`    | `option_get_positions`      |
+| `okx option fills`        | `option_get_fills`          |
+| `okx option instruments`  | `option_get_instruments`    |
+| `okx option greeks`       | `option_get_greeks`         |
 
 **Do NOT convert MCP tool names to hyphen-joined CLI commands.** `okx option place-order` is **not** a valid command — the CLI will reject it with "Unknown command". Use `okx option place` instead.
 
@@ -26,10 +26,10 @@ This CLI uses **space-separated subcommands** (`okx option place`). The MCP tool
 
 Options (`*-USD-YYMMDD-strike-C/P`) support two USDT-based sizing modes:
 
-| `--tgtCcy` | sz meaning | Conversion formula |
-|---|---|---|
-| `quote_ccy` | USDT notional value | `floor(sz / (ctVal * lastPx))` |
-| `margin` | USDT margin cost | `floor(sz * lever / (ctVal * lastPx))` |
+| `--tgtCcy`  | sz meaning          | Conversion formula                     |
+| ----------- | ------------------- | -------------------------------------- |
+| `quote_ccy` | USDT notional value | `floor(sz / (ctVal * lastPx))`         |
+| `margin`    | USDT margin cost    | `floor(sz * lever / (ctVal * lastPx))` |
 
 ```bash
 # Buy BTC call option with 200,000 USDT notional — system converts to contracts automatically
@@ -42,10 +42,12 @@ okx option place --instId BTC-USD-260405-90000-C --side sell \
 ```
 
 **Conversion formulas** (for reference):
+
 - `quote_ccy`: `contracts = floor(usdtAmt / (ctVal × lastPx))`
 - `margin`: `contracts = floor(marginAmt × lever / (ctVal × lastPx))`
 
 Example — BTC option (ctVal=1 BTC, lastPx=84000):
+
 - 200,000 USDT notional → floor(200000 / (1 × 84000)) = floor(2.38) = **2 contracts**
 - 50,000 USDT margin at 3x → floor(50000 × 3 / (1 × 84000)) = floor(1.78) = **1 contract**
 
@@ -61,10 +63,10 @@ Example — BTC option (ctVal=1 BTC, lastPx=84000):
 okx option instruments --uly <underlying> [--expTime <YYMMDD>] [--json]
 ```
 
-| Param | Required | Description |
-|---|---|---|
-| `--uly` | Yes | Underlying, e.g. `BTC-USD` or `ETH-USD` |
-| `--expTime` | No | Filter by expiry date, e.g. `250328` |
+| Param       | Required | Description                             |
+| ----------- | -------- | --------------------------------------- |
+| `--uly`     | Yes      | Underlying, e.g. `BTC-USD` or `ETH-USD` |
+| `--expTime` | No       | Filter by expiry date, e.g. `250328`    |
 
 Returns: `instId`, `uly`, `expTime`, `stk` (strike), `optType` (C/P), `state`.
 
@@ -93,30 +95,32 @@ okx option place --instId <id> --side <buy|sell> --ordType <type> \
   [--stpMode <cancel_maker|cancel_taker|cancel_both>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | e.g. `BTC-USD-250328-95000-C` (call) or `...-P` (put) |
-| `--side` | Yes | - | `buy` or `sell` |
-| `--ordType` | Yes | - | `market`, `limit`, `post_only`, `fok`, `ioc` |
-| `--tdMode` | Yes | - | `cash` = buyer (full premium); `cross`/`isolated` = seller (margin) |
-| `--sz` | Yes | - | Number of contracts (default), or USDT amount when `--tgtCcy` is set |
-| `--tgtCcy` | No | - | `quote_ccy`: sz is USDT notional value; `margin`: sz is USDT margin cost (position = sz * leverage). Both auto-convert to contracts |
-| `--px` | Cond. | - | Required for `limit`, `post_only`, `fok`, `ioc` |
-| `--reduceOnly` | No | false | Close-only; do not open a new position |
-| `--tpTriggerPx` | No | - | Attached take-profit trigger price |
-| `--tpOrdPx` | No | - | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`) |
-| `--tpOrdKind` | No | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase) |
-| `--tpTriggerPxType` | No | last | Price source for TP trigger: `last` (default), `index`, `mark` |
-| `--slTriggerPx` | No | - | Attached stop-loss trigger price |
-| `--slOrdPx` | No | - | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`) |
-| `--slTriggerPxType` | No | last | Price source for SL trigger: `last` (default), `index`, `mark` |
-| `--stpMode` | No | - | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both` |
+| Param               | Required | Default   | Description                                                                                                                          |
+| ------------------- | -------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `--instId`          | Yes      | -         | e.g. `BTC-USD-250328-95000-C` (call) or `...-P` (put)                                                                                |
+| `--side`            | Yes      | -         | `buy` or `sell`                                                                                                                      |
+| `--ordType`         | Yes      | -         | `market`, `limit`, `post_only`, `fok`, `ioc`                                                                                         |
+| `--tdMode`          | Yes      | -         | `cash` = buyer (full premium); `cross`/`isolated` = seller (margin)                                                                  |
+| `--sz`              | Yes      | -         | Number of contracts (default), or USDT amount when `--tgtCcy` is set                                                                 |
+| `--tgtCcy`          | No       | -         | `quote_ccy`: sz is USDT notional value; `margin`: sz is USDT margin cost (position = sz \* leverage). Both auto-convert to contracts |
+| `--px`              | Cond.    | -         | Required for `limit`, `post_only`, `fok`, `ioc`                                                                                      |
+| `--reduceOnly`      | No       | false     | Close-only; do not open a new position                                                                                               |
+| `--tpTriggerPx`     | No       | -         | Attached take-profit trigger price                                                                                                   |
+| `--tpOrdPx`         | No       | -         | TP order price; use `-1` for market execution (must use `=` form: `--tpOrdPx=-1`)                                                    |
+| `--tpOrdKind`       | No       | condition | `condition`: trigger-based TP (default); `limit`: immediate limit-order TP (no trigger phase)                                        |
+| `--tpTriggerPxType` | No       | last      | Price source for TP trigger: `last` (default), `index`, `mark`                                                                       |
+| `--slTriggerPx`     | No       | -         | Attached stop-loss trigger price                                                                                                     |
+| `--slOrdPx`         | No       | -         | SL order price; use `-1` for market execution (must use `=` form: `--slOrdPx=-1`)                                                    |
+| `--slTriggerPxType` | No       | last      | Price source for SL trigger: `last` (default), `index`, `mark`                                                                       |
+| `--stpMode`         | No       | -         | Self-trade prevention: `cancel_maker`, `cancel_taker`, `cancel_both`                                                                 |
 
 **tdMode rules:**
+
 - Buyer (`side=buy`): always use `cash` — pay full premium, no margin call risk
 - Seller (`side=sell`): use `cross` or `isolated` — margin required, liquidation risk
 
 **Example — Immediate limit-order TP (tpOrdKind limit):**
+
 ```bash
 okx option place --instId BTC-USD-260328-100000-C --side buy \
   --ordType limit --tdMode cash --sz 1 --px 0.005 \
@@ -124,6 +128,7 @@ okx option place --instId BTC-USD-260328-100000-C --side buy \
 ```
 
 **Example — Self-trade prevention (stpMode cancel_maker):**
+
 ```bash
 okx option place --instId BTC-USD-260328-100000-C --side buy \
   --ordType limit --tdMode cash --sz 1 --px 0.005 \
@@ -183,10 +188,10 @@ okx option batch-cancel --orders '[{"instId":"BTC-USD-250328-95000-C","ordId":"1
 okx option orders [--instId <id>] [--uly <underlying>] [--history] [--archive] [--json]
 ```
 
-| Flag | Effect |
-|---|---|
-| *(default)* | Live/pending orders |
-| `--history` | Historical (7d) |
+| Flag        | Effect              |
+| ----------- | ------------------- |
+| _(default)_ | Live/pending orders |
+| `--history` | Historical (7d)     |
 | `--archive` | Older archive (3mo) |
 
 ---

@@ -53,7 +53,9 @@ const { MockWS, wsInstances } = vi.hoisted(() => {
       }),
     }
     wsInstances.push(inst)
-    process.nextTick(() => { inst._trigger('open'); })
+    process.nextTick(() => {
+      inst._trigger('open')
+    })
     return inst
   })
   return { MockWS, wsInstances }
@@ -69,23 +71,21 @@ function makeListenKeyBody(): string {
 }
 
 function setupHttpMock(): void {
-  httpRequestSpy.mockImplementation(
-    (opts: { method?: string }, callback?: (res: EventEmitter) => void) => {
-      const method = (opts.method ?? 'POST').toUpperCase()
-      const res = new EventEmitter()
-      const req = Object.assign(new EventEmitter(), {
-        end: vi.fn(() => {
-          const body = method === 'POST' ? makeListenKeyBody() : '{}'
-          if (callback) {
-            callback(res)
-            res.emit('data', body)
-            res.emit('end')
-          }
-        }),
-      })
-      return req
-    }
-  )
+  httpRequestSpy.mockImplementation((opts: { method?: string }, callback?: (res: EventEmitter) => void) => {
+    const method = (opts.method ?? 'POST').toUpperCase()
+    const res = new EventEmitter()
+    const req = Object.assign(new EventEmitter(), {
+      end: vi.fn(() => {
+        const body = method === 'POST' ? makeListenKeyBody() : '{}'
+        if (callback) {
+          callback(res)
+          res.emit('data', body)
+          res.emit('end')
+        }
+      }),
+    })
+    return req
+  })
 }
 
 const REST_BASE = 'http://test.local'
@@ -115,9 +115,7 @@ describe('createBinanceWsClient', () => {
     const client = makeClient()
     await client.connect()
 
-    const postCalls = httpRequestSpy.mock.calls.filter(
-      c => (c[0] as { method: string }).method === 'POST'
-    )
+    const postCalls = httpRequestSpy.mock.calls.filter(c => (c[0] as { method: string }).method === 'POST')
     expect(postCalls).toHaveLength(1)
     expect((postCalls[0]?.[0] as { path: string }).path).toBe('/fapi/v1/listenKey')
     expect(wsInstances).toHaveLength(1)
@@ -158,9 +156,7 @@ describe('createBinanceWsClient', () => {
     await new Promise(r => setImmediate(r))
 
     expect(expiredEvents).toHaveLength(1)
-    const postCalls = httpRequestSpy.mock.calls.filter(
-      c => (c[0] as { method: string }).method === 'POST'
-    )
+    const postCalls = httpRequestSpy.mock.calls.filter(c => (c[0] as { method: string }).method === 'POST')
     expect(postCalls.length).toBeGreaterThanOrEqual(1)
     expect(wsInstances.length).toBeGreaterThanOrEqual(2)
 
@@ -176,9 +172,7 @@ describe('createBinanceWsClient', () => {
 
     await vi.advanceTimersByTimeAsync(30 * 60 * 1_000)
 
-    const putCalls = httpRequestSpy.mock.calls.filter(
-      c => (c[0] as { method: string }).method === 'PUT'
-    )
+    const putCalls = httpRequestSpy.mock.calls.filter(c => (c[0] as { method: string }).method === 'PUT')
     expect(putCalls).toHaveLength(1)
     expect((putCalls[0]?.[0] as { path: string }).path).toContain('listenKey=lk-1')
 
@@ -198,9 +192,7 @@ describe('createBinanceWsClient', () => {
     // Complete the 30s overlap setTimeout inside rotateKey()
     await vi.advanceTimersByTimeAsync(30 * 1_000)
 
-    const postCalls = httpRequestSpy.mock.calls.filter(
-      c => (c[0] as { method: string }).method === 'POST'
-    )
+    const postCalls = httpRequestSpy.mock.calls.filter(c => (c[0] as { method: string }).method === 'POST')
     expect(postCalls.length).toBeGreaterThanOrEqual(1)
     expect(wsInstances.length).toBeGreaterThanOrEqual(2)
     expect(firstSocket.close).toHaveBeenCalled()
@@ -218,8 +210,8 @@ describe('createBinanceWsClient', () => {
 
     await vi.advanceTimersByTimeAsync(60 * 60 * 1_000)
 
-    const activeCalls = httpRequestSpy.mock.calls.filter(
-      c => ['PUT', 'POST'].includes((c[0] as { method: string }).method)
+    const activeCalls = httpRequestSpy.mock.calls.filter(c =>
+      ['PUT', 'POST'].includes((c[0] as { method: string }).method)
     )
     expect(activeCalls).toHaveLength(0)
   })

@@ -4,6 +4,7 @@
 **Deps:** none · **Closes:** strategy_4_1b, strategy_4_2b, strategy_4_3b, strategy_spot_futures · **Spec:** docs-strategy/strategies/00_globals.md §Inventory
 
 ## Goal
+
 Delete the four spec-less strategy IDs that are **not referenced by any live-config, fleet
 enum, or active autoresearch matrix row**: `strategy_4_1b`, `strategy_4_2b`, `strategy_4_3b`,
 `strategy_spot_futures`. These are the lowest-risk removals — they live only in the backtesting
@@ -12,11 +13,13 @@ Task 02 (it is exec-wired); the shared file `strategy-4-3.ts` is therefore NOT d
 its `_4_3b` variant branch is stripped.
 
 ## Spec anchors
+
 - 00_globals.md §Inventory lists the canonical set only: 1, 1 WS, 2, 3a, 4.1a, 4.2a, 6. Every ID
   in this task is absent from that table → spec-less → remove.
 - §14 Conservatism / spot-futures has no spec entry; the `calculateSpotFuturesPnl` path is orphaned once the ID is gone.
 
 ## Files to read
+
 - src/backtesting/strategies/registry.ts (createStrategy switch)
 - src/backtesting/strategies/strategy-4-1.ts, strategy-4-2.ts (variant ctors — keep the `a` branch)
 - src/backtesting/strategies/strategy-spot-futures.ts (whole file — delete)
@@ -27,7 +30,9 @@ its `_4_3b` variant branch is stripped.
 - src/autoresearch/worktree/manager.ts (spot-futures YAML patch)
 
 ## Files to edit / delete
+
 Edit:
+
 - src/backtesting/strategies/registry.ts:30-31 (drop `case 'strategy_4_1b'`), :34-35 (`_4_2b`), :38-39 (`_4_3b`), :10 + :42-43 (`SpotFuturesStrategy` import + `case 'strategy_spot_futures'`)
 - src/backtesting/strategies/strategy-4-1.ts:25 — narrow ctor `variant` type to `'strategy_4_1a'` only
 - src/backtesting/strategies/strategy-4-2.ts:25 — narrow ctor `variant` type to `'strategy_4_2a'` only
@@ -37,20 +42,22 @@ Edit:
 - src/backtesting/pnl/calculator.ts:103 — remove `calculateSpotFuturesPnl` (orphaned once branch above is gone; confirm no other caller)
 - config/base_config.yaml:63 — remove the `spot_fees:` block (comment at :58)
 - src/autoresearch/worktree/manager.ts:261-264 — remove the `strategy_spot_futures` perp/spot YAML-patch block
-- src/backtesting/__tests__/config-loader.test.ts:49-53 (4_1b load test), and VALID-list assertion entries :214 (4_1b), :216 (4_2b), :218 (4_3b), :282-equiv spot_futures
+- src/backtesting/**tests**/config-loader.test.ts:49-53 (4_1b load test), and VALID-list assertion entries :214 (4_1b), :216 (4_2b), :218 (4_3b), :282-equiv spot_futures
 - autoresearch/program.md:89 (heading `strategy_4_1a / strategy_4_1b`), :99 (`strategy_4_2a / strategy_4_2b`) — drop the `b` names
 - RESULTS.md:35-40 (strategy_4_1b rows), :47-50 (strategy_4_2b rows) + any 4_3b/spot_futures rows
 
 Delete:
+
 - config/strategies/strategy_4_1b.yaml
 - config/strategies/strategy_4_2b.yaml
 - config/strategies/strategy_4_3b.yaml
 - config/strategies/strategy_spot_futures.yaml
 - src/backtesting/strategies/strategy-spot-futures.ts
-- src/backtesting/__tests__/e2e/spot-futures.e2e.test.ts
+- src/backtesting/**tests**/e2e/spot-futures.e2e.test.ts
 - src/backtesting/engine/backtest-runner.test.ts:45 — remove the spot-futures case (delete file only if it becomes empty; otherwise edit)
 
 ## The change (numbered)
+
 1. Strip the `_4_1b` / `_4_2b` variant branches from the shared `strategy-4-1.ts` / `strategy-4-2.ts` (keep `a`); narrow their ctor `variant` types.
 2. In `registry.ts` and `loader.ts` remove the `_4_1b`, `_4_2b`, `_4_3b`, and `strategy_spot_futures` cases (leave `strategy_4_3a` in place for Task 02).
 3. In `schema.ts` remove the four IDs from `VALID_STRATEGY_IDS`, narrow the `strategy_id` unions, delete `SpotFuturesConfig` + its union member + the `spot_fees` base field.
@@ -60,12 +67,14 @@ Delete:
 7. Delete the `spot_fees` block in `base_config.yaml`; update `program.md` headings and `RESULTS.md` rows.
 
 ## Verification
+
 - `npm run build` typechecks clean (no dangling union members / imports).
 - `npm test` green; existing `strategy-4.e2e.test.ts` (4_1a/4_2a) still passes.
 - `grep -rn "strategy_4_1b\|strategy_4_2b\|strategy_4_3b\|strategy_spot_futures" src config autoresearch RESULTS.md` returns zero non-historical hits (docs-strategy prose may retain mentions).
 - `grep -rn "SpotFutures\|spot_fees\|calculateSpotFuturesPnl" src config` returns zero hits.
 
 ## Notes / blockers
-- No blockers: none of these four IDs appear in live-configs/, src/execution/fleet/schema.ts, or an *active* autoresearch matrix row (matrix.yaml:167-182 spot rows are all commented; 4_1b/4_2b/4_3b never had matrix rows).
+
+- No blockers: none of these four IDs appear in live-configs/, src/execution/fleet/schema.ts, or an _active_ autoresearch matrix row (matrix.yaml:167-182 spot rows are all commented; 4_1b/4_2b/4_3b never had matrix rows).
 - Do NOT delete `strategy-4-3.ts` here — only strip its `_4_3b` branch. The file (and its `_4_3a` branch) is removed in Task 02.
 - Keep the `strategy_4_3a` VALID_STRATEGY_IDS entry (:279) — Task 02 removes it.

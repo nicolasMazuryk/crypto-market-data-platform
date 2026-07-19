@@ -181,7 +181,7 @@ async function main(): Promise<void> {
   const rateLimitErrors: string[] = []
   const instrumentedRest: ExchangeRestAdapter = {
     ...rawRest,
-    createOrder: async (params) => {
+    createOrder: async params => {
       const ts = Date.now()
       createOrderTimestamps.push(ts)
       console.log(`  ${CY}[${new Date(ts).toISOString()}] createOrder → ${params.symbol} qty=${String(params.qty)}${R}`)
@@ -293,17 +293,22 @@ async function main(): Promise<void> {
   // Print intent results
   for (let i = 0; i < results.length; i++) {
     const result = results[i]
-    const state = manager.get(intents[i]!.id)
+    const intent = intents[i]
+    if (!intent) continue
+    const state = manager.get(intent.id)
     const status = state?.status ?? 'unknown'
     const symbol = result?.status === 'fulfilled' ? result.value.status : '(rejected)'
-    console.log(`  Intent ${String(i + 1)}: status=${status} (${String(symbol)})`)
+    console.log(`  Intent ${String(i + 1)}: status=${status} (${symbol})`)
   }
 
   // ── Verify stagger timing ──────────────────────────────────────────────
   console.log(`\n${BD}Timing analysis:${R}`)
   const gaps: number[] = []
   for (let i = 1; i < createOrderTimestamps.length; i++) {
-    const gap = createOrderTimestamps[i]! - createOrderTimestamps[i - 1]!
+    const curr = createOrderTimestamps[i]
+    const prev = createOrderTimestamps[i - 1]
+    if (curr === undefined || prev === undefined) continue
+    const gap = curr - prev
     gaps.push(gap)
     const ok = gap >= STAGGER_MS
     console.log(`  Gap ${String(i)}: ${String(gap)}ms ${ok ? `${GR}✓${R}` : `${RD}✗ (< ${String(STAGGER_MS)}ms)${R}`}`)
@@ -325,7 +330,9 @@ async function main(): Promise<void> {
 
   const badGaps = gaps.filter(g => g < STAGGER_MS)
   if (badGaps.length > 0) {
-    console.log(`  ${RD}✗ ${String(badGaps.length)} gap(s) below ${String(STAGGER_MS)}ms: ${badGaps.map(String).join(', ')}ms${R}`)
+    console.log(
+      `  ${RD}✗ ${String(badGaps.length)} gap(s) below ${String(STAGGER_MS)}ms: ${badGaps.map(String).join(', ')}ms${R}`
+    )
     passed = false
   } else if (gaps.length > 0) {
     console.log(`  ${GR}✓ All gaps >= ${String(STAGGER_MS)}ms (min=${String(Math.min(...gaps))}ms)${R}`)
@@ -362,13 +369,13 @@ async function main(): Promise<void> {
     console.error(`  ${RD}✗ getPositions failed: ${String(err)}${R}`)
   }
 
-  await ws.disconnect?.()
+  await ws.disconnect()
 
   console.log(`\n${BD}Result: ${passed ? `${GR}PASS${R}` : `${RD}FAIL${R}`}${R}`)
   if (!passed) process.exit(1)
 }
 
-main().catch(err => {
+main().catch((err: unknown) => {
   console.error(err)
   process.exit(1)
 })

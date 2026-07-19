@@ -19,16 +19,20 @@ import type { FleetEntry } from '../schema.js'
 import type { RegistryEntry } from '../../provisioning/registry/schema.js'
 
 const args = process.argv.slice(2)
-const fleetPath = args.includes('--fleet') ? args[args.indexOf('--fleet') + 1]! : 'live-configs/fleet.yaml'
-const registryPath = args.includes('--registry') ? args[args.indexOf('--registry') + 1]! : 'live-configs/registry.yaml'
-const basePath = args.includes('--base') ? args[args.indexOf('--base') + 1]! : 'config/execution.base.yaml'
-const configOutDir = args.includes('--config-dir') ? args[args.indexOf('--config-dir') + 1]! : 'config'
-const sshTarget = args.includes('--ssh') ? args[args.indexOf('--ssh') + 1]! : 'nicolas@203.0.113.10'
-const sshKeyPath = args.includes('--ssh-key') ? args[args.indexOf('--ssh-key') + 1]! : '~/.ssh/nicolas'
-const concurrency = parseInt(args.includes('--concurrency') ? args[args.indexOf('--concurrency') + 1]! : '5', 10)
+function getArg(flag: string): string | undefined {
+  const i = args.indexOf(flag)
+  return i !== -1 ? args[i + 1] : undefined
+}
+const fleetPath = getArg('--fleet') ?? 'live-configs/fleet.yaml'
+const registryPath = getArg('--registry') ?? 'live-configs/registry.yaml'
+const basePath = getArg('--base') ?? 'config/execution.base.yaml'
+const configOutDir = getArg('--config-dir') ?? 'config'
+const sshTarget = getArg('--ssh') ?? 'nicolas@203.0.113.10'
+const sshKeyPath = getArg('--ssh-key') ?? '~/.ssh/nicolas'
+const concurrency = parseInt(getArg('--concurrency') ?? '5', 10)
 const dryRun = args.includes('--dry-run') || args.includes('-n')
 
-const onlyArg = args.includes('--only') ? args[args.indexOf('--only') + 1] : undefined
+const onlyArg = getArg('--only')
 const onlyFilter = onlyArg ? new Set(onlyArg.split(',').map(s => s.trim())) : null
 
 async function confirm(question: string): Promise<boolean> {

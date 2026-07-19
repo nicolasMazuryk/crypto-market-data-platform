@@ -3,73 +3,73 @@
 
 - name: Ensure execution base directory exists
   ansible.builtin.file:
-    path: "{{ execution_base_dir }}"
+    path: '{{ execution_base_dir }}'
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: '0755'
 
 - name: Ensure execution releases directory exists
   ansible.builtin.file:
-    path: "{{ execution_releases_dir }}"
+    path: '{{ execution_releases_dir }}'
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: '0755'
 
 - name: Ensure execution secrets directory exists (root-only)
   ansible.builtin.file:
-    path: "{{ execution_secrets_dir }}"
+    path: '{{ execution_secrets_dir }}'
     state: directory
     owner: root
     group: root
-    mode: "0700"
+    mode: '0700'
 
 - name: Ensure execution engine config directory exists
   ansible.builtin.file:
-    path: "{{ execution_config_dir }}"
+    path: '{{ execution_config_dir }}'
     state: directory
     owner: nicolas
     group: nicolas
-    mode: "0755"
+    mode: '0755'
 
 - name: Ensure execution engine WAL directory exists
   ansible.builtin.file:
-    path: "{{ execution_wal_dir }}"
+    path: '{{ execution_wal_dir }}'
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: '0755'
 
 # ── 2. Config ───────────────────────────────────────────────────────────────────
 
 - name: Copy execution engine base config
   ansible.builtin.copy:
-    src: "{{ repo_dir }}/config/execution.base.yaml"
-    dest: "{{ execution_config_dir }}/execution.base.yaml"
+    src: '{{ repo_dir }}/config/execution.base.yaml'
+    dest: '{{ execution_config_dir }}/execution.base.yaml'
     owner: nicolas
     group: nicolas
-    mode: "0644"
+    mode: '0644'
     remote_src: true
   notify: Restart execution-engine
 
 - name: Copy execution engine config for current mode
   ansible.builtin.copy:
-    src: "{{ repo_dir }}/config/execution.{{ execution_mode }}.yaml"
-    dest: "{{ execution_config_dir }}/execution.{{ execution_mode }}.yaml"
+    src: '{{ repo_dir }}/config/execution.{{ execution_mode }}.yaml'
+    dest: '{{ execution_config_dir }}/execution.{{ execution_mode }}.yaml'
     owner: nicolas
     group: nicolas
-    mode: "0644"
+    mode: '0644'
     remote_src: true
   notify: Restart execution-engine
 
 - name: Copy registry.yaml to execution config dir (needed by containers for identity)
   ansible.builtin.copy:
-    src: "{{ repo_dir }}/live-configs/registry.yaml"
-    dest: "{{ execution_config_dir }}/registry.yaml"
+    src: '{{ repo_dir }}/live-configs/registry.yaml'
+    dest: '{{ execution_config_dir }}/registry.yaml'
     owner: nicolas
     group: nicolas
-    mode: "0644"
+    mode: '0644'
     remote_src: true
   notify: Restart execution-engine
 
@@ -86,7 +86,7 @@
 
 - name: Set execution_image_tag from git SHA
   ansible.builtin.set_fact:
-    execution_image_tag: "{{ _git_sha.stdout | trim }}"
+    execution_image_tag: '{{ _git_sha.stdout | trim }}'
   when: execution_image_tag == ""
 
 # ── 4. Build + tag Docker image ─────────────────────────────────────────────────
@@ -100,11 +100,11 @@
 
 - name: Create release directory for this SHA
   ansible.builtin.file:
-    path: "{{ execution_releases_dir }}/{{ execution_image_tag }}"
+    path: '{{ execution_releases_dir }}/{{ execution_image_tag }}'
     state: directory
     owner: root
     group: root
-    mode: "0755"
+    mode: '0755'
 
 - name: Record deployed SHA and timestamp
   ansible.builtin.copy:
@@ -112,16 +112,16 @@
       sha={{ execution_image_tag }}
       deployed_at={{ ansible_facts['date_time']['iso8601'] }}
       mode={{ execution_mode }}
-    dest: "{{ execution_releases_dir }}/{{ execution_image_tag }}/release"
+    dest: '{{ execution_releases_dir }}/{{ execution_image_tag }}/release'
     owner: root
     group: root
-    mode: "0444"
+    mode: '0444'
     force: false
 
 - name: Update current symlink to latest release (atomic)
   ansible.builtin.file:
-    src: "{{ execution_releases_dir }}/{{ execution_image_tag }}"
-    dest: "{{ execution_base_dir }}/current"
+    src: '{{ execution_releases_dir }}/{{ execution_image_tag }}'
+    dest: '{{ execution_base_dir }}/current'
     state: link
     force: true
 
@@ -129,13 +129,13 @@
 
 - name: List release directories
   ansible.builtin.find:
-    paths: "{{ execution_releases_dir }}"
+    paths: '{{ execution_releases_dir }}'
     file_type: directory
   register: _release_dirs
 
 - name: Prune old releases
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: '{{ item.path }}'
     state: absent
   loop: "{{ (_release_dirs.files | sort(attribute='mtime'))[:((_release_dirs.files | length) - execution_releases_keep)] }}"
   when: _release_dirs.files | length > execution_releases_keep
@@ -145,10 +145,10 @@
 - name: Template execution secrets env file
   ansible.builtin.template:
     src: execution.env.j2
-    dest: "{{ execution_secrets_dir }}/{{ execution_mode }}.env"
+    dest: '{{ execution_secrets_dir }}/{{ execution_mode }}.env'
     owner: root
     group: root
-    mode: "0400"
+    mode: '0400'
   no_log: true
 
 # ── 8. Postgres migrations ──────────────────────────────────────────────────────
@@ -172,7 +172,7 @@
     dest: /etc/systemd/system/execution-engine@.service
     owner: root
     group: root
-    mode: "0644"
+    mode: '0644'
   notify:
     - Reload systemd
     - Restart execution-engine
@@ -183,7 +183,7 @@
     dest: /etc/systemd/system/execution-engine-page@.service
     owner: root
     group: root
-    mode: "0644"
+    mode: '0644'
   notify: Reload systemd
 
 - name: Flush handlers (systemd reload before enable/start)
@@ -193,14 +193,14 @@
 
 - name: Enable execution-engine service
   ansible.builtin.systemd:
-    name: "execution-engine@{{ execution_mode }}.service"
+    name: 'execution-engine@{{ execution_mode }}.service'
     enabled: true
     daemon_reload: false
   when: execution_engine_enabled | bool
 
 - name: Start execution-engine service if not running
   ansible.builtin.systemd:
-    name: "execution-engine@{{ execution_mode }}.service"
+    name: 'execution-engine@{{ execution_mode }}.service'
     state: started
     daemon_reload: false
   when: execution_engine_enabled | bool
@@ -209,10 +209,10 @@
 
 - name: Wait for execution engine /ready
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ execution_health_port }}/ready"
+    url: 'http://127.0.0.1:{{ execution_health_port }}/ready'
     status_code: 200
   register: _ready
   until: _ready.status == 200
-  retries: "{{ execution_health_ready_retries }}"
-  delay: "{{ execution_health_ready_delay }}"
+  retries: '{{ execution_health_ready_retries }}'
+  delay: '{{ execution_health_ready_delay }}'
   when: execution_engine_enabled | bool

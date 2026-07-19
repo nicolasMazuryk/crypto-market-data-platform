@@ -123,23 +123,23 @@ okx market indicator rainbow BTC-USDT   → Rainbow Chart valuation band
 
 When using MCP tools directly (instead of CLI), the tool names map as follows:
 
-| CLI subcommand | MCP tool name |
-|---|---|
-| `market ticker` | `market_get_ticker` |
-| `market tickers` | `market_get_tickers` |
-| `market instruments` | `market_get_instruments` |
-| `market orderbook` | `market_get_orderbook` |
-| `market candles` | `market_get_candles` |
-| `market index-candles` | `market_get_index_candles` |
-| `market funding-rate` | `market_get_funding_rate` |
-| `market trades` | `market_get_trades` |
-| `market mark-price` | `market_get_mark_price` |
-| `market index-ticker` | `market_get_index_ticker` |
-| `market price-limit` | `market_get_price_limit` |
-| `market open-interest` | `market_get_open_interest` |
-| `market stock-tokens` | `market_get_stock_tokens` |
-| `market instruments-by-category` | `market_get_instruments_by_category` |
-| `market indicator list` | `market_list_indicators` |
-| `market indicator <name> <instId>` | `market_get_indicator` |
+| CLI subcommand                     | MCP tool name                        |
+| ---------------------------------- | ------------------------------------ |
+| `market ticker`                    | `market_get_ticker`                  |
+| `market tickers`                   | `market_get_tickers`                 |
+| `market instruments`               | `market_get_instruments`             |
+| `market orderbook`                 | `market_get_orderbook`               |
+| `market candles`                   | `market_get_candles`                 |
+| `market index-candles`             | `market_get_index_candles`           |
+| `market funding-rate`              | `market_get_funding_rate`            |
+| `market trades`                    | `market_get_trades`                  |
+| `market mark-price`                | `market_get_mark_price`              |
+| `market index-ticker`              | `market_get_index_ticker`            |
+| `market price-limit`               | `market_get_price_limit`             |
+| `market open-interest`             | `market_get_open_interest`           |
+| `market stock-tokens`              | `market_get_stock_tokens`            |
+| `market instruments-by-category`   | `market_get_instruments_by_category` |
+| `market indicator list`            | `market_list_indicators`             |
+| `market indicator <name> <instId>` | `market_get_indicator`               |
 
 > **`demo` parameter (MCP only)**: All market MCP tools (except `market_list_indicators` and `market_get_indicator`) accept an optional `demo: true` parameter to query OKX's simulated trading market data environment. Default is `false` (live data). CLI equivalent: `--demo` global flag.

@@ -21,17 +21,17 @@ queryable. Stop all non-essential services. Downsize server `cpx62 → cpx32` an
 
 ## Current state (verified 2026-05-31)
 
-| Item | Value |
-|---|---|
-| Server | `arbinet`, type `cpx62`, id `127349851`, dc `nbg1-dc3`, IP `203.0.113.10` |
-| Specs | 16 vCPU AMD EPYC-Genoa, 32 GB RAM, 600 GB boot disk (58 G used), load ~0.14 |
-| Volume | `arbinet-data`, id `105446342`, 200 GB ext4, dev `/dev/disk/by-id/scsi-0HC_Volume_105446342`, mount `/data` (46 G used) |
-| ClickHouse `arbinet` | **38.15 GiB, ~3.0 B rows** ← the payload |
-| ClickHouse `system` | 6.27 GiB (logs — disposable) |
-| Postgres | `/data/postgres` 135 MB (keep) |
-| Containers | clickhouse(keep), postgres(keep), + prometheus, grafana, loki, promtail, jaeger, alertmanager, caddy (stop) |
-| Timers | `worker-market-sync.timer`, `worker-funding-rates.timer` (hourly — disable) |
-| Compose | `/opt/arbinet/docker-compose.prod.yml`; execution+workers already profile-gated; **observability has NO profile (starts by default)** |
+| Item                 | Value                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Server               | `arbinet`, type `cpx62`, id `127349851`, dc `nbg1-dc3`, IP `203.0.113.10`                                                           |
+| Specs                | 16 vCPU AMD EPYC-Genoa, 32 GB RAM, 600 GB boot disk (58 G used), load ~0.14                                                           |
+| Volume               | `arbinet-data`, id `105446342`, 200 GB ext4, dev `/dev/disk/by-id/scsi-0HC_Volume_105446342`, mount `/data` (46 G used)               |
+| ClickHouse `arbinet` | **38.15 GiB, ~3.0 B rows** ← the payload                                                                                              |
+| ClickHouse `system`  | 6.27 GiB (logs — disposable)                                                                                                          |
+| Postgres             | `/data/postgres` 135 MB (keep)                                                                                                        |
+| Containers           | clickhouse(keep), postgres(keep), + prometheus, grafana, loki, promtail, jaeger, alertmanager, caddy (stop)                           |
+| Timers               | `worker-market-sync.timer`, `worker-funding-rates.timer` (hourly — disable)                                                           |
+| Compose              | `/opt/arbinet/docker-compose.prod.yml`; execution+workers already profile-gated; **observability has NO profile (starts by default)** |
 
 **Tooling:** terraform v1.14.8 (local), ansible (local), rsync (local). State is **local** (`terraform/terraform.tfstate`), no remote backend.
 
@@ -43,10 +43,12 @@ queryable. Stop all non-essential services. Downsize server `cpx62 → cpx32` an
 (create volume, recreate server, delete volume) needs `var.hcloud_token`.
 
 **Action required from user (Phase 0):** create `terraform/terraform.tfvars`:
+
 ```hcl
 hcloud_token   = "<HETZNER_API_TOKEN>"
 ssh_public_key = "<contents of ~/.ssh/nicolas.pub>"   # ed25519 ...nicolasmazuryk@gmail.com
 ```
+
 Shell env does not persist between tool calls, so the tfvars file (auto-loaded by terraform)
 is the reliable mechanism. **Confirm `*.tfvars` is gitignored** before writing the token.
 
@@ -54,12 +56,12 @@ is the reliable mechanism. **Confirm `*.tfvars` is gitignored** before writing t
 
 ## Cost impact
 
-| | Now | After |
-|---|---|---|
-| Server | cpx62 ~€55–70/mo | cpx32 ~€7.5/mo |
-| Volume | 200 GB ~€10/mo | 50 GB ~€2.5/mo |
-| IPv4 | ~€0.50 | ~€0.50 |
-| **Total** | **~€65–80/mo** | **~€10.5/mo** |
+|           | Now              | After          |
+| --------- | ---------------- | -------------- |
+| Server    | cpx62 ~€55–70/mo | cpx32 ~€7.5/mo |
+| Volume    | 200 GB ~€10/mo   | 50 GB ~€2.5/mo |
+| IPv4      | ~€0.50           | ~€0.50         |
+| **Total** | **~€65–80/mo**   | **~€10.5/mo**  |
 
 ---
 
@@ -85,6 +87,7 @@ is the reliable mechanism. **Confirm `*.tfvars` is gitignored** before writing t
 ## Phase 1 — Quiesce + cleanup + stop stack (SSH, reversible, NO token)
 
 Run as one remote script (`ssh ... 'bash -s' < script`):
+
 - [ ] `sudo systemctl disable --now worker-market-sync.timer worker-funding-rates.timer`
 - [ ] Truncate all `system.*` MergeTree log tables (reclaim ~6.27 GiB):
       loop `SELECT name FROM system.tables WHERE database='system' AND engine LIKE '%MergeTree%'` → `TRUNCATE TABLE system.<name>`.
@@ -113,7 +116,7 @@ Run as one remote script (`ssh ... 'bash -s' < script`):
 - [ ] `terraform state rm hcloud_volume_attachment.data hcloud_volume.data` (old 200 GB volume → unmanaged backstop, NOT deleted).
 - [ ] `terraform state mv hcloud_volume.data_new hcloud_volume.data`; `... data_new attachment → data`.
 - [ ] Edit `volume.tf`: remove temp `data_new` blocks; `hcloud_volume.data` now name `arbinet-data-50`, size 50; set `volume_size=50`.
-- [ ] `terraform plan` → only diff should be server_type (cpx62→cpx32). 
+- [ ] `terraform plan` → only diff should be server_type (cpx62→cpx32).
 - [ ] `terraform apply -replace=hcloud_server.main` → destroys cpx62, creates **cpx32**, reattaches 50 GB volume + network + firewall.
 
 ## Phase 5 — Provision + start + verify

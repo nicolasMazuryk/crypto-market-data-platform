@@ -4,14 +4,14 @@ All authenticated endpoints require the following headers to be included with ea
 
 ## Required Headers
 
-| Header | Description |
-|--------|-------------|
-| `KC-API-KEY` | Your API key |
-| `KC-API-SIGN` | Base64-encoded HMAC-SHA256 signature |
-| `KC-API-TIMESTAMP` | Request timestamp in milliseconds since Unix epoch |
-| `KC-API-PASSPHRASE` | HMAC-SHA256 encrypted passphrase, Base64-encoded |
-| `KC-API-KEY-VERSION` | `3` |
-| `Content-Type` | `application/json` |
+| Header               | Description                                        |
+| -------------------- | -------------------------------------------------- |
+| `KC-API-KEY`         | Your API key                                       |
+| `KC-API-SIGN`        | Base64-encoded HMAC-SHA256 signature               |
+| `KC-API-TIMESTAMP`   | Request timestamp in milliseconds since Unix epoch |
+| `KC-API-PASSPHRASE`  | HMAC-SHA256 encrypted passphrase, Base64-encoded   |
+| `KC-API-KEY-VERSION` | `3`                                                |
+| `Content-Type`       | `application/json`                                 |
 
 ## Signature Generation
 

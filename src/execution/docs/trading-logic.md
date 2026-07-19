@@ -5,6 +5,7 @@
 Both strategies share the same signal: **predicted funding rate on USDT-margined perpetual swaps**. `FundingRateSource` polls each exchange REST endpoint every `fundingPullMs` milliseconds (default 15,000 ms) and caches a snapshot per `(exchange, symbol)`. `FundingEventScheduler` wakes `wakeBeforeHourEndMs` (default 300,000 ms = 5 min) before each hourly boundary and evaluates symbols whose `nextFundingTimestamp` falls within `fundingWindowMs` (default 300,000 ms) of that boundary.
 
 A symbol is eligible for evaluation when:
+
 - Its snapshot is fresh (age < 2 × `fundingPullMs`)
 - `market.status === 'trading'`
 - The signal condition below is met
@@ -23,12 +24,12 @@ snap.fundingRatePercent ≤ -|negativeFundingThresholdPercent|
 
 **Thesis**: collect the funding payment by holding a long position through the settlement event, accepting a brief window of delta exposure.
 
-| Attribute | Value |
-|---|---|
-| Direction | LONG |
-| Exit policy | Timed |
+| Attribute    | Value                                                        |
+| ------------ | ------------------------------------------------------------ |
+| Direction    | LONG                                                         |
+| Exit policy  | Timed                                                        |
 | Profits from | Funding payment received (longs receive on negative funding) |
-| Costs | Expected price drop during hold window + trading fees |
+| Costs        | Expected price drop during hold window + trading fees        |
 
 **Entry time**: `nextFundingTimestamp − entryOffsetSeconds × 1000` ms (default: 10 s before funding)
 
@@ -38,14 +39,14 @@ snap.fundingRatePercent ≤ -|negativeFundingThresholdPercent|
 
 ### Config keys (`id: 'strategy_1'`)
 
-| Key | Type | Default | Effect |
-|---|---|---|---|
-| `enabled` | boolean | `false` | Must be `true` to activate |
-| `negativeFundingThresholdPercent` | number | `-0.5` | Trigger threshold (e.g., `-0.5` → trades when rate ≤ −0.5%) |
-| `entryOffsetSeconds` | number | `10` | Seconds before `nextFundingTimestamp` to submit market entry |
-| `exitOffsetSeconds` | number | `2` | Seconds after `nextFundingTimestamp` to submit market exit |
-| `amountUsd` | number | `20` | Target notional in USD |
-| `leverage` | number | `4` | Position leverage; margin = `amountUsd / leverage` |
+| Key                               | Type    | Default | Effect                                                       |
+| --------------------------------- | ------- | ------- | ------------------------------------------------------------ |
+| `enabled`                         | boolean | `false` | Must be `true` to activate                                   |
+| `negativeFundingThresholdPercent` | number  | `-0.5`  | Trigger threshold (e.g., `-0.5` → trades when rate ≤ −0.5%)  |
+| `entryOffsetSeconds`              | number  | `10`    | Seconds before `nextFundingTimestamp` to submit market entry |
+| `exitOffsetSeconds`               | number  | `2`     | Seconds after `nextFundingTimestamp` to submit market exit   |
+| `amountUsd`                       | number  | `20`    | Target notional in USD                                       |
+| `leverage`                        | number  | `4`     | Position leverage; margin = `amountUsd / leverage`           |
 
 ---
 
@@ -53,12 +54,12 @@ snap.fundingRatePercent ≤ -|negativeFundingThresholdPercent|
 
 **Thesis**: profit directly from the anticipated price drop triggered by the funding event. The price decline must exceed the funding fee paid plus execution fees.
 
-| Attribute | Value |
-|---|---|
-| Direction | SHORT |
-| Exit policy | SL + TP + deadline |
-| Profits from | Price decline after funding settlement |
-| Costs | Funding fee paid (shorts pay on negative funding) + trading fees |
+| Attribute    | Value                                                            |
+| ------------ | ---------------------------------------------------------------- |
+| Direction    | SHORT                                                            |
+| Exit policy  | SL + TP + deadline                                               |
+| Profits from | Price decline after funding settlement                           |
+| Costs        | Funding fee paid (shorts pay on negative funding) + trading fees |
 
 **Entry time**: `nextFundingTimestamp − entryOffsetSeconds × 1000` ms (default: 10 s before funding)
 
@@ -81,16 +82,16 @@ The first exit to trigger (SL, TP, or deadline) causes the manager to cancel the
 
 ### Config keys (`id: 'strategy_3a'`)
 
-| Key | Type | Default | Effect |
-|---|---|---|---|
-| `enabled` | boolean | `false` | Must be `true` |
-| `negativeFundingThresholdPercent` | number | `-0.5` | Same signal filter as strategy_1 |
-| `entryOffsetSeconds` | number | `10` | Same as strategy_1 |
-| `stopLossPercent` | number | `1` | SL distance from entry in % (exits short if price rises by this %) |
-| `tpVariantAMultiplier` | number | `1.5` | TP distance = \|fundingRatePercent\| × this multiplier |
-| `deadlineSeconds` | number | `300` | Max hold from `nextFundingTimestamp` before forced market close |
-| `amountUsd` | number | `20` | Target notional in USD |
-| `leverage` | number | `4` | Position leverage |
+| Key                               | Type    | Default | Effect                                                             |
+| --------------------------------- | ------- | ------- | ------------------------------------------------------------------ |
+| `enabled`                         | boolean | `false` | Must be `true`                                                     |
+| `negativeFundingThresholdPercent` | number  | `-0.5`  | Same signal filter as strategy_1                                   |
+| `entryOffsetSeconds`              | number  | `10`    | Same as strategy_1                                                 |
+| `stopLossPercent`                 | number  | `1`     | SL distance from entry in % (exits short if price rises by this %) |
+| `tpVariantAMultiplier`            | number  | `1.5`   | TP distance = \|fundingRatePercent\| × this multiplier             |
+| `deadlineSeconds`                 | number  | `300`   | Max hold from `nextFundingTimestamp` before forced market close    |
+| `amountUsd`                       | number  | `20`    | Target notional in USD                                             |
+| `leverage`                        | number  | `4`     | Position leverage                                                  |
 
 The `tpVariant` field stored in Postgres (`'A'`) is an audit label only; the execution manager uses the computed `tpPct` directly and never reads `tpVariant`.
 
@@ -113,6 +114,7 @@ qty = floor(rawQty / step) × step
 ```
 
 Returns `null` (intent rejected at preflight) if any of:
+
 - `qty ≤ 0`
 - `qty < market.minAmount` (when defined by exchange)
 - `qty × price < market.minCost` (when defined by exchange)
@@ -125,18 +127,18 @@ Returns `null` (intent rejected at preflight) if any of:
 
 All checks run in [`src/execution/execution/preflight.ts`](../execution/preflight.ts) before any REST call. On rejection the manager logs the error code and drops the intent; no retry is attempted for the same `(strategy, exchange, symbol, nextFundingTimestamp)` tuple.
 
-| Order | Check | Error code | Condition |
-|---|---|---|---|
-| 1 | Kill switch not halted | `kill_switch` | `canPlaceOrder()` returns `false` in `halted` mode |
-| 2 | Market metadata exists | `no_market` | `markets.get(exchange, symbol)` returned `undefined` |
-| 3 | Leverage ≤ market max | `leverage_exceeded` | Checked only when `market.maxLeverage` is defined |
-| 4 | Quantity computable | `invalid_qty` | `computeOrderQty()` returned `null` |
-| 5 | Min notional met | `min_notional` | `qty × refPrice < market.minCost` |
-| 6 | Sufficient margin | `insufficient_balance` | `stateStore USDT available < amountUsd / leverage` |
-| 7 | Global concurrent cap | `cap_exceeded` | In-flight intent count ≥ `risk.globalMaxConcurrentIntents` (default 10) |
-| 8 | Global notional cap | `cap_exceeded` | In-flight notional + `amountUsd` > `risk.globalMaxNotionalUsd` (default $1,000) |
-| 9 | Per-strategy concurrent cap | `cap_exceeded` | Strategy intent count ≥ `risk.perStrategy[id].maxConcurrentIntents` (default 1) |
-| 10 | Per-strategy notional cap | `cap_exceeded` | Strategy notional + `amountUsd` > `risk.perStrategy[id].maxNotionalUsd` (default $100) |
+| Order | Check                       | Error code             | Condition                                                                              |
+| ----- | --------------------------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| 1     | Kill switch not halted      | `kill_switch`          | `canPlaceOrder()` returns `false` in `halted` mode                                     |
+| 2     | Market metadata exists      | `no_market`            | `markets.get(exchange, symbol)` returned `undefined`                                   |
+| 3     | Leverage ≤ market max       | `leverage_exceeded`    | Checked only when `market.maxLeverage` is defined                                      |
+| 4     | Quantity computable         | `invalid_qty`          | `computeOrderQty()` returned `null`                                                    |
+| 5     | Min notional met            | `min_notional`         | `qty × refPrice < market.minCost`                                                      |
+| 6     | Sufficient margin           | `insufficient_balance` | `stateStore USDT available < amountUsd / leverage`                                     |
+| 7     | Global concurrent cap       | `cap_exceeded`         | In-flight intent count ≥ `risk.globalMaxConcurrentIntents` (default 10)                |
+| 8     | Global notional cap         | `cap_exceeded`         | In-flight notional + `amountUsd` > `risk.globalMaxNotionalUsd` (default $1,000)        |
+| 9     | Per-strategy concurrent cap | `cap_exceeded`         | Strategy intent count ≥ `risk.perStrategy[id].maxConcurrentIntents` (default 1)        |
+| 10    | Per-strategy notional cap   | `cap_exceeded`         | Strategy notional + `amountUsd` > `risk.perStrategy[id].maxNotionalUsd` (default $100) |
 
 **Live safety ceiling**: config validation (`parseEngineConfig`) raises a `ConfigError` if `mode: live` and `risk.globalMaxNotionalUsd > $100,000` without `risk.acknowledgeUncapped: true`.
 
@@ -144,11 +146,11 @@ All checks run in [`src/execution/execution/preflight.ts`](../execution/prefligh
 
 [`src/execution/risk/killSwitch.ts`](../risk/killSwitch.ts) has three states:
 
-| State | `canPlaceOrder()` | How to enter |
-|---|---|---|
-| `live` | `true` | Config `mode: live` at startup, or `setMode('live')` |
-| `dry_run` | `true` | Config `mode: dry_run` at startup, or `setMode('dry_run')` |
-| `halted` | `false` | `trip(reason)` — manual call or automatic on fatal alert |
+| State     | `canPlaceOrder()` | How to enter                                               |
+| --------- | ----------------- | ---------------------------------------------------------- |
+| `live`    | `true`            | Config `mode: live` at startup, or `setMode('live')`       |
+| `dry_run` | `true`            | Config `mode: dry_run` at startup, or `setMode('dry_run')` |
+| `halted`  | `false`           | `trip(reason)` — manual call or automatic on fatal alert   |
 
 `trip(reason)` immediately invokes `flattenAll()` (wired to `ExecutionManager` at startup): cancels all open orders, then submits market reduce-only close orders for every open position across all configured exchanges. There is no automatic recovery from `halted`; re-entering `live` or `dry_run` requires a manual `setMode()` call (or restarting the engine with the intended config).
 
@@ -156,13 +158,13 @@ All checks run in [`src/execution/execution/preflight.ts`](../execution/prefligh
 
 ## Order types
 
-| Order | Strategy | Type | Side | Notes |
-|---|---|---|---|---|
-| Entry | All | Market | Buy (strategy_1) / Sell (strategy_3a) | Submitted at `entryAt` |
-| Timed exit | strategy_1 | Market, reduce-only | Sell | Submitted when `exitAt` timer fires |
-| Take profit | strategy_3a | Limit, reduce-only | Buy | Placed immediately after entry fill; price = `P_entry × (1 − tpPct/100)` |
-| Stop loss | strategy_3a | Stop-market, reduce-only | Buy | Placed immediately after entry fill; price = `P_entry × (1 + slPct/100)` |
-| Deadline close | strategy_3a | Market, reduce-only | Buy | Submitted if deadline reached before SL/TP fill |
+| Order          | Strategy    | Type                     | Side                                  | Notes                                                                    |
+| -------------- | ----------- | ------------------------ | ------------------------------------- | ------------------------------------------------------------------------ |
+| Entry          | All         | Market                   | Buy (strategy_1) / Sell (strategy_3a) | Submitted at `entryAt`                                                   |
+| Timed exit     | strategy_1  | Market, reduce-only      | Sell                                  | Submitted when `exitAt` timer fires                                      |
+| Take profit    | strategy_3a | Limit, reduce-only       | Buy                                   | Placed immediately after entry fill; price = `P_entry × (1 − tpPct/100)` |
+| Stop loss      | strategy_3a | Stop-market, reduce-only | Buy                                   | Placed immediately after entry fill; price = `P_entry × (1 + slPct/100)` |
+| Deadline close | strategy_3a | Market, reduce-only      | Buy                                   | Submitted if deadline reached before SL/TP fill                          |
 
 ---
 

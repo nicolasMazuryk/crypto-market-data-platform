@@ -69,12 +69,12 @@ npm run format:check
 
 ## Observability
 
-| Service | URL | Credentials |
-|---|---|---|
-| Grafana | https://grafana.203-0-113-10.nip.io | `admin` / `<OBSERVABILITY_PASSWORD>` |
-| Prometheus | https://prometheus.203-0-113-10.nip.io | `ops` / `<OBSERVABILITY_PASSWORD>` |
-| Jaeger | https://jaeger.203-0-113-10.nip.io | `ops` / `<OBSERVABILITY_PASSWORD>` |
-| Alertmanager | https://alertmanager.203-0-113-10.nip.io | `ops` / `<OBSERVABILITY_PASSWORD>` |
+| Service      | URL                                        | Credentials                      |
+| ------------ | ------------------------------------------ | -------------------------------- |
+| Grafana      | https://grafana.203-0-113-10.nip.io      | `admin` / `<OBSERVABILITY_PASSWORD>` |
+| Prometheus   | https://prometheus.203-0-113-10.nip.io   | `ops` / `<OBSERVABILITY_PASSWORD>`   |
+| Jaeger       | https://jaeger.203-0-113-10.nip.io       | `ops` / `<OBSERVABILITY_PASSWORD>`   |
+| Alertmanager | https://alertmanager.203-0-113-10.nip.io | `ops` / `<OBSERVABILITY_PASSWORD>`   |
 
 Prometheus, Jaeger, and Alertmanager are protected by HTTP Basic Auth (user `ops`). Grafana uses its own login.
 

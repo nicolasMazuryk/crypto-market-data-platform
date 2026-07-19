@@ -12,7 +12,11 @@ export interface OkxOrderWsAdapterOptions {
 function withTimeout<T>(p: Promise<T>): Promise<T> {
   return Promise.race([
     p,
-    new Promise<never>((_, reject) => setTimeout(() => { reject(new Error('WS_TIMEOUT')); }, ACK_TIMEOUT_MS)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        reject(new Error('WS_TIMEOUT'))
+      }, ACK_TIMEOUT_MS)
+    ),
   ])
 }
 
@@ -35,7 +39,7 @@ export function createOkxOrderWsAdapter(opts: OkxOrderWsAdapterOptions): Exchang
     exchange: 'okx',
 
     async connect(): Promise<void> {
-      if (!opts.credentials?.apiKey || !opts.credentials?.apiSecret) {
+      if (!opts.credentials?.apiKey || !opts.credentials.apiSecret) {
         throw new Error('OKX order WS adapter: missing credentials (apiKey/apiSecret required)')
       }
       const { WebsocketAPIClient } = await import('okx-api')
@@ -84,7 +88,7 @@ export function createOkxOrderWsAdapter(opts: OkxOrderWsAdapterOptions): Exchang
         }) as Promise<unknown>
         const response = await withTimeout(sdkCall)
         // OKX WS API returns data as an array — first element is our order result
-         
+
         const item = (response as { data: { sCode: string; sMsg: string; clOrdId: string; ordId: string }[] }).data[0]
         if (item?.sCode !== '0') {
           return rejectAck(req.clientOrderId, new Error(item?.sMsg ?? 'order rejected'))
@@ -122,7 +126,7 @@ export function createOkxOrderWsAdapter(opts: OkxOrderWsAdapterOptions): Exchang
       try {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-non-null-assertion
         const response = await withTimeout(sdkClient!.amendOrder(params) as Promise<unknown>)
-         
+
         const item = (response as { data: { sCode: string; sMsg: string; clOrdId: string; ordId: string }[] }).data[0]
         if (item?.sCode !== '0') {
           return rejectAck(ref.clientOrderId, new Error(item?.sMsg ?? 'amend rejected'))

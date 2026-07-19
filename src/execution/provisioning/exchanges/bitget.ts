@@ -238,7 +238,9 @@ export class BitgetProvisioningAdapter implements ProvisioningAdapter {
     // Bitget ModifyVirtualSubaccount requires permList but margin_trade is not a valid value,
     // so every call would reset margin that the user enabled in the UI. We activate sub-accounts
     // via the ModifyVirtualSubaccount call inside createApiKey instead (new sub-accounts only).
-    return Promise.reject(new Error('RenameNotSupported: Bitget sub-account rename/reactivate skipped to preserve margin permissions'))
+    return Promise.reject(
+      new Error('RenameNotSupported: Bitget sub-account rename/reactivate skipped to preserve margin permissions')
+    )
   }
 
   async transferUsdt(subAccountId: string, amountUsdt: number, direction: TransferDirection): Promise<void> {

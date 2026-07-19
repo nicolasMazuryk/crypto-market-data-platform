@@ -12,34 +12,35 @@ mode: dry_run
 strategies:
   - id: strategy_1
     enabled: false
-    negativeFundingThresholdPercent: -0.5   # % — entry threshold (e.g. -0.5 = −0.5 % per 8 h)
-    entryOffsetSeconds: 2                   # s — enter N seconds before funding time
-    exitOffsetSeconds: 1                    # s — exit N seconds after funding time
-    amountUsd: 10                           # USD — notional per intent
-    leverage: 4                             # x — leverage applied at the exchange
+    negativeFundingThresholdPercent: -0.5 # % — entry threshold (e.g. -0.5 = −0.5 % per 8 h)
+    entryOffsetSeconds: 2 # s — enter N seconds before funding time
+    exitOffsetSeconds: 6 # s — exit N seconds after funding time
+    amountUsd: 10 # USD — notional per intent
+    leverage: 4 # x — leverage applied at the exchange
 
   - id: strategy_3a
     enabled: true
-    negativeFundingThresholdPercent: -0.25  # % — minimum funding rate to trigger entry
-    entryOffsetSeconds: 2                   # s — enter N seconds before funding time
-    stopLossPercent: 1.0                    # % — stop-loss distance from entry price
-    tpVariantAMultiplier: 1.5              # x — TP = |fundingRate| × multiplier
-    tpVariantBOffsetPercent: 0.4           # % — TP offset for variant B (unused in 3a)
-    deadlineSeconds: 300                    # s — max time in position before forced exit
-    amountUsd: 10                           # USD — notional per intent
-    leverage: 4                             # x
+    negativeFundingThresholdPercent: -0.25 # % — minimum funding rate to trigger entry
+    entryOffsetSeconds: 2 # s — enter N seconds before funding time
+    stopLossPercent: 1.0 # % — stop-loss distance from entry price
+    tpVariantAMultiplier: 1.5 # x — TP = |fundingRate| × multiplier
+    tpVariantBOffsetPercent: 0.4 # % — TP offset for variant B (unused in 3a)
+    deadlineSeconds: 300 # s — max time in position before forced exit
+    amountUsd: 10 # USD — notional per intent
+    leverage: 4 # x
 
 # ── Risk limits ───────────────────────────────────────────────────────────────
 risk:
-  globalMaxConcurrentIntents: 10000         # count — engine-wide cap across all strategies
-  globalMaxNotionalUsd: 100000              # USD — engine-wide notional cap
+  globalMaxConcurrentIntents: 10000 # count — engine-wide cap across all strategies
+  globalMaxNotionalUsd: 100000 # USD — engine-wide notional cap
   perStrategy:
     strategy_1:
-      maxConcurrentIntents: 2000            # count
-      maxNotionalUsd: 200000               # USD
+      maxConcurrentIntents: 2000 # count
+      maxNotionalUsd: 200000 # USD
     strategy_3a:
-      maxConcurrentIntents: 20              # count — conservative for dry-run testing
-      maxNotionalUsd: 200000               # USD
+      maxConcurrentIntents: 20 # count — conservative for dry-run testing
+      maxNotionalUsd: 200000 # USD
+
 
 # ── Testing knobs (uncomment to use) ─────────────────────────────────────────
 # testing:

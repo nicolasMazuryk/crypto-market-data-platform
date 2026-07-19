@@ -9,18 +9,21 @@ Perform a thorough, line-by-line code review of the codebase responsible for **l
 For **every** strategy listed in the strategy specifications section, verify the following dimensions across **both** the live execution engine and the backtesting engine:
 
 ### 1. Order Lifecycle
+
 - **Order placement** — correct side, type, quantity, price, timing, and parameters; correct handling of API responses; proper retry/error semantics.
 - **Order execution** — fills are detected, attributed, and accounted for correctly (partial fills, full fills, rejected fills, fee accounting).
 - **Order cancellation** — cancellations are issued at the right moments, acknowledged correctly, and state is updated atomically; no orphaned or "zombie" orders.
 - **End-to-end order flow** — from signal → placement → ack → fill/cancel/expire → position update → exit → reconciliation.
 
 ### 2. Strategy Correctness
+
 - **Accuracy** — the implemented logic matches the strategy specification exactly. No silent deviations, no missing branches.
 - **Timing** — all time-relative offsets (entry, exit, deadline) are computed against the correct reference clock (funding event time, exchange time, local time) and applied consistently between live and backtest.
 - **Execution timing & edge cases** — behavior at boundary conditions: simultaneous events, clock drift, latency, websocket disconnects, missed funding events, late fills, fills crossing the deadline, partial fills near the deadline, etc.
 - **All possible scenarios & use cases** — happy path, all OCO branches, deadline branch, no-fill branch, partial-fill branches, exchange errors, network errors, restart/recovery.
 
 ### 3. Consistency Checks
+
 - **Live vs Backtest parity** — same inputs must produce the same decisions and the same resulting positions, P&L, and order log (modulo unavoidable real-world noise like slippage).
 - **No false positives** — no strategy should generate phantom entries, phantom exits, or duplicate orders under any sequence of events.
 - **No inconsistencies** — state machines must be deterministic; no path can leave the system with stale orders, mismatched positions, or untracked exposure.
@@ -37,29 +40,34 @@ Verify these invariants hold under **every** event interleaving:
 ## Strategy Specifications
 
 ### `strategy_1`
+
 - No SL, no TP.
 - Pure time-based:
   - Entry order placed at `entry_offset_seconds` relative to the funding event.
   - Exit order placed at `exit_offset_seconds` relative to the funding event.
 
 ### `strategy_1-ws`
+
 - No SL, no TP.
 - Time-based entry, websocket-driven exit:
   - Entry order placed at `entry_offset_seconds` relative to the funding event.
   - Exit order placed **immediately** when the funding fee accrual event is received via the user data websocket.
 
 ### `strategy_2`
+
 - **SL** placed immediately after the Entry MARKET order.
 - **TP** placed immediately when the funding fee accrual event arrives via the user data websocket.
 - **TP is dynamic**: must be recalculated from `retracement_pct` and `lowest_price`, and replaced on the exchange each time `lowest_price` makes a new low.
 - Full OCO semantics apply (SL / TP / deadline).
 
 ### `strategy_3a/b`
+
 - **SL** placed immediately after the Entry MARKET order.
 - **TP** placed immediately after the Entry MARKET order.
 - Full OCO semantics apply (SL / TP / deadline).
 
 ### `strategy_4.1a/b`
+
 - A **ladder of Entry LIMIT orders** placed at `entry_offset_seconds`.
 - **SL** placed immediately after the Entry LIMIT ladder is placed.
 - **TP** placed immediately when the first (or any) Entry LIMIT order is triggered and filled.
@@ -69,9 +77,11 @@ Verify these invariants hold under **every** event interleaving:
   - If **no** Entry LIMIT order fills and the deadline is reached → cancel all open Entry LIMIT orders, the SL, and the TP.
 
 ### `strategy_4.2a/b`
+
 - Identical to `strategy_4.1a/b`, except there is a **single** Entry LIMIT order instead of a ladder.
 
 ### `strategy_6`
+
 - **PRE_FUNDING_ORDER** placed at `entryOffsetSeconds` before the funding event.
 - **MAIN MARKET Entry order** placed **immediately** when the funding fee accrual event (originating from the `PRE_FUNDING_ORDER` position) is received via the user data websocket.
 - **SL and TP** orders placed **immediately** when the MAIN Entry order is filled/executed.

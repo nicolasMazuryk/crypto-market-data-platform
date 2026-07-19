@@ -44,7 +44,8 @@ function sortRegistry(registry: Registry): Registry {
       const byExchange = orderIndex(EXCHANGE_ORDER, a.exchange) - orderIndex(EXCHANGE_ORDER, b.exchange)
       if (byExchange !== 0) return byExchange
 
-      const byStrategy = orderIndex(STRATEGY_ORDER, a.assigned_strategy ?? '') - orderIndex(STRATEGY_ORDER, b.assigned_strategy ?? '')
+      const byStrategy =
+        orderIndex(STRATEGY_ORDER, a.assigned_strategy ?? '') - orderIndex(STRATEGY_ORDER, b.assigned_strategy ?? '')
       if (byStrategy !== 0) return byStrategy
 
       return a.sub_account_id.localeCompare(b.sub_account_id)

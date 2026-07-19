@@ -12,7 +12,7 @@ const WORKER_PATH = fileURLToPath(new URL('./worker-bootstrap.mjs', import.meta.
 export async function runOrchestrator(
   chartConfig: ChartConfig,
   clickhouse: ClickHouseConnectionConfig,
-  limit?: number,
+  limit?: number
 ): Promise<void> {
   const client = createClient({
     url: `http://${clickhouse.host}:${clickhouse.httpPort}`,

@@ -2,7 +2,7 @@
 - name: Read provisioned volume device from Terraform
   ansible.builtin.command:
     cmd: terraform output -raw volume_linux_device
-    chdir: "{{ playbook_dir }}/../../terraform"
+    chdir: '{{ playbook_dir }}/../../terraform'
   delegate_to: localhost
   become: false
   register: terraform_volume_device
@@ -29,22 +29,22 @@
 
 - name: Ensure application directories exist
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: '{{ item.path }}'
     state: directory
     owner: "{{ item.owner | default('root') }}"
     group: "{{ item.group | default(item.owner | default('root')) }}"
-    mode: "{{ item.mode }}"
+    mode: '{{ item.mode }}'
   loop:
-    - path: "{{ data_dir }}"
-      mode: "0755"
-    - path: "{{ app_dir }}"
+    - path: '{{ data_dir }}'
+      mode: '0755'
+    - path: '{{ app_dir }}'
       owner: nicolas
       group: nicolas
-      mode: "0755"
-    - path: "{{ repo_dir }}"
+      mode: '0755'
+    - path: '{{ repo_dir }}'
       owner: nicolas
       group: nicolas
-      mode: "0755"
+      mode: '0755'
 
 - name: Read UUID for persistent data volume
   ansible.builtin.command:
@@ -56,7 +56,7 @@
   ansible.builtin.lineinfile:
     path: /etc/fstab
     regexp: '^UUID={{ persistent_volume_uuid.stdout }}\s+{{ data_dir }}\s+ext4\s+defaults,nofail\s+0\s+2$'
-    line: "UUID={{ persistent_volume_uuid.stdout }} {{ data_dir }} ext4 defaults,nofail 0 2"
+    line: 'UUID={{ persistent_volume_uuid.stdout }} {{ data_dir }} ext4 defaults,nofail 0 2'
 
 - name: Mount persistent data volume
   ansible.builtin.command:
@@ -66,17 +66,17 @@
 
 - name: Ensure mounted data subdirectories exist
   ansible.builtin.file:
-    path: "{{ item.path }}"
+    path: '{{ item.path }}'
     state: directory
-    owner: "{{ item.owner }}"
-    group: "{{ item.group }}"
-    mode: "{{ item.mode }}"
+    owner: '{{ item.owner }}'
+    group: '{{ item.group }}'
+    mode: '{{ item.mode }}'
   loop:
-    - path: "{{ clickhouse_data_dir }}"
-      owner: "101"
-      group: "101"
-      mode: "0755"
-    - path: "{{ data_dir }}/downloads"
+    - path: '{{ clickhouse_data_dir }}'
+      owner: '101'
+      group: '101'
+      mode: '0755'
+    - path: '{{ data_dir }}/downloads'
       owner: nicolas
       group: nicolas
-      mode: "0775"
+      mode: '0775'

@@ -15,7 +15,9 @@ async function runWithConcurrency<T>(tasks: T[], fn: (t: T) => Promise<void> | v
   let i = 0
   async function worker(): Promise<void> {
     while (i < tasks.length) {
-      const task = tasks[i++]!
+      const idx = i++
+      const task = tasks[idx]
+      if (task === undefined) continue
       await fn(task)
     }
   }
@@ -64,7 +66,10 @@ function strategyThreshold(config: StrategyConfig): number {
   return -Math.abs(config.negativeFundingThresholdPercent)
 }
 
-function isNearAnyEnabledThreshold(fundingRatePercent: number, configsByStrategy: Map<StrategyId, StrategyConfig>): boolean {
+function isNearAnyEnabledThreshold(
+  fundingRatePercent: number,
+  configsByStrategy: Map<StrategyId, StrategyConfig>
+): boolean {
   for (const cfg of configsByStrategy.values()) {
     if (!cfg.enabled) continue
     const threshold = strategyThreshold(cfg)
@@ -103,18 +108,17 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
     for (const exchange of exchanges) {
       // Collect and sort by fundingRate (most negative first) so the best opportunities
       // are evaluated — and therefore submitted — before the per-strategy cap is reached.
-      const eligibleWindowSnaps = Array.from(funding.latest(exchange).values())
-        .filter(snap => {
-          if (symbolFilter && !symbolFilter.has(snap.symbol)) return false
-          if (snap.timestamp < now - staleMaxAgeMs) {
-            logger.warn(
-              { exchange, symbol: snap.symbol, ageMs: now - snap.timestamp },
-              'scheduler: stale snapshot, skipping'
-            )
-            return false
-          }
-          return snap.nextFundingTimestamp >= now && snap.nextFundingTimestamp <= windowEnd
-        })
+      const eligibleWindowSnaps = Array.from(funding.latest(exchange).values()).filter(snap => {
+        if (symbolFilter && !symbolFilter.has(snap.symbol)) return false
+        if (snap.timestamp < now - staleMaxAgeMs) {
+          logger.warn(
+            { exchange, symbol: snap.symbol, ageMs: now - snap.timestamp },
+            'scheduler: stale snapshot, skipping'
+          )
+          return false
+        }
+        return snap.nextFundingTimestamp >= now && snap.nextFundingTimestamp <= windowEnd
+      })
 
       const snaps = eligibleWindowSnaps
         .filter(snap => isNearAnyEnabledThreshold(snap.fundingRatePercent, configsByStrategy))
@@ -169,7 +173,9 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
 
     if (prewarmTasks.length > 0 && opts.leveragePrewarmer) {
       const prewarmer = opts.leveragePrewarmer
-      void runWithConcurrency(prewarmTasks, ([ex, sym, lev]) => { prewarmer(ex, sym, lev); })
+      void runWithConcurrency(prewarmTasks, ([ex, sym, lev]) => {
+        prewarmer(ex, sym, lev)
+      })
     }
 
     const nextWake = nextWakeTime(now, config.wakeBeforeHourEndMs)

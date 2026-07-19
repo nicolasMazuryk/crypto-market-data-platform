@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
 ---
 
 **KuCoin-specific notes (CRITICAL):**
+
 - WS entry via WS order adapter (requiresWsOrderAdapter=true)
 - KuCoin does NOT echo `clientOrderId` for market fills in WS events → `pollForEntryFill` is PRIMARY fill path
 - Funding fee: `wallet.funding` WS channel

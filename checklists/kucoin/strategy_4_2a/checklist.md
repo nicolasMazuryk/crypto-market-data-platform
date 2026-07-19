@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_4_2a.ts`, `src/execution/execution/mana
 ---
 
 **KuCoin-specific notes:**
+
 - REST limit entry (no WS adapter)
 - KuCoin LIMIT order WS fills DO echo `clientOrderId` → WS routing works for limit fill
 - `cancelIgnoreCode: 100004` (order not found = success) for all cancels

@@ -193,7 +193,8 @@ export function loadEngineConfig(options: LoadEngineConfigOptions): EngineConfig
     const enabledExchange = parsed.exchanges.find(e => e.enabled)
     if (enabledStrategy && enabledExchange) {
       const registryEntry = registry.combinations.find(
-        c => c.exchange === enabledExchange.exchange && c.assigned_strategy === enabledStrategy.id && c.status === 'active'
+        c =>
+          c.exchange === enabledExchange.exchange && c.assigned_strategy === enabledStrategy.id && c.status === 'active'
       )
       if (registryEntry) {
         identity = {

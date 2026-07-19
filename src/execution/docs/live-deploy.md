@@ -16,6 +16,7 @@ Cross-references: [provisioning.md](./provisioning.md), [runbook.md](./runbook.m
 - State hash on server: `/opt/arbinet/execution/state/<id>.hash` (drift detection).
 
 Sources of truth:
+
 - **What runs** = `live-configs/fleet.yaml`.
 - **Which subaccount keys feed a combo** = `live-configs/registry.yaml`, looked up by `(assigned_strategy, exchange)` at deploy time.
 
@@ -46,6 +47,7 @@ npm run provision -- --strategy <strategy_id> --exchange <exchange> --capital <u
 ```
 
 What it does:
+
 - Picks an idle subaccount row in `registry.yaml` via LRU, or creates one through master broker creds.
 - Flips row to `status: active`, `assigned_strategy: <strategy_id>`.
 - Calls `reconcileCapital()` on exchange → moves USDT from master to subaccount to match `--capital`.
@@ -58,6 +60,7 @@ Repeat per combo.
 ```bash
 npm run registry:validate
 ```
+
 Checks uniqueness of `(exchange, subaccount)`, IP allow-lists, key/passphrase presence.
 
 ### 3.3 List / inspect
@@ -71,6 +74,7 @@ npm run provision:list
 ```bash
 npm run provision:release -- --strategy <strategy_id> --exchange <exchange>
 ```
+
 Flips row → `status: idle`, clears `assigned_strategy`. Fleet validator then refuses any combo referencing it.
 
 > **Never hand-edit `assigned_strategy` in `registry.yaml`.** Bypasses capital reconciliation + uniqueness checks and does not trigger redeploy (see §8).
@@ -137,6 +141,7 @@ npm run fleet:reconcile -- --fleet live-configs/fleet.yaml --registry live-confi
 ```
 
 Reconcile flow:
+
 1. SSH to server, list running `execution-engine@*` units.
 2. Diff against desired fleet → `{toStart, toStop, toRedeploy}`.
 3. For each combo: write `execution.<id>.yaml`, `<id>.env` (subaccount keys from registry), template systemd unit.
@@ -158,6 +163,7 @@ Recommended: 24h. Watch for clean `journalctl`, `/ready` 200, metrics scraping.
 ```bash
 npm run deploy:execution
 ```
+
 Equivalent to `npm run deploy -- -e deploy_execution=true -e execution_engine_enabled=true -e execution_mode=live -e allow_in_hours_deploy=true`.
 
 Then re-reconcile so combos flip from dry-run → live:
@@ -180,6 +186,7 @@ ssh nicolas@$SERVER 'sudo journalctl -u execution-engine@strategy_2-bybit -n 200
 Per-combo metrics: `http://127.0.0.1:<metrics_port>/metrics`.
 
 End-to-end checks:
+
 1. `registry:validate` + `fleet:validate` + `config:validate` all green locally.
 2. `fleet:generate-configs` manifest inspected.
 3. All `execution-engine@*` units `active (running)`, `/ready` returns 200.
@@ -236,7 +243,7 @@ Always go through `provision:release` + `provision`.
 
 ### 8.1 Swap which strategy a subaccount runs
 
-*Subaccount X on Bybit currently runs `strategy_2`. Switch to `strategy_5`.*
+_Subaccount X on Bybit currently runs `strategy_2`. Switch to `strategy_5`._
 
 ```bash
 # 1. Release old assignment
@@ -259,7 +266,7 @@ Diff shows `- stop strategy_2-bybit`, `+ start strategy_5-bybit`. New subaccount
 
 ### 8.2 Move a strategy to a different subaccount on same exchange
 
-*`strategy_2` on Bybit should run on subaccount Y instead of X.*
+_`strategy_2` on Bybit should run on subaccount Y instead of X._
 
 ```bash
 npm run provision:release -- --strategy strategy_2 --exchange bybit
@@ -289,18 +296,18 @@ Do per-combo (release → provision → fleet edit → reconcile). Stage in dry-
 
 ## 9. Critical files
 
-| Path | Purpose |
-|---|---|
-| `live-configs/registry.yaml` | Subaccount inventory + assignments. |
-| `live-configs/fleet.yaml` | What runs (combos, ports, risk, config path). |
-| `live-configs/strategies/<id>.yaml` | Per-combo strategy params. |
-| `/opt/arbinet/execution/secrets/<id>.env` | Subaccount keys on server (templated). |
-| `/opt/arbinet/execution/state/<id>.hash` | Deploy hash for drift detection. |
-| `src/execution/fleet/cli/reconcile.ts` | Orchestrator. |
-| `src/execution/fleet/{loader,validate,reconcile}.ts` | Schema + cross-ref + diff. |
-| `src/execution/provisioning/cli/{provision,release,sync,list}.ts` | Registry maintenance. |
-| `ansible/playbooks/{deploy,fleet-reconcile,rollback-execution}.yml` | Playbooks. |
-| `ansible/roles/execution-engine/tasks/{deploy-instance,stop-instance}.yml` | Per-combo tasks. |
+| Path                                                                       | Purpose                                       |
+| -------------------------------------------------------------------------- | --------------------------------------------- |
+| `live-configs/registry.yaml`                                               | Subaccount inventory + assignments.           |
+| `live-configs/fleet.yaml`                                                  | What runs (combos, ports, risk, config path). |
+| `live-configs/strategies/<id>.yaml`                                        | Per-combo strategy params.                    |
+| `/opt/arbinet/execution/secrets/<id>.env`                                  | Subaccount keys on server (templated).        |
+| `/opt/arbinet/execution/state/<id>.hash`                                   | Deploy hash for drift detection.              |
+| `src/execution/fleet/cli/reconcile.ts`                                     | Orchestrator.                                 |
+| `src/execution/fleet/{loader,validate,reconcile}.ts`                       | Schema + cross-ref + diff.                    |
+| `src/execution/provisioning/cli/{provision,release,sync,list}.ts`          | Registry maintenance.                         |
+| `ansible/playbooks/{deploy,fleet-reconcile,rollback-execution}.yml`        | Playbooks.                                    |
+| `ansible/roles/execution-engine/tasks/{deploy-instance,stop-instance}.yml` | Per-combo tasks.                              |
 
 ---
 

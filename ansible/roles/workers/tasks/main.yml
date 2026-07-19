@@ -1,11 +1,11 @@
 ---
 - name: Template worker systemd units
   ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "/etc/systemd/system/{{ item.dest }}"
+    src: '{{ item.src }}'
+    dest: '/etc/systemd/system/{{ item.dest }}'
     owner: root
     group: root
-    mode: "0644"
+    mode: '0644'
   loop:
     - src: worker-failure-notify@.service.j2
       dest: worker-failure-notify@.service
@@ -27,18 +27,18 @@
 
 - name: Deploy worker helper scripts
   ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "{{ app_dir }}/{{ item.dest }}"
+    src: '{{ item.src }}'
+    dest: '{{ app_dir }}/{{ item.dest }}'
     owner: nicolas
     group: nicolas
-    mode: "{{ item.mode }}"
+    mode: '{{ item.mode }}'
   loop:
     - src: notify-failure.sh.j2
       dest: notify-failure.sh
-      mode: "0755"
+      mode: '0755'
     - src: quote-sync-coordinator.sh.j2
       dest: quote-sync-coordinator.sh
-      mode: "0755"
+      mode: '0755'
 
 - name: Reload systemd
   ansible.builtin.meta: flush_handlers

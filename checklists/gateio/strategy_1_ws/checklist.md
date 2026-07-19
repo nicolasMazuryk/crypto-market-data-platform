@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
 ---
 
 **GateIO-specific notes:**
+
 - WS entry via WS order adapter (requiresWsOrderAdapter=true)
 - Private WS: `futures.orders` channel for order fills; timestamps in **seconds** (× 1000 for ms)
 - Funding fee events: GateIO private WS on `account.book` or similar channel with fund-related bizType

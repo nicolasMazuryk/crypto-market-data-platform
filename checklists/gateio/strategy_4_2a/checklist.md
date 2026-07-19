@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_4_2a.ts`, `src/execution/execution/mana
 ---
 
 **GateIO-specific notes:**
+
 - REST limit entry (no WS adapter)
 - `futures.orders` WS for fill; timestamps in **seconds** (adapter × 1000)
 - `cancelIgnoreCode: 'TEXT_DUPLICATED'` for all cancels

@@ -16,6 +16,7 @@ Default to proposing before building.
 # Scope
 
 ## Strategies to implement first
+
 - `strategy_1`
 - `strategy_3a`
 - `strategy_3b`
@@ -28,6 +29,7 @@ All three share the same core workflow and infrastructure and differ mainly in *
 Use the backtests as the **source of truth for strategy semantics** (entry conditions, timing, sizing, exit logic). The live engine must produce behavior consistent with the backtests where the backtest assumptions are realistic.
 
 ## Exchanges to support first
+
 `binance`, `bybit`, `okx`, `bitget`, `gateio`, `kucoin` — **perpetual futures (USDT-M)**.
 
 The exchange layer must be abstracted behind a uniform interface so adding a new exchange is a driver implementation, not an engine change.
@@ -35,34 +37,38 @@ The exchange layer must be abstracted behind a uniform interface so adding a new
 # Functional Requirements
 
 ## 1. Market metadata
+
 - Maintain an up-to-date catalog of perpetual markets per exchange: symbol, base/quote, contract size, tick size, lot size, min notional, max leverage, maker/taker fees, status.
 - Refresh on startup and on a schedule (every 10 min); expose a query API used by all downstream components.
 
 export interface MarketMetadata {
-  symbol: string // Exchange-specific symbol (e.g., 1000PEPEUSDT)
-  contractSize: number
-  pricePrecision: number
-  amountPrecision: number
-  minPrice?: number
-  maxPrice?: number
-  minAmount?: number
-  maxAmount?: number
-  minCost?: number
+symbol: string // Exchange-specific symbol (e.g., 1000PEPEUSDT)
+contractSize: number
+pricePrecision: number
+amountPrecision: number
+minPrice?: number
+maxPrice?: number
+minAmount?: number
+maxAmount?: number
+minCost?: number
 }
 
 ## 2. Funding-rate collection
+
 - Pull **next funding rate** (predicted / current-interval rate) for **all symbols on each exchange**, on a cadence appropriate to each exchange (as frequently as exchange allows).
 - Prefer official REST/WebSocket endpoints via typed SDKs; fall back to ccxt where it is strictly better; use browser rendering (Playwright) only as a last resort when no API exists.
 - Normalize into a single internal schema: `{ exchange, symbol, fundingRate, fundingRatePercent, fundingInterval [1,2,4,8], nextFundingTimestamp, nextFundingDatetime, timestamp }`.
 - Store the latest snapshot in memory (or in Redis).
 
 ## 3. Pre-funding strategy evaluation
-- Just before each funding event (per-exchange, per-symbol, since intervals differ, interval maybe 1,2,4,8 hours), for example 2 min before funding event, evaluate strategies against current rates. 
+
+- Just before each funding event (per-exchange, per-symbol, since intervals differ, interval maybe 1,2,4,8 hours), for example 2 min before funding event, evaluate strategies against current rates.
 - Select **negative funding rates** that satisfy each strategy's entry conditions (funding rate thresholds).
 - Produce a set of **trade intents**: `{ id, strategy, exchange, symbol, volume (in asset), amount (in USDT), fundingRatePercent, fundingInterval, nextFundingTimestamp, nextFundingDatetime }`.
 - Time budget must account for exchange latency, funding-time congestion, and per-exchange order-placement throughput.
 
 ## 4. Order execution
+
 - Place, amend, and cancel orders via a uniform **REST adapter** per exchange.
 - Support market, limit, reduce-only and exchange-specific flags.
 - Enforce **idempotency** via `clientOrderId` and local intent IDs; never create duplicate orders on retry.
@@ -70,6 +76,7 @@ export interface MarketMetadata {
 - Handle partial fills, rejects, margin/leverage requirements, and reduce-only violations.
 
 ## 5. Private WebSocket streams (user data)
+
 - For each connected exchange/account, maintain a **private WebSocket adapter** that emits:
   - Order lifecycle events (new, filled, partially filled, cancelled, rejected, expired).
   - Position updates (open/close, size, entry price, unrealized PnL, liquidation price).
@@ -78,16 +85,19 @@ export interface MarketMetadata {
 - Auto-reconnect with jittered backoff; resubscribe on reconnect; resync via REST snapshot after reconnect (this is likely already handled by SDK libraries mentioned below).
 
 ## 6. Local state synchronization
+
 - Keep a **locally synchronized view** of each exchange account: open orders, open positions, balances.
 - Rule: state derives from `REST snapshot → WebSocket delta stream`. On any gap/desync, reconcile by REST snapshot and re-emit internal events idempotently.
 - Detect and alert on divergences (local vs. exchange).
 
 ## 7. Order and position monitoring
+
 - Track every order from intent → placed → filled/cancelled with timestamps, latencies, and final PnL impact.
 - Enforce strategy exit rules (time-based, funding completed/accrued/applied, stop conditions) via a monitoring loop independent from the entry path.
 - Cancel-and-replace logic where needed; handle "order not found" races cleanly.
 
 ## 8. Persistence
+
 - Persist everything that cannot be cheaply reconstructed from exchange APIs:
   - Trade intents, order lifecycle, fills, realized PnL, funding-fee attributions and accruals.
   - Local positions and balances snapshots at key moments (pre-funding, post-funding).
@@ -96,12 +106,13 @@ export interface MarketMetadata {
 - Choose storage appropriate to access patterns (propose Postgres for relational/auditable data).
 
 ## 9. Configuration
+
 - Each strategy is defined by a typed config: thresholds, timing offsets, stop-loss levels etc.
 - Per-exchange config: API keys (from secrets manager/env, never source), endpoints, rate-limit profiles (YAML config).
 - Hot-reload where safe; otherwise explicit restart-required.
 - other configurable params (YAML):
-  - orderAmountUsd: 10  # in USDT, default order size
-  - leverage: 4  # leverage multiplier for trading
+  - orderAmountUsd: 10 # in USDT, default order size
+  - leverage: 4 # leverage multiplier for trading
 
 # Non-Functional Requirements
 
@@ -132,6 +143,7 @@ There is a prior, **completely different** strategy (perpetual futures spread ar
 It is a different strategy with a different data flow and different trading logic. Treat it as **read-only inspiration**, not a template. Do not carry over its code style, folder conventions, abstractions, or naming. Design this system fresh.
 
 You may look at these areas only to understand **approaches** to recurring subproblems:
+
 - `src/core/markets` — how perpetual market metadata is kept current.
 - `src/adapters` (Private WS Adapter) — how user-data streams are mapped to internal events.
 - `src/adapters` (REST Adapter) — how exchange REST calls are unified.
@@ -183,6 +195,7 @@ For the strategy logic itself, **do not look at the old repo** — our strategie
 # First Response
 
 Start by:
+
 1. Confirming you've read `@docs-strategy/` and `@src/backtesting/strategies/`.
 2. Summarizing the three strategies in your own words, including what differs between them.
 3. Listing your open questions before you begin Phase 1.

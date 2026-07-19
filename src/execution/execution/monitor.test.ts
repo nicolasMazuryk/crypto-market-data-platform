@@ -543,7 +543,10 @@ describe('PositionMonitor', () => {
         clock,
         logger: createExecutionLogger(),
         metrics: makeMetrics(),
-        setTimeoutFn: cb => { timers.push({ cb }); return timers.length - 1 },
+        setTimeoutFn: cb => {
+          timers.push({ cb })
+          return timers.length - 1
+        },
         clearTimeoutFn: () => {},
       })
       const exits: { intentId: string; reason: ExitReason }[] = []

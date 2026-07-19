@@ -52,7 +52,12 @@ export interface BaseStrategy {
   readonly id: string
 
   /** Initialize with merged config */
-  initialize(config: StrategyConfig, feeSchedule: FeeSchedule, slippage: number, fundingSettlement?: FundingSettlementConfig): void
+  initialize(
+    config: StrategyConfig,
+    feeSchedule: FeeSchedule,
+    slippage: number,
+    fundingSettlement?: FundingSettlementConfig
+  ): void
 
   /** Check if this funding event meets selection criteria */
   shouldTrigger(event: FundingEvent): boolean

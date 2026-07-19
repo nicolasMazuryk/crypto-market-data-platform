@@ -4,20 +4,20 @@ KuCoin uses a 3-credential authentication system: API Key, API Secret, and Passp
 
 ## Base URLs
 
-| Environment | URL |
-|-------------|-----|
-| Spot/Margin | https://api.kucoin.com |
-| Futures | https://api-futures.kucoin.com |
+| Environment | URL                            |
+| ----------- | ------------------------------ |
+| Spot/Margin | https://api.kucoin.com         |
+| Futures     | https://api-futures.kucoin.com |
 
 ## Required Headers
 
-* `KC-API-KEY`: Your API Key
-* `KC-API-SIGN`: HMAC-SHA256 signature (Base64 encoded)
-* `KC-API-TIMESTAMP`: Current Unix time in milliseconds
-* `KC-API-PASSPHRASE`: HMAC-SHA256 signed passphrase (Base64 encoded)
-* `KC-API-KEY-VERSION`: `3`
-* `Content-Type`: `application/json` (for POST/PUT/DELETE with body)
-* `User-Agent`: `kucoin-spot/1.0.0 (Skill)`
+- `KC-API-KEY`: Your API Key
+- `KC-API-SIGN`: HMAC-SHA256 signature (Base64 encoded)
+- `KC-API-TIMESTAMP`: Current Unix time in milliseconds
+- `KC-API-PASSPHRASE`: HMAC-SHA256 signed passphrase (Base64 encoded)
+- `KC-API-KEY-VERSION`: `3`
+- `Content-Type`: `application/json` (for POST/PUT/DELETE with body)
+- `User-Agent`: `kucoin-spot/1.0.0 (Skill)`
 
 ## Signing Process
 
@@ -25,21 +25,23 @@ KuCoin uses a 3-credential authentication system: API Key, API Secret, and Passp
 
 Concatenate: `timestamp + method + requestEndpoint + body`
 
-| Component | Description | Example |
-|-----------|-------------|---------|
-| `timestamp` | Unix time in milliseconds (same as KC-API-TIMESTAMP header) | `1234567890123` |
-| `method` | HTTP method in UPPERCASE | `GET`, `POST`, `DELETE` |
-| `requestEndpoint` | URL path with query string | `/api/v1/accounts?currency=BTC` |
-| `body` | JSON body string for POST/PUT, empty string for GET/DELETE without body | `{"symbol":"BTC-USDT","side":"buy"}` |
+| Component         | Description                                                             | Example                              |
+| ----------------- | ----------------------------------------------------------------------- | ------------------------------------ |
+| `timestamp`       | Unix time in milliseconds (same as KC-API-TIMESTAMP header)             | `1234567890123`                      |
+| `method`          | HTTP method in UPPERCASE                                                | `GET`, `POST`, `DELETE`              |
+| `requestEndpoint` | URL path with query string                                              | `/api/v1/accounts?currency=BTC`      |
+| `body`            | JSON body string for POST/PUT, empty string for GET/DELETE without body | `{"symbol":"BTC-USDT","side":"buy"}` |
 
 **Examples:**
 
 For a GET request:
+
 ```
 1234567890123GET/api/v1/accounts?currency=BTC
 ```
 
 For a POST request:
+
 ```
 1234567890123POST/api/v1/hf/orders{"symbol":"BTC-USDT","side":"buy","type":"limit","price":"30000","size":"0.001"}
 ```
@@ -145,6 +147,6 @@ curl -X POST "${BASE_URL}${ENDPOINT}" \
 
 ## Security Notes
 
-* Never share your secret key or passphrase
-* Use IP whitelist in KuCoin API settings
-* Enable only required permissions
+- Never share your secret key or passphrase
+- Use IP whitelist in KuCoin API settings
+- Enable only required permissions

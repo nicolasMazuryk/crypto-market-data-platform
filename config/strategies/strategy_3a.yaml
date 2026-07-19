@@ -1,15 +1,15 @@
 # Strategy 3A: Negative Funding SHORT - Ride the Drop (TP = F * 1.5)
 # Short to profit from the price drop, TP variant A
 
-strategy_id: "strategy_3a"
-direction: "short"
-negative_funding_threshold_percent: -0.20     # -0.20%
-entry_offset_seconds: 2       # Enter at T_funding - 2s
-stop_loss_percent: 2.0              # 2.0%
-tp_mode: "A"
-tp_multiplier: 1.975          # TP = F * 1.975
-tp_addend_pct: 0.30              # Not used in mode A, but required
-deadline_seconds: 60          # Max seconds after T_funding before forced exit
+strategy_id: 'strategy_3a'
+direction: 'short'
+negative_funding_threshold_percent: -0.20 # -0.20%
+entry_offset_seconds: 2 # Enter at T_funding - 2s
+stop_loss_percent: 2.0 # 2.0%
+tp_mode: 'A'
+tp_multiplier: 1.975 # TP = F * 1.975
+tp_addend_pct: 0.30 # Not used in mode A, but required
+deadline_seconds: 60 # Max seconds after T_funding before forced exit
 funding_applied_on_same_second: true
 amount_usd: 20
 leverage: 4

@@ -9,7 +9,7 @@
 
 - name: Stop execution-engine gracefully via systemd (SIGTERM + 30s drain)
   ansible.builtin.systemd:
-    name: "execution-engine@{{ execution_mode }}.service"
+    name: 'execution-engine@{{ execution_mode }}.service'
     state: stopped
   when: _engine_active.rc == 0
   failed_when: false

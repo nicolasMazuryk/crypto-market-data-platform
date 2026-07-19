@@ -4,13 +4,13 @@ KuCoin uses HMAC-SHA256 signing for authenticated API requests.
 
 ## Required Headers
 
-| Header | Description |
-|--------|-------------|
-| `KC-API-KEY` | Your API Key |
-| `KC-API-SIGN` | Base64-encoded HMAC-SHA256 signature |
-| `KC-API-TIMESTAMP` | Request timestamp in milliseconds (UTC) |
-| `KC-API-PASSPHRASE` | HMAC-SHA256 encrypted passphrase, Base64-encoded |
-| `KC-API-KEY-VERSION` | `3` |
+| Header               | Description                                      |
+| -------------------- | ------------------------------------------------ |
+| `KC-API-KEY`         | Your API Key                                     |
+| `KC-API-SIGN`        | Base64-encoded HMAC-SHA256 signature             |
+| `KC-API-TIMESTAMP`   | Request timestamp in milliseconds (UTC)          |
+| `KC-API-PASSPHRASE`  | HMAC-SHA256 encrypted passphrase, Base64-encoded |
+| `KC-API-KEY-VERSION` | `3`                                              |
 
 ## Signing Process
 

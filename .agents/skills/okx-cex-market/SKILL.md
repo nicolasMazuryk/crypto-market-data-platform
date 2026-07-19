@@ -1,20 +1,20 @@
 ---
 name: okx-cex-market
-description: "Use this skill when the user asks for: price of any asset, ticker, order book, candles, OHLCV, funding rate, open interest, OI change scanner, market screener (top movers, high-volume, newly listed), mark price, index price, recent trades, instrument list, stock tokens, metals prices (gold, XAU, XAG), commodities (oil, OIL), forex rates (EUR/USD, EURUSDT), bond instruments, non-crypto assets, or any technical indicator query (RSI, MACD, EMA, Bollinger Bands, KDJ, SuperTrend, AHR999, BTC rainbow, and 70+ more). All commands are read-only and do NOT require API credentials. Do NOT use for account balance/positions (okx-cex-portfolio), placing/cancelling orders (okx-cex-trade), or bots (okx-cex-bot)."
+description: 'Use this skill when the user asks for: price of any asset, ticker, order book, candles, OHLCV, funding rate, open interest, OI change scanner, market screener (top movers, high-volume, newly listed), mark price, index price, recent trades, instrument list, stock tokens, metals prices (gold, XAU, XAG), commodities (oil, OIL), forex rates (EUR/USD, EURUSDT), bond instruments, non-crypto assets, or any technical indicator query (RSI, MACD, EMA, Bollinger Bands, KDJ, SuperTrend, AHR999, BTC rainbow, and 70+ more). All commands are read-only and do NOT require API credentials. Do NOT use for account balance/positions (okx-cex-portfolio), placing/cancelling orders (okx-cex-trade), or bots (okx-cex-bot).'
 license: MIT
 metadata:
   author: okx
-  version: "1.3.3"
-  homepage: "https://www.okx.com"
+  version: '1.3.3'
+  homepage: 'https://www.okx.com'
   agent:
     requires:
-      bins: ["okx"]
+      bins: ['okx']
     install:
       - id: npm
         kind: node
-        package: "@okx_ai/okx-trade-cli@1.3.3"
-        bins: ["okx"]
-        label: "Install okx CLI (npm)"
+        package: '@okx_ai/okx-trade-cli@1.3.3'
+        bins: ['okx']
+        label: 'Install okx CLI (npm)'
 ---
 
 # OKX CEX Market Data CLI
@@ -24,6 +24,7 @@ metadata:
 Public market data for OKX: prices, order books, candles, funding rates, open interest, instrument info, and technical indicators. All commands are **read-only** and require **no API credentials**.
 
 **Skill routing**
+
 - Market data / indicators → `okx-cex-market` (this skill)
 - Account balance / positions → `okx-cex-portfolio`
 - Place / cancel orders → `okx-cex-trade`
@@ -47,27 +48,27 @@ Market data commands return the same public data regardless of demo/live mode �
 
 ## Command Index
 
-| # | Command | Description |
-|---|---|---|
-| 1 | `okx market ticker <instId>` | Last price, 24h high/low/vol/change% |
-| 2 | `okx market tickers <instType>` | All tickers for SPOT / SWAP / FUTURES / OPTION |
-| 3 | `okx market instruments --instType <type> [--instId <id>]` | List instruments (instId, ctVal, lotSz, minSz, tickSz, state) |
-| 4 | `okx market orderbook <instId> [--sz <n>]` | Order book asks/bids (default top 5 per side, max 400) |
-| 5 | `okx market candles <instId> [--bar <bar>] [--limit <n>] [--after <ts>] [--before <ts>]` | OHLCV candles (default `--bar 1m`); auto-routes to historical endpoint for data back to 2021; `--after` paginates back in time, `--before` paginates forward |
-| 6 | `okx market index-candles <instId> [--bar <bar>] [--limit <n>] [--history]` | Index OHLCV (use `BTC-USD` not `BTC-USDT`) |
-| 7 | `okx market funding-rate <instId> [--history] [--limit <n>]` | Current or historical funding rate (SWAP only) |
-| 8 | `okx market trades <instId> [--limit <n>]` | Recent public trades |
-| 9 | `okx market mark-price --instType <type> [--instId <id>]` | Mark price (SWAP / FUTURES / OPTION) |
-| 10 | `okx market index-ticker [--instId <id>] [--quoteCcy <ccy>]` | Index price (e.g., BTC-USD) |
-| 11 | `okx market price-limit <instId>` | Upper/lower price limits (SWAP / FUTURES only) |
-| 12 | `okx market open-interest --instType <type> [--instId <id>]` | Open interest in contracts and base currency |
-| 13 | `okx market instruments-by-category --instCategory <3\|4\|5\|6\|7>` | Discover instruments by asset category: 3=Stock tokens (AAPL/TSLA), 4=Metals (gold/silver), 5=Commodities (oil/gas), 6=Forex (EUR/USD), 7=Bonds |
-| 13† | `okx market stock-tokens` | **Deprecated** — use `instruments-by-category --instCategory 3` instead |
-| 14 | `okx market filter --instType <SPOT\|SWAP\|FUTURES> [--sortBy <field>] [--sortOrder <asc\|desc>] [--limit <n>] [--baseCcy <ccy>] [--quoteCcy <ccy>] [--settleCcy <ccy>] [--instFamily <fam>] [--ctType <linear\|inverse>] [--minLast <n>] [--maxLast <n>] [--minChg24hPct <n>] [--maxChg24hPct <n>] [--minMarketCapUsd <n>] [--maxMarketCapUsd <n>] [--minVolUsd24h <n>] [--maxVolUsd24h <n>] [--minFundingRate <n>] [--maxFundingRate <n>] [--minOiUsd <n>] [--maxOiUsd <n>]` | Screen / rank instruments by multi-dimensional criteria (price, volume, OI, funding rate, market cap) |
-| 15 | `okx market oi-history <instId> [--bar <5m\|15m\|1H\|4H\|1D>] [--limit <n>] [--ts <ms>]` | OI history time series with bar-over-bar delta for a single instrument |
-| 16 | `okx market oi-change --instType <SWAP\|FUTURES> [--bar <5m\|15m\|1H\|4H\|1D>] [--sortBy <field>] [--sortOrder <asc\|desc>] [--limit <n>] [--minOiUsd <n>] [--minVolUsd24h <n>] [--minAbsOiDeltaPct <n>]` | Find instruments with largest OI changes (accumulation/distribution scanner) |
-| 17 | `okx market indicator list` | List all supported indicator names and descriptions |
-| 18 | `okx market indicator <indicator> <instId> [--bar] [--params] [--list] [--limit] [--backtest-time]` | Technical indicator values |
+| #   | Command                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Description                                                                                                                                                  |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `okx market ticker <instId>`                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Last price, 24h high/low/vol/change%                                                                                                                         |
+| 2   | `okx market tickers <instType>`                                                                                                                                                                                                                                                                                                                                                                                                                                                | All tickers for SPOT / SWAP / FUTURES / OPTION                                                                                                               |
+| 3   | `okx market instruments --instType <type> [--instId <id>]`                                                                                                                                                                                                                                                                                                                                                                                                                     | List instruments (instId, ctVal, lotSz, minSz, tickSz, state)                                                                                                |
+| 4   | `okx market orderbook <instId> [--sz <n>]`                                                                                                                                                                                                                                                                                                                                                                                                                                     | Order book asks/bids (default top 5 per side, max 400)                                                                                                       |
+| 5   | `okx market candles <instId> [--bar <bar>] [--limit <n>] [--after <ts>] [--before <ts>]`                                                                                                                                                                                                                                                                                                                                                                                       | OHLCV candles (default `--bar 1m`); auto-routes to historical endpoint for data back to 2021; `--after` paginates back in time, `--before` paginates forward |
+| 6   | `okx market index-candles <instId> [--bar <bar>] [--limit <n>] [--history]`                                                                                                                                                                                                                                                                                                                                                                                                    | Index OHLCV (use `BTC-USD` not `BTC-USDT`)                                                                                                                   |
+| 7   | `okx market funding-rate <instId> [--history] [--limit <n>]`                                                                                                                                                                                                                                                                                                                                                                                                                   | Current or historical funding rate (SWAP only)                                                                                                               |
+| 8   | `okx market trades <instId> [--limit <n>]`                                                                                                                                                                                                                                                                                                                                                                                                                                     | Recent public trades                                                                                                                                         |
+| 9   | `okx market mark-price --instType <type> [--instId <id>]`                                                                                                                                                                                                                                                                                                                                                                                                                      | Mark price (SWAP / FUTURES / OPTION)                                                                                                                         |
+| 10  | `okx market index-ticker [--instId <id>] [--quoteCcy <ccy>]`                                                                                                                                                                                                                                                                                                                                                                                                                   | Index price (e.g., BTC-USD)                                                                                                                                  |
+| 11  | `okx market price-limit <instId>`                                                                                                                                                                                                                                                                                                                                                                                                                                              | Upper/lower price limits (SWAP / FUTURES only)                                                                                                               |
+| 12  | `okx market open-interest --instType <type> [--instId <id>]`                                                                                                                                                                                                                                                                                                                                                                                                                   | Open interest in contracts and base currency                                                                                                                 |
+| 13  | `okx market instruments-by-category --instCategory <3\|4\|5\|6\|7>`                                                                                                                                                                                                                                                                                                                                                                                                            | Discover instruments by asset category: 3=Stock tokens (AAPL/TSLA), 4=Metals (gold/silver), 5=Commodities (oil/gas), 6=Forex (EUR/USD), 7=Bonds              |
+| 13† | `okx market stock-tokens`                                                                                                                                                                                                                                                                                                                                                                                                                                                      | **Deprecated** — use `instruments-by-category --instCategory 3` instead                                                                                      |
+| 14  | `okx market filter --instType <SPOT\|SWAP\|FUTURES> [--sortBy <field>] [--sortOrder <asc\|desc>] [--limit <n>] [--baseCcy <ccy>] [--quoteCcy <ccy>] [--settleCcy <ccy>] [--instFamily <fam>] [--ctType <linear\|inverse>] [--minLast <n>] [--maxLast <n>] [--minChg24hPct <n>] [--maxChg24hPct <n>] [--minMarketCapUsd <n>] [--maxMarketCapUsd <n>] [--minVolUsd24h <n>] [--maxVolUsd24h <n>] [--minFundingRate <n>] [--maxFundingRate <n>] [--minOiUsd <n>] [--maxOiUsd <n>]` | Screen / rank instruments by multi-dimensional criteria (price, volume, OI, funding rate, market cap)                                                        |
+| 15  | `okx market oi-history <instId> [--bar <5m\|15m\|1H\|4H\|1D>] [--limit <n>] [--ts <ms>]`                                                                                                                                                                                                                                                                                                                                                                                       | OI history time series with bar-over-bar delta for a single instrument                                                                                       |
+| 16  | `okx market oi-change --instType <SWAP\|FUTURES> [--bar <5m\|15m\|1H\|4H\|1D>] [--sortBy <field>] [--sortOrder <asc\|desc>] [--limit <n>] [--minOiUsd <n>] [--minVolUsd24h <n>] [--minAbsOiDeltaPct <n>]`                                                                                                                                                                                                                                                                      | Find instruments with largest OI changes (accumulation/distribution scanner)                                                                                 |
+| 17  | `okx market indicator list`                                                                                                                                                                                                                                                                                                                                                                                                                                                    | List all supported indicator names and descriptions                                                                                                          |
+| 18  | `okx market indicator <indicator> <instId> [--bar] [--params] [--list] [--limit] [--backtest-time]`                                                                                                                                                                                                                                                                                                                                                                            | Technical indicator values                                                                                                                                   |
 
 ---
 
@@ -75,16 +76,16 @@ Market data commands return the same public data regardless of demo/live mode �
 
 ### Step 1 — Identify data type and load reference
 
-| User intent | Reference to load |
-|---|---|
-| Price, candles, order book, recent trades | `{baseDir}/references/price-data-commands.md` |
-| Technical indicators (RSI, MACD, EMA, BB, KDJ, SuperTrend, AHR999, Rainbow, etc.) | `{baseDir}/references/indicator-commands.md` |
-| Funding rate, mark price, open interest, price limit, index ticker | `{baseDir}/references/derivatives-commands.md` |
-| Screen / rank instruments; find top movers, high-OI, high-volume contracts | Use `okx market filter` directly |
-| OI history time series for a single instrument | Use `okx market oi-history` directly |
-| OI change scanner; find contracts with large OI shifts | Use `okx market oi-change` directly |
-| List instruments, discover stock tokens, metals/commodities/forex/bonds, find option instIds | `{baseDir}/references/instrument-commands.md` |
-| Multi-step or cross-skill workflows; MCP tool names | `{baseDir}/references/workflows.md` |
+| User intent                                                                                  | Reference to load                              |
+| -------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Price, candles, order book, recent trades                                                    | `{baseDir}/references/price-data-commands.md`  |
+| Technical indicators (RSI, MACD, EMA, BB, KDJ, SuperTrend, AHR999, Rainbow, etc.)            | `{baseDir}/references/indicator-commands.md`   |
+| Funding rate, mark price, open interest, price limit, index ticker                           | `{baseDir}/references/derivatives-commands.md` |
+| Screen / rank instruments; find top movers, high-OI, high-volume contracts                   | Use `okx market filter` directly               |
+| OI history time series for a single instrument                                               | Use `okx market oi-history` directly           |
+| OI change scanner; find contracts with large OI shifts                                       | Use `okx market oi-change` directly            |
+| List instruments, discover stock tokens, metals/commodities/forex/bonds, find option instIds | `{baseDir}/references/instrument-commands.md`  |
+| Multi-step or cross-skill workflows; MCP tool names                                          | `{baseDir}/references/workflows.md`            |
 
 ### Step 2 — Run commands immediately
 

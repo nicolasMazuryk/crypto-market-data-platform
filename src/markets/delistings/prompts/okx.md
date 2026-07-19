@@ -1,4 +1,5 @@
 ## Configuration
+
 **Exchange:** OKX
 **Action Type:** Delisting
 **Target Trading Pairs:** Perpetual Futures (USDT pairs)
@@ -11,6 +12,7 @@
 ---
 
 ## Task Overview
+
 I need you to extract information about the specified **Action Type** for the specified **Target Trading Pairs** from the **Exchange's** announcement page, focusing on **Action Type** within the specified **Date Range**.
 
 **IMPORTANT:** Use Playwright browser automation tools directly - do NOT build or create any scripts. Use the available Playwright tools to navigate, interact with, and extract data from web pages directly.
@@ -50,11 +52,12 @@ I need you to extract information about the specified **Action Type** for the sp
 
 4. **Output format:**
    Create a JSON object with token names as keys and action datetimes as values:
+
 ```json
-   {
-     "TOKENUSDT": "YYYY-MM-DD HH:MM",
-     "TOKENUSDT": "YYYY-MM-DD HH:MM"
-   }
+{
+  "TOKENUSDT": "YYYY-MM-DD HH:MM",
+  "TOKENUSDT": "YYYY-MM-DD HH:MM"
+}
 ```
 
 1. **Save the results:**
@@ -62,6 +65,7 @@ I need you to extract information about the specified **Action Type** for the sp
    - Ensure the file is properly formatted and valid JSON
 
 ## Important Notes
+
 - **Do NOT build or create any scripts** - use Playwright browser automation tools directly to interact with web pages
 - Only include data matching **Target Trading Pairs** from the configuration
 - Only include announcements matching **Action Type** from the configuration
@@ -70,9 +74,9 @@ I need you to extract information about the specified **Action Type** for the sp
 - Use UTC timezone for all datetimes
 - Format datetime as "YYYY-MM-DD HH:MM"
 - Process announcements one by one in chronological order (top-to-bottom, from newest to oldest)
-   - **START** processing from the page number specified in **Pagination Start** (including that page) - skip pages before this
-   - **STOP** when you reach the page number specified in **Pagination Stop** (including that page) - do not process any further pages
-   - Do not process the same announcement or page twice - keep track of processed items
+  - **START** processing from the page number specified in **Pagination Start** (including that page) - skip pages before this
+  - **STOP** when you reach the page number specified in **Pagination Stop** (including that page) - do not process any further pages
+  - Do not process the same announcement or page twice - keep track of processed items
 - Save output to **Output Path** from the configuration
 
 Please proceed with this task and save the complete JSON output to the specified path when finished. Start processing from the page specified in **Pagination Start** (including that page) and stop processing when you reach the page specified in **Pagination Stop** (including that page).

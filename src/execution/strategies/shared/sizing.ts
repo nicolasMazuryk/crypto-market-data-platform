@@ -32,8 +32,7 @@ export function computeMinOrderQty(market: MarketMetadata, price: number): numbe
   const step = lotStep(market.amountPrecision)
 
   const lotFloor = market.minAmount ?? step
-  const notionalFloor =
-    market.minCost !== undefined ? roundUpToStep(market.minCost / price / contractSize, step) : 0
+  const notionalFloor = market.minCost !== undefined ? roundUpToStep(market.minCost / price / contractSize, step) : 0
 
   const rawMin = Math.max(lotFloor, notionalFloor, step)
   const qty = roundUpToStep(rawMin, step)

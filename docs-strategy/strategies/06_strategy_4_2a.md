@@ -46,12 +46,12 @@ Code refs: `src/execution/execution/manager.ts:2642` (`setError limit_expired`).
 
 **Kind:** `sl_tp_deadline`.
 
-| Path | Order | Price | Fee class | `exit_reason` / `error_code` |
-|---|---|---|---|---|
-| Take-profit | SELL LIMIT reduce-only | `P_fill × (1 + takeProfitPct/100)` | maker | `tp_hit` |
-| Stop-loss | conditional SELL STOP-MARKET reduce-only | trigger `P_limit × (1 − |F| × slMultiplier/100)`; market − slippage, gap-through | taker | `sl_hit` |
-| Deadline | SELL MARKET reduce-only at `T_settle + deadlineSeconds` | market − slippage | taker | `deadline` |
-| No fill | cancel entry limit at `expireAt` | — | none | `error_code = limit_expired` |
+| Path        | Order                                                   | Price                              | Fee class | `exit_reason` / `error_code`                         |
+| ----------- | ------------------------------------------------------- | ---------------------------------- | --------- | ---------------------------------------------------- | ----- | -------- |
+| Take-profit | SELL LIMIT reduce-only                                  | `P_fill × (1 + takeProfitPct/100)` | maker     | `tp_hit`                                             |
+| Stop-loss   | conditional SELL STOP-MARKET reduce-only                | trigger `P_limit × (1 −            | F         | × slMultiplier/100)`; market − slippage, gap-through | taker | `sl_hit` |
+| Deadline    | SELL MARKET reduce-only at `T_settle + deadlineSeconds` | market − slippage                  | taker     | `deadline`                                           |
+| No fill     | cancel entry limit at `expireAt`                        | —                                  | none      | `error_code = limit_expired`                         |
 
 SL-vs-TP: SL-first (§5.5.3). Entry-vs-SL on one candle: both fire, worst outcome (§5.5.4) — with `slMultiplier > limitOffsetMult` this is a real path on deep drop candles: filled and stopped in the same second.
 
@@ -69,16 +69,16 @@ limit_expired path: NET_PNL = 0, no fees.
 
 ## 5. Parameterization & schema parity
 
-| Doc var | Backtest key | Live key | Unit | Proposed | Schema default | Notes |
-|---|---|---|---|---|---|---|
-| `F_threshold` | `negative_funding_threshold_percent` | `negativeFundingThresholdPercent` | percent, signed < 0 | **−0.4** | −0.4 | R10 |
-| `entry_offset_seconds` | `entry_offset_seconds` | `entryOffsetSeconds` | seconds | **5** | 5 | |
-| `limit_offset_mult` | `limit_offset_mult` | `limitOffsetMult` | multiplier on `|F|` | **0.75** | 0.75 | |
-| `TP_pct` | `take_profit_pct` | `takeProfitPct` | **percent — 0.2 means 0.20%; backtest and live both percent; loader guard `unit_suspect_fraction` on v < 0.05** (R4) | **0.2** | 0.2 | highest-risk unit key, same as 4.1a |
-| `sl_mult` | `sl_multiplier` | `slMultiplier` | multiplier on `|F|` | **1.5** | 1.5 | bound 1.0–4.0 **and > `limit_offset_mult`** (else stop above entry) — loader-enforced |
-| `T_deadline` | `deadline_seconds` | `deadlineSeconds` | seconds | **60** | 60 | bound 10–3600 |
-| — | `amount_usd` / `leverage` | `amountUsd` / `leverage` | USD / int | 20 / 4 | 20 / 4 | source had no usable live config ("not deployed; live config unusable as written") — schema defaults are the proposal baseline |
-| — | fees / slippage / latency | per `00_globals.md` §10.2 | | | | |
+| Doc var                | Backtest key                         | Live key                          | Unit                                                                                                                 | Proposed | Schema default | Notes                                                                                                                          |
+| ---------------------- | ------------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------------------------------------- | -------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---- | ------------------------------------------------------------------------------------- |
+| `F_threshold`          | `negative_funding_threshold_percent` | `negativeFundingThresholdPercent` | percent, signed < 0                                                                                                  | **−0.4** | −0.4           | R10                                                                                                                            |
+| `entry_offset_seconds` | `entry_offset_seconds`               | `entryOffsetSeconds`              | seconds                                                                                                              | **5**    | 5              |                                                                                                                                |
+| `limit_offset_mult`    | `limit_offset_mult`                  | `limitOffsetMult`                 | multiplier on `                                                                                                      | F        | `              | **0.75**                                                                                                                       | 0.75 |                                                                                       |
+| `TP_pct`               | `take_profit_pct`                    | `takeProfitPct`                   | **percent — 0.2 means 0.20%; backtest and live both percent; loader guard `unit_suspect_fraction` on v < 0.05** (R4) | **0.2**  | 0.2            | highest-risk unit key, same as 4.1a                                                                                            |
+| `sl_mult`              | `sl_multiplier`                      | `slMultiplier`                    | multiplier on `                                                                                                      | F        | `              | **1.5**                                                                                                                        | 1.5  | bound 1.0–4.0 **and > `limit_offset_mult`** (else stop above entry) — loader-enforced |
+| `T_deadline`           | `deadline_seconds`                   | `deadlineSeconds`                 | seconds                                                                                                              | **60**   | 60             | bound 10–3600                                                                                                                  |
+| —                      | `amount_usd` / `leverage`            | `amountUsd` / `leverage`          | USD / int                                                                                                            | 20 / 4   | 20 / 4         | source had no usable live config ("not deployed; live config unusable as written") — schema defaults are the proposal baseline |
+| —                      | fees / slippage / latency            | per `00_globals.md` §10.2         |                                                                                                                      |          |                |                                                                                                                                |
 
 **Schema-shape warning (binding, carried from source):** backtest and engine config representations must be generated from the one canonical schema — a hand-written config in the wrong schema is rejected (or worse, misread) by the other side. See `00_globals.md` §11.2.
 
@@ -94,14 +94,14 @@ limit_expired path: NET_PNL = 0, no fees.
 
 ### Parity ledger — Strategy 4.2a
 
-| Live behavior | Backtest treatment |
-|---|---|
-| Single limit entry | **Modeled conservatively** — trade-through only |
-| SL placed with entry limit (R11) | **Modeled faithfully** — identical rule both sides |
-| TP placed on fill | **Modeled conservatively** — next-candle effectiveness, `drop_candle + 1` discipline |
-| `limit_expired` termination | **Modeled faithfully** — normative terminal state, zero P&L/fees (R5) |
-| Pre-settlement fill kept, no funding | **Modeled conservatively** — `FUNDING_PNL = 0` (R7) |
-| Entry-and-SL same candle | **Modeled pessimistically** — both fire, worst outcome |
-| Deadline close / sweep | **Modeled faithfully** / implicit |
-| Predicted-rate selection | **Named optimism** — settled-rate proxy |
-| Kill switch / orphan handling | **Not modeled** — operational |
+| Live behavior                        | Backtest treatment                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------------ |
+| Single limit entry                   | **Modeled conservatively** — trade-through only                                      |
+| SL placed with entry limit (R11)     | **Modeled faithfully** — identical rule both sides                                   |
+| TP placed on fill                    | **Modeled conservatively** — next-candle effectiveness, `drop_candle + 1` discipline |
+| `limit_expired` termination          | **Modeled faithfully** — normative terminal state, zero P&L/fees (R5)                |
+| Pre-settlement fill kept, no funding | **Modeled conservatively** — `FUNDING_PNL = 0` (R7)                                  |
+| Entry-and-SL same candle             | **Modeled pessimistically** — both fire, worst outcome                               |
+| Deadline close / sweep               | **Modeled faithfully** / implicit                                                    |
+| Predicted-rate selection             | **Named optimism** — settled-rate proxy                                              |
+| Kill switch / orphan handling        | **Not modeled** — operational                                                        |

@@ -6,13 +6,13 @@ It is **analysis + an ordered task plan only** — no code was changed producing
 
 ## What's here
 
-| File | Purpose |
-|---|---|
-| `README.md` | This index + reading order. |
-| `gap-analysis.md` | Per-requirement verdict table (Conforms/Partial/Missing/Contradicts) with `path:line` citations and an **OPEN QUESTIONS** section. Conforming rows produce no task. |
-| `implementation-plan.md` | The ordered task index (`NN`, title, goal, deps, priority, parity impact) + critical path. |
-| `traceability-matrix.md` | requirement ↔ gap ↔ task, plus the R1–R12 reconciliation → task map. |
-| `tasks/NN-<slug>.md` | One self-contained, dependency-ordered implementation task per file, sized for a single ~80k-token agent window. |
+| File                     | Purpose                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `README.md`              | This index + reading order.                                                                                                                                         |
+| `gap-analysis.md`        | Per-requirement verdict table (Conforms/Partial/Missing/Contradicts) with `path:line` citations and an **OPEN QUESTIONS** section. Conforming rows produce no task. |
+| `implementation-plan.md` | The ordered task index (`NN`, title, goal, deps, priority, parity impact) + critical path.                                                                          |
+| `traceability-matrix.md` | requirement ↔ gap ↔ task, plus the R1–R12 reconciliation → task map.                                                                                                |
+| `tasks/NN-<slug>.md`     | One self-contained, dependency-ordered implementation task per file, sized for a single ~80k-token agent window.                                                    |
 
 ## Reading order
 
@@ -26,7 +26,7 @@ It is **analysis + an ordered task plan only** — no code was changed producing
 The **backtest** (`src/backtesting/**`) and **live** (`src/execution/**`) engines are two independent implementations with **no shared code and no shared canonical schema**, contradicting globals §11.2.1. Parity is held only by this spec, so **backtest↔live parity is the central risk surface**. Findings in one sentence:
 
 - **Live engine:** broadly conformant. Main breaks: S4.1a ladder implements the pre-R11 lifecycle (structurally can't catch the drop), `exit_reason` enum names differ from §12.1, S6 threshold key is the legacy `funding_threshold` (R6), and several per-exchange guards drift (stagger, 60s stale, S6 sort).
-- **Backtest engine:** systematically **optimistic** — no injected latency, no market slippage, a naïve `T_drop` detector (not §3.1) whose fallback is anti-conservative, the lookahead guard is dead code, 4.* strategies book funding (R7 violation), S4.1a/4.2a place protective orders after fills (R11 violation), the terminal-state enum is the pre-R12 vocabulary, and **S1-WS does not exist**.
+- **Backtest engine:** systematically **optimistic** — no injected latency, no market slippage, a naïve `T_drop` detector (not §3.1) whose fallback is anti-conservative, the lookahead guard is dead code, 4.\* strategies book funding (R7 violation), S4.1a/4.2a place protective orders after fills (R11 violation), the terminal-state enum is the pre-R12 vocabulary, and **S1-WS does not exist**.
 - **Config:** no canonical source; live zod is nearly bound-free; no `unit_suspect_fraction` guard (a live YAML carries `takeProfitPct: 0.003`); some live YAMLs are written in the wrong schema shape and parse to a zero-strategy engine.
 
 ## Execution rules for the downstream agent

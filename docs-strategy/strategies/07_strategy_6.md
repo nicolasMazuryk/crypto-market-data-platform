@@ -66,8 +66,8 @@ AT T_settle − entryOffsetSeconds:
 
 **Funding attribution.** At `T_settle` the only open position is PRE_FUNDING (wrong direction) → it accrues the funding **cost** on all six venues; MAIN, filled after the event, accrues none this cycle. The FIFO caveat (`00_globals.md` §5.4) governs ledger attribution after the reversal:
 
-| Exchange | Attribution of the settlement to legs after reversal | Confidence |
-|---|---|---|
+| Exchange                                     | Attribution of the settlement to legs after reversal                                                                                                                                                                                          | Confidence           |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | Binance, Bybit, OKX, Gate.io, KuCoin, Bitget | Economic charge lands on the pre-existing (PRE_FUNDING) leg; per-venue ledger labeling **to be confirmed from venue docs/income statements during the canary phase** — the spec's conservative default books the full charge to `FUNDING_PRE` | default-conservative |
 
 ## 3. Exit policy & terminal states
@@ -76,14 +76,14 @@ AT T_settle − entryOffsetSeconds:
 
 **Error-code taxonomy (entry state machine — the most elaborate in the fleet):**
 
-| `error_code` | Meaning | Position outcome |
-|---|---|---|
-| `pre_funding_order_failed` | PRE_FUNDING submission threw | none |
-| `pre_funding_order_rejected` | exchange rejected PRE_FUNDING | none |
-| `pre_funding_not_filled` | WS event arrived but PRE_FUNDING never filled — MAIN not sent | none (abort close if partial) |
-| `funding_event_timeout` | no `ws.funding_fee` within timeout; PRE_FUNDING closed at small loss | flattened |
-| `main_order_failed` / `main_order_rejected` | MAIN submission threw / rejected | PRE_FUNDING flattened via abort ladder |
-| `close_pre_funding_failed` | abort could not flatten PRE_FUNDING after all 3 retries | **orphan risk** — ops alert; orphan auto-flatten (`00_globals.md` §7.3) is the backstop |
+| `error_code`                                | Meaning                                                              | Position outcome                                                                        |
+| ------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `pre_funding_order_failed`                  | PRE_FUNDING submission threw                                         | none                                                                                    |
+| `pre_funding_order_rejected`                | exchange rejected PRE_FUNDING                                        | none                                                                                    |
+| `pre_funding_not_filled`                    | WS event arrived but PRE_FUNDING never filled — MAIN not sent        | none (abort close if partial)                                                           |
+| `funding_event_timeout`                     | no `ws.funding_fee` within timeout; PRE_FUNDING closed at small loss | flattened                                                                               |
+| `main_order_failed` / `main_order_rejected` | MAIN submission threw / rejected                                     | PRE_FUNDING flattened via abort ladder                                                  |
+| `close_pre_funding_failed`                  | abort could not flatten PRE_FUNDING after all 3 retries              | **orphan risk** — ops alert; orphan auto-flatten (`00_globals.md` §7.3) is the backstop |
 
 ## 4. P&L decomposition & profit condition
 
@@ -97,24 +97,24 @@ FEES              = takerFeePct × 2 (PRE_FUNDING entry + MAIN entry)
 NET_PNL           = MAIN_DELTA + PRE_FUNDING_DELTA + FUNDING_PRE − FEES
 ```
 
-**Profit condition:** `MAIN_DELTA > |PRE_FUNDING_DELTA| + |FUNDING_PRE| + FEES`. `FUNDING_PRE` is minimized by construction (smallest feasible PRE_FUNDING size); with `mainAmountUsd = 10` and a min-notional PRE leg of ~5 USD on many venues, the PRE overhead is *not* negligible relative to notional — the spec flags that S6's economics improve directly with `mainAmountUsd`, and the canary protocol (§6.2) must measure realized PRE overhead in bp of net notional. MAIN, filled after the event, receives no funding this cycle.
+**Profit condition:** `MAIN_DELTA > |PRE_FUNDING_DELTA| + |FUNDING_PRE| + FEES`. `FUNDING_PRE` is minimized by construction (smallest feasible PRE_FUNDING size); with `mainAmountUsd = 10` and a min-notional PRE leg of ~5 USD on many venues, the PRE overhead is _not_ negligible relative to notional — the spec flags that S6's economics improve directly with `mainAmountUsd`, and the canary protocol (§6.2) must measure realized PRE overhead in bp of net notional. MAIN, filled after the event, receives no funding this cycle.
 
 **Key risks (binding list):** WS event miss (→ timeout, small PRE loss); PRE_FUNDING funding cost; MAIN slippage into thin post-event liquidity (MAIN is a market order fired into the spike); once-only lock failure would double-fire MAIN (lock is therefore normative, not advisory); `close_pre_funding_failed` orphan.
 
 ## 5. Parameterization & schema parity
 
-| Doc var | Backtest key | Live key | Unit | Proposed | Schema default | Notes |
-|---|---|---|---|---|---|---|
-| `main_side` | `main_side` | `mainSide` | enum `long|short` | **long** | *(required)* | |
-| `F_threshold_s6` | `funding_threshold_percent` | `fundingThresholdPercent` — **legacy engine key `funding_threshold` accepted as alias for one migration cycle, warn on use (R6)** | percent, **signed** (any sign; 0 = always-on) | **+0.1** | 0 | independent of `mainSide` |
-| `entry_offset_seconds` | `entry_offset_seconds` | `entryOffsetSeconds` | seconds | **3** | 10 | PRE_FUNDING placement |
-| `ws_timeout` | `funding_fee_timeout_seconds` | `fundingFeeTimeoutSeconds` | seconds | **10** (**OKX: 45**) | 30 | abort trigger |
-| `TP_mult_6` | `tp_multiplier` | `tpMultiplier` | multiplier on `|F|` | **1.5** | 0.5 | computed at MAIN fill from settled rate |
-| `sl_mult` | `sl_multiplier` | `slMultiplier` | multiplier on `|F|` | **1.5** | 1.0 | bound 0.5–4.0 |
-| `T_deadline` | `deadline_seconds` | `deadlineSeconds` | seconds | **1800** | 3300 | bound 10–3600 (R3; note 3300 ≤ 3600 ✓) |
-| — | `main_amount_usd` | `mainAmountUsd` | USD | **10** | *(required)* | see PRE-overhead remark §4 |
-| — | `leverage` | `leverage` | int | **5** | *(required)* | |
-| — | *(derived)* | `preFundingVolume` | qty | min lot / min-notional qty | *(not configurable)* | derived at trigger and re-checked at submission |
+| Doc var                | Backtest key                  | Live key                                                                                                                          | Unit                                          | Proposed                   | Schema default       | Notes                                           |
+| ---------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------- | -------------------- | ----------------------------------------------- | --- | --------------------------------------- |
+| `main_side`            | `main_side`                   | `mainSide`                                                                                                                        | enum `long                                    | short`                     | **long**             | _(required)_                                    |     |
+| `F_threshold_s6`       | `funding_threshold_percent`   | `fundingThresholdPercent` — **legacy engine key `funding_threshold` accepted as alias for one migration cycle, warn on use (R6)** | percent, **signed** (any sign; 0 = always-on) | **+0.1**                   | 0                    | independent of `mainSide`                       |
+| `entry_offset_seconds` | `entry_offset_seconds`        | `entryOffsetSeconds`                                                                                                              | seconds                                       | **3**                      | 10                   | PRE_FUNDING placement                           |
+| `ws_timeout`           | `funding_fee_timeout_seconds` | `fundingFeeTimeoutSeconds`                                                                                                        | seconds                                       | **10** (**OKX: 45**)       | 30                   | abort trigger                                   |
+| `TP_mult_6`            | `tp_multiplier`               | `tpMultiplier`                                                                                                                    | multiplier on `                               | F                          | `                    | **1.5**                                         | 0.5 | computed at MAIN fill from settled rate |
+| `sl_mult`              | `sl_multiplier`               | `slMultiplier`                                                                                                                    | multiplier on `                               | F                          | `                    | **1.5**                                         | 1.0 | bound 0.5–4.0                           |
+| `T_deadline`           | `deadline_seconds`            | `deadlineSeconds`                                                                                                                 | seconds                                       | **1800**                   | 3300                 | bound 10–3600 (R3; note 3300 ≤ 3600 ✓)          |
+| —                      | `main_amount_usd`             | `mainAmountUsd`                                                                                                                   | USD                                           | **10**                     | _(required)_         | see PRE-overhead remark §4                      |
+| —                      | `leverage`                    | `leverage`                                                                                                                        | int                                           | **5**                      | _(required)_         |                                                 |
+| —                      | _(derived)_                   | `preFundingVolume`                                                                                                                | qty                                           | min lot / min-notional qty | _(not configurable)_ | derived at trigger and re-checked at submission |
 
 Backtest keys are listed for schema completeness (single source of truth, `00_globals.md` §11.2) even though no backtest consumes them — the canonical schema still validates S6 configs.
 
@@ -124,7 +124,7 @@ Backtest keys are listed for schema completeness (single source of truth, `00_gl
 
 Two independent blockers, either sufficient:
 
-1. **Causal gating on a private event.** The MAIN entry fires on `ws.funding_fee`, an event that arrives only because the PRE_FUNDING position exists on the private stream. Historical data contains neither the stream nor a per-account event-latency distribution; `T_drop` localization recovers the *market* shadow of settlement, not the *account-level* event timing that gates MAIN.
+1. **Causal gating on a private event.** The MAIN entry fires on `ws.funding_fee`, an event that arrives only because the PRE_FUNDING position exists on the private stream. Historical data contains neither the stream nor a per-account event-latency distribution; `T_drop` localization recovers the _market_ shadow of settlement, not the _account-level_ event timing that gates MAIN.
 2. **Fill inside the forbidden candle.** MAIN is a market order fired into `drop_candle` (or the spike candle for positive-funding events). `00_globals.md` §5.5.2 forbids resolving the intra-candle sequence "event → order → fill"; simulating MAIN at `drop_candle + 1` prices would assert an execution quality (post-spike fill) that live does not have, and any intra-candle price assumption is unverifiable in both directions.
 
 No conservative treatment exists that is both honest and informative — a simulation pessimistic enough to be safe (worst price of `drop_candle`) is uninformative about the real edge. Therefore: **not backtested at all**, per `00_globals.md` §Inventory.
@@ -137,11 +137,11 @@ No conservative treatment exists that is both honest and informative — a simul
 
 ### Parity ledger — Strategy 6
 
-| Behavior | Treatment |
-|---|---|
-| Entire entry path (PRE_FUNDING, WS event gate, MAIN) | **Not backtestable** — §6.1; substitute protocol §6.2 |
-| TP/SL/deadline exit management | **Not backtested** (no simulated entry to manage); state machine validated in shadow/canary |
-| REST `getPositions()` net-qty confirm | **Normative live behavior** (formerly `GETPOSITIONS_POST_MAIN_FILL` divergence, now spec §2.4) |
-| Abort ladder (3 retries, backoff, REST ground truth) | Validated in canary; `close_pre_funding_failed` is a halt condition |
-| Funding attribution per venue | Default-conservative booking to `FUNDING_PRE`; audited in canary (§6.2.d) |
-| Kill switch / sweeps | Operational, as fleet-wide |
+| Behavior                                             | Treatment                                                                                      |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Entire entry path (PRE_FUNDING, WS event gate, MAIN) | **Not backtestable** — §6.1; substitute protocol §6.2                                          |
+| TP/SL/deadline exit management                       | **Not backtested** (no simulated entry to manage); state machine validated in shadow/canary    |
+| REST `getPositions()` net-qty confirm                | **Normative live behavior** (formerly `GETPOSITIONS_POST_MAIN_FILL` divergence, now spec §2.4) |
+| Abort ladder (3 retries, backoff, REST ground truth) | Validated in canary; `close_pre_funding_failed` is a halt condition                            |
+| Funding attribution per venue                        | Default-conservative booking to `FUNDING_PRE`; audited in canary (§6.2.d)                      |
+| Kill switch / sweeps                                 | Operational, as fleet-wide                                                                     |

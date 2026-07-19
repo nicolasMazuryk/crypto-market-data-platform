@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_1_ws.ts`, `src/execution/execution/mana
 ---
 
 **Bitget-specific notes:**
+
 - WS entry via WS order adapter (requiresWsOrderAdapter=true)
 - Bitget WS 'orders' channel for fill events; timestamps in ms (no conversion needed)
 - Bitget echoes `clientOrderId` in WS fill events → WS routing is primary

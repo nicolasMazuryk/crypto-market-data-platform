@@ -4,17 +4,17 @@ description: "Use this skill when the user wants to 'login/log in/sign in', 'aut
 license: MIT
 metadata:
   author: okx
-  version: "1.3.3"
-  homepage: "https://www.okx.com"
+  version: '1.3.3'
+  homepage: 'https://www.okx.com'
   agent:
     requires:
-      bins: ["okx"]
+      bins: ['okx']
     install:
       - id: npm
         kind: node
-        package: "@okx_ai/okx-trade-cli@1.3.3"
-        bins: ["okx"]
-        label: "Install okx CLI (npm)"
+        package: '@okx_ai/okx-trade-cli@1.3.3'
+        bins: ['okx']
+        label: 'Install okx CLI (npm)'
 ---
 
 # OKX CEX Authentication
@@ -23,13 +23,14 @@ OAuth 2.0 device flow authentication for OKX CLI. Guides first-time setup, re-au
 
 ## Supported Sites
 
-| Site | Region | URL |
-| -------- | ----------------------- | --------------- |
+| Site     | Region | URL           |
+| -------- | ------ | ------------- |
 | `global` | Global | `www.okx.com` |
 | `eea`    | EEA    | `my.okx.com`  |
 | `us`     | US     | `app.okx.com` |
 
 Site is a separate dimension from auth method. Both API-key and OAuth paths require a site. Once selected, a site is persisted:
+
 - **API-key users**: `profile.site` in `~/.okx/config.toml` (written by `okx config init`).
 - **OAuth users**: saved inside the `okx-auth` binary state the first time `okx auth login --site <X>` succeeds, and returned by `okx auth status --json` as the `site` field.
 
@@ -59,6 +60,7 @@ Then apply the following three checks **in strict order** — each step short-ci
 ### Step 0.1 — Site check (independent of auth mode)
 
 A site is considered already selected if **either** is true:
+
 - `config show --json` has any profile with a non-empty `site` field, OR
 - `auth status --json` returns a non-empty `site` field **AND** `status` is `logged_in` or `pending`.
 
@@ -67,9 +69,10 @@ A site is considered already selected if **either** is true:
 If **neither** condition above holds, site has never been chosen. You MUST ask the user to pick one before any login attempt by echoing the following menu verbatim (Chinese), and wait for their reply:
 
 > 您需要选择要连接的 OKX 站点：
-> 1) Global (www.okx.com)
-> 2) EEA (my.okx.com)
-> 3) US (app.okx.com)
+>
+> 1. Global (www.okx.com)
+> 2. EEA (my.okx.com)
+> 3. US (app.okx.com)
 
 Map the reply (`1`/`2`/`3` or `global`/`eea`/`us`) to the corresponding site id and remember it for the rest of this flow. Do NOT default to `global` silently — that hides the regional choice from the user.
 
@@ -100,11 +103,11 @@ Wait for the user's choice. Do not pick for them.
 
 Use `auth status --json`:
 
-| `status` value  | Action |
-| --------------- | ------ |
+| `status` value  | Action                                                                                                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `logged_in`     | **STOP.** Reply using the success template from [Agent login procedure](#agent-login-procedure) Step 3 `logged_in` branch (site + scopes only; see its negative-list rules), then proceed. |
-| `pending`       | Previous login in progress — follow [Login Flow](#login-flow) wait-for-signal procedure. Do NOT start a new login, do NOT auto-poll. |
-| `not_logged_in` | Proceed to [Login Flow](#login-flow) with the site chosen in Step 0.1. |
+| `pending`       | Previous login in progress — follow [Login Flow](#login-flow) wait-for-signal procedure. Do NOT start a new login, do NOT auto-poll.                                                       |
+| `not_logged_in` | Proceed to [Login Flow](#login-flow) with the site chosen in Step 0.1.                                                                                                                     |
 
 ## Pre-login Gate (MANDATORY — do not run `okx auth login` without this)
 
@@ -117,6 +120,7 @@ Before invoking `okx auth login` (with or without `--manual`), you MUST verify a
 If **any** of the three is false — even if a prior skill's output, `auth status --json` output, or `config show --json` output seems to imply a site — you MUST first post the Step 0.1 menu, wait for the user's reply, then re-check this gate. The `site` field in `auth status --json` when `status` is `not_logged_in` is a placeholder (typically `"global"`) and **does not** satisfy condition 1.
 
 Worked counter-example (anti-pattern):
+
 > Upstream portfolio skill runs `auth status --json`, gets `{"status":"not_logged_in","site":"global"}`, tells you "user is not_logged_in, load okx-cex-auth and log in".
 > ❌ **Wrong:** you read that context, run `okx auth login --manual --site global`, immediately return the OAuth URL and code.
 > ✅ **Right:** you ignore the upstream site value, post the Step 0.1 menu yourself, wait for user's reply, then run `okx auth login --manual --site <user's choice>`.
@@ -243,11 +247,11 @@ Run `okx auth status --json` to check login status. Parse the JSON output:
 }
 ```
 
-| `status` value   | Meaning                        | Action                          |
-| ----------------- | ------------------------------ | ------------------------------- |
-| `logged_in`       | Valid session                  | Proceed                        |
-| `pending`         | Login in progress              | Wait for user to signal completion; do NOT auto-poll |
-| `not_logged_in`   | No active session              | Run `okx auth login --manual`  |
+| `status` value  | Meaning           | Action                                               |
+| --------------- | ----------------- | ---------------------------------------------------- |
+| `logged_in`     | Valid session     | Proceed                                              |
+| `pending`       | Login in progress | Wait for user to signal completion; do NOT auto-poll |
+| `not_logged_in` | No active session | Run `okx auth login --manual`                        |
 
 ## Re-authentication (Session Expired)
 
@@ -305,16 +309,16 @@ If any `okx auth` command (`login`, `logout`, `status`) fails with "Failed to sp
 
 ## Error Reference
 
-| Error message                                 | Cause                                  | Action                                           |
-| --------------------------------------------- | -------------------------------------- | ------------------------------------------------ |
-| `No config found. Run okx config init first.` | No config                              | Run `okx config init`                            |
-| `Session expired — run okx auth login again`  | Refresh token expired                  | Run `okx auth login --manual`                    |
-| `Authorization timed out`                     | User did not authorize in time         | Run `okx auth login --manual` again              |
-| `Access denied`                               | User rejected authorization in browser | Run `okx auth login --manual` and ask to approve |
-| `Region restriction` (51155, 51734)            | Instrument not available in configured site | Check `okx auth status --json` for current site; re-login with `--site` if needed |
-| `Network error` during login                  | Network unavailable                    | Check network and retry                          |
-| `Failed to spawn okx-auth`                    | Binary not installed or corrupted      | Run `okx auth install`                           |
-| `Installation failed: All CDN sources failed` | Network issue during binary download   | Check network and retry `okx auth install`       |
+| Error message                                 | Cause                                       | Action                                                                            |
+| --------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
+| `No config found. Run okx config init first.` | No config                                   | Run `okx config init`                                                             |
+| `Session expired — run okx auth login again`  | Refresh token expired                       | Run `okx auth login --manual`                                                     |
+| `Authorization timed out`                     | User did not authorize in time              | Run `okx auth login --manual` again                                               |
+| `Access denied`                               | User rejected authorization in browser      | Run `okx auth login --manual` and ask to approve                                  |
+| `Region restriction` (51155, 51734)           | Instrument not available in configured site | Check `okx auth status --json` for current site; re-login with `--site` if needed |
+| `Network error` during login                  | Network unavailable                         | Check network and retry                                                           |
+| `Failed to spawn okx-auth`                    | Binary not installed or corrupted           | Run `okx auth install`                                                            |
+| `Installation failed: All CDN sources failed` | Network issue during binary download        | Check network and retry `okx auth install`                                        |
 
 ## Skill Routing
 

@@ -10,8 +10,10 @@ function parseClickHouseDateTime(s: string): Date {
   return new Date(s.replace(' ', 'T') + 'Z')
 }
 
-export async function* streamFundingEvents(config: ChartConfig, client: ClickHouseClient): AsyncGenerator<FundingEvent> {
-
+export async function* streamFundingEvents(
+  config: ChartConfig,
+  client: ClickHouseClient
+): AsyncGenerator<FundingEvent> {
   const conditions: string[] = []
 
   if (config.threshold_mode === 'lte') {
@@ -93,7 +95,7 @@ export async function fetchOrderbookWindow(
   client: ClickHouseClient,
   event: FundingEvent,
   preSec: number,
-  postSec: number,
+  postSec: number
 ): Promise<OrderbookRow[]> {
   const fundingTimeSec = Math.floor(event.funding_time.getTime() / 1000)
   const fromDate = new Date((fundingTimeSec - preSec) * 1000)
@@ -133,7 +135,7 @@ export async function fetchOrderbookWindow(
     ask_close: number | null
   }>()
 
-  return rows.map((r) => ({
+  return rows.map(r => ({
     ts: parseClickHouseDateTime(r.ts),
     bid_open: r.bid_open,
     bid_high: r.bid_high,

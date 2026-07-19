@@ -66,10 +66,7 @@ describe('createBitgetOrderWsAdapter', () => {
   })
 
   it('amendOrder → always returns rejected (not supported on Bitget WS)', async () => {
-    const ack = await adapter.amendOrder(
-      { symbol: 'BTCUSDT', clientOrderId: 'cid-1' },
-      { price: 31000 }
-    )
+    const ack = await adapter.amendOrder({ symbol: 'BTCUSDT', clientOrderId: 'cid-1' }, { price: 31000 })
     expect(ack.status).toBe('rejected')
     expect(ack.rejectReason).toContain('not supported')
   })

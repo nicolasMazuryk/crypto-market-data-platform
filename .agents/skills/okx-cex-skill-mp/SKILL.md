@@ -4,17 +4,17 @@ description: "Use this skill when the user asks to: 'find a trading skill', 'sea
 license: MIT
 metadata:
   author: okx
-  version: "1.3.3"
-  homepage: "https://www.okx.com"
+  version: '1.3.3'
+  homepage: 'https://www.okx.com'
   agent:
     requires:
-      bins: ["okx"]
+      bins: ['okx']
     install:
       - id: npm
         kind: node
-        package: "@okx_ai/okx-trade-cli@1.3.3"
-        bins: ["okx"]
-        label: "Install okx CLI (npm)"
+        package: '@okx_ai/okx-trade-cli@1.3.3'
+        bins: ['okx']
+        label: 'Install okx CLI (npm)'
 ---
 
 # OKX Skills Marketplace
@@ -26,6 +26,7 @@ Browse, search, install, and manage AI trading skills from the OKX Skills Market
 > When a skill is installed via `okx skill add`, it is downloaded from the marketplace and saved locally to your agent's skill directory (e.g., `~/.agents/skills/<skill-name>/`). The skill runs entirely on your local machine with your agent's full permissions — treat it with the same caution as installing any third-party software.
 
 **Skill routing**
+
 - Skill marketplace → `okx-cex-skill-mp` (this skill)
 - Market data / indicators → `okx-cex-market`
 - Account balance / positions → `okx-cex-portfolio`
@@ -61,16 +62,16 @@ Never skip `add` and go straight to `download` unless `add` has already failed.
 
 ## Command Reference
 
-| # | Command | Description |
-|---|---------|-------------|
-| 1 | `okx skill search <keyword>` | Search marketplace by keyword |
-| 2 | `okx skill search --categories <id>` | Filter skills by category |
-| 3 | `okx skill categories` | List all available categories |
-| 4 | `okx skill add <name>` | Download + install to all detected agents |
-| 5 | `okx skill download <name> [--dir <path>] [--format zip\|skill]` | Download package (default format: zip) |
-| 6 | `okx skill list` | List locally installed skills |
-| 7 | `okx skill check <name>` | Check if a newer version is available |
-| 8 | `okx skill remove <name>` | Uninstall a skill |
+| #   | Command                                                          | Description                               |
+| --- | ---------------------------------------------------------------- | ----------------------------------------- |
+| 1   | `okx skill search <keyword>`                                     | Search marketplace by keyword             |
+| 2   | `okx skill search --categories <id>`                             | Filter skills by category                 |
+| 3   | `okx skill categories`                                           | List all available categories             |
+| 4   | `okx skill add <name>`                                           | Download + install to all detected agents |
+| 5   | `okx skill download <name> [--dir <path>] [--format zip\|skill]` | Download package (default format: zip)    |
+| 6   | `okx skill list`                                                 | List locally installed skills             |
+| 7   | `okx skill check <name>`                                         | Check if a newer version is available     |
+| 8   | `okx skill remove <name>`                                        | Uninstall a skill                         |
 
 Add `--json` to any command for raw JSON output. Add `--env` to wrap the output as `{"env", "profile", "data"}`.
 
@@ -85,6 +86,7 @@ okx skill search grid
 ```
 
 Output:
+
 ```
   NAME              VERSION   DESCRIPTION
   grid-premium      1.2.0     Enhanced grid trading with technical analysis
@@ -94,11 +96,13 @@ Output:
 ```
 
 Search with category filter:
+
 ```bash
 okx skill search --categories trading-strategy
 ```
 
 Pagination (response includes `totalPage` for total pages):
+
 ```bash
 okx skill search grid --page 2 --limit 5
 # Output: "3 skills found (page 2/4). Use `okx skill add <name>` to install."
@@ -111,6 +115,7 @@ okx skill categories
 ```
 
 Output:
+
 ```
   ID                  NAME
   trading-strategy    Trading Strategy
@@ -125,6 +130,7 @@ okx skill add grid-premium
 ```
 
 Output:
+
 ```
 Downloading grid-premium...
 Installing to detected agents...
@@ -132,6 +138,7 @@ Installing to detected agents...
 ```
 
 What happens under the hood:
+
 1. Downloads skill zip from OKX marketplace API
 2. Extracts and validates the package (checks SKILL.md exists, reads metadata)
 3. Runs `npx skills add` to install to all locally detected agents
@@ -146,17 +153,20 @@ okx skill download grid-premium --dir ~/Downloads/
 ```
 
 Output:
+
 ```
 ✓ Downloaded grid-premium.zip
   Path: /Users/me/Downloads/grid-premium.zip
 ```
 
 To download as `.skill` format (for agents that recognize the extension):
+
 ```bash
 okx skill download grid-premium --dir ~/Downloads/ --format skill
 ```
 
 The zip contains:
+
 - `SKILL.md` — the skill's main instruction file
 - `_meta.json` — metadata (name, version, title, description)
 - `reference/` — optional supporting documents
@@ -168,6 +178,7 @@ okx skill list
 ```
 
 Output:
+
 ```
   NAME              VERSION   INSTALLED AT
   grid-premium      1.2.0     2026-03-25 10:30:00
@@ -183,6 +194,7 @@ okx skill check grid-premium
 ```
 
 Output:
+
 ```
 grid-premium: installed v1.0.0 → latest v1.2.0 (update available)
   Use `okx skill add grid-premium` to update.
@@ -197,6 +209,7 @@ okx skill remove grid-premium
 ```
 
 Output:
+
 ```
 ✓ Skill "grid-premium" removed
 ```
@@ -207,11 +220,11 @@ Output:
 
 When the CLI is unavailable (e.g., Claude Desktop without terminal access), the same marketplace functionality is available via MCP tools:
 
-| MCP Tool | Equivalent CLI | Description |
-|----------|---------------|-------------|
-| `skills_search` | `okx skill search` | Search by keyword/category. Response includes `totalPage` for pagination. |
-| `skills_get_categories` | `okx skill categories` | List categories |
-| `skills_download` | `okx skill download` | Download package to directory (default format: `.skill`; pass `format: "zip"` for zip) |
+| MCP Tool                | Equivalent CLI         | Description                                                                            |
+| ----------------------- | ---------------------- | -------------------------------------------------------------------------------------- |
+| `skills_search`         | `okx skill search`     | Search by keyword/category. Response includes `totalPage` for pagination.              |
+| `skills_get_categories` | `okx skill categories` | List categories                                                                        |
+| `skills_download`       | `okx skill download`   | Download package to directory (default format: `.skill`; pass `format: "zip"` for zip) |
 
 Note: MCP tools only support search and download. The full install flow (`add`) requires CLI access.
 
@@ -219,10 +232,10 @@ Note: MCP tools only support search and download. The full install flow (`add`) 
 
 ## Error Handling
 
-| Error | Meaning | Action |
-|-------|---------|--------|
-| `70002 SKILL_DELETED` | Skill has been removed from marketplace | Choose a different skill |
-| `70003 NO_APPROVED_VERSION` | No approved version available | Skill is pending review, try later |
-| `70030 VERSION_NOT_APPROVED` | Version not yet approved for download | Wait for review or use an older version |
-| `50111/50112/50113` | Authentication error | Run `okx config init` to set up credentials |
-| `npx skills add` fails | npx not available or network issue | Use `okx skill download` instead, then manually install |
+| Error                        | Meaning                                 | Action                                                  |
+| ---------------------------- | --------------------------------------- | ------------------------------------------------------- |
+| `70002 SKILL_DELETED`        | Skill has been removed from marketplace | Choose a different skill                                |
+| `70003 NO_APPROVED_VERSION`  | No approved version available           | Skill is pending review, try later                      |
+| `70030 VERSION_NOT_APPROVED` | Version not yet approved for download   | Wait for review or use an older version                 |
+| `50111/50112/50113`          | Authentication error                    | Run `okx config init` to set up credentials             |
+| `npx skills add` fails       | npx not available or network issue      | Use `okx skill download` instead, then manually install |

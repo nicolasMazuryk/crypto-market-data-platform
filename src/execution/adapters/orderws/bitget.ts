@@ -12,7 +12,11 @@ export interface BitgetOrderWsAdapterOptions {
 function withTimeout<T>(p: Promise<T>): Promise<T> {
   return Promise.race([
     p,
-    new Promise<never>((_, reject) => setTimeout(() => { reject(new Error('WS_TIMEOUT')); }, ACK_TIMEOUT_MS)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        reject(new Error('WS_TIMEOUT'))
+      }, ACK_TIMEOUT_MS)
+    ),
   ])
 }
 
@@ -103,10 +107,7 @@ export function createBitgetOrderWsAdapter(opts: BitgetOrderWsAdapterOptions): E
     },
 
     // Bitget v3 WS API does not expose an amend-order channel; cancel+replace is required
-    amendOrder(
-      ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>,
-      _patch: OrderAmendPatch
-    ): Promise<OrderAck> {
+    amendOrder(ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>, _patch: OrderAmendPatch): Promise<OrderAck> {
       void ref
       return Promise.resolve(rejectAck(ref.clientOrderId, new Error('amendOrder not supported via Bitget WS')))
     },

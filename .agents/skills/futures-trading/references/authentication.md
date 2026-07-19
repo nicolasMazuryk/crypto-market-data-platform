@@ -4,13 +4,13 @@ KuCoin uses HMAC-SHA256 to authenticate private API requests. Every authenticate
 
 ## Required Headers
 
-| Header | Description |
-|--------|-------------|
-| `KC-API-KEY` | Your API key obtained from the KuCoin console. |
-| `KC-API-SIGN` | Base64-encoded HMAC-SHA256 signature of the prehash string, using your API secret as the key. |
-| `KC-API-TIMESTAMP` | Request timestamp in **milliseconds** since Unix epoch. Must be within 5 seconds of server time. |
-| `KC-API-PASSPHRASE` | The passphrase you set when creating the API key. For API key version 2, this must be Base64-encoded HMAC-SHA256 of the raw passphrase using the API secret. |
-| `KC-API-KEY-VERSION` | API key version. Use `"2"` for the latest version (recommended). Version 2 requires the passphrase to be signed. |
+| Header               | Description                                                                                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `KC-API-KEY`         | Your API key obtained from the KuCoin console.                                                                                                               |
+| `KC-API-SIGN`        | Base64-encoded HMAC-SHA256 signature of the prehash string, using your API secret as the key.                                                                |
+| `KC-API-TIMESTAMP`   | Request timestamp in **milliseconds** since Unix epoch. Must be within 5 seconds of server time.                                                             |
+| `KC-API-PASSPHRASE`  | The passphrase you set when creating the API key. For API key version 2, this must be Base64-encoded HMAC-SHA256 of the raw passphrase using the API secret. |
+| `KC-API-KEY-VERSION` | API key version. Use `"2"` for the latest version (recommended). Version 2 requires the passphrase to be signed.                                             |
 
 ## Signature Construction
 
@@ -22,26 +22,29 @@ The prehash string is constructed by concatenating the following components **wi
 prehash = timestamp + method + endpoint + body
 ```
 
-| Component | Description | Example |
-|-----------|-------------|---------|
-| `timestamp` | Same value as `KC-API-TIMESTAMP` (milliseconds) | `1721969436000` |
-| `method` | HTTP method in **UPPERCASE** | `GET`, `POST`, `DELETE` |
-| `endpoint` | Request path including query string (no host) | `/api/v1/orders?symbol=XBTUSDTM` |
-| `body` | JSON request body as a string. Empty string `""` for GET/DELETE requests with no body. | `{"symbol":"XBTUSDTM","side":"buy","type":"market","size":1,"leverage":"10"}` |
+| Component   | Description                                                                            | Example                                                                       |
+| ----------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `timestamp` | Same value as `KC-API-TIMESTAMP` (milliseconds)                                        | `1721969436000`                                                               |
+| `method`    | HTTP method in **UPPERCASE**                                                           | `GET`, `POST`, `DELETE`                                                       |
+| `endpoint`  | Request path including query string (no host)                                          | `/api/v1/orders?symbol=XBTUSDTM`                                              |
+| `body`      | JSON request body as a string. Empty string `""` for GET/DELETE requests with no body. | `{"symbol":"XBTUSDTM","side":"buy","type":"market","size":1,"leverage":"10"}` |
 
 **Examples of prehash strings:**
 
 GET request:
+
 ```
 1721969436000GET/api/v1/orders?symbol=XBTUSDTM
 ```
 
 POST request:
+
 ```
 1721969436000POST/api/v1/orders{"clientOid":"agent-abc123","symbol":"XBTUSDTM","side":"buy","type":"market","size":1,"leverage":"10"}
 ```
 
 DELETE request:
+
 ```
 1721969436000DELETE/api/v1/orders/5c35c02703aa673ceec2a168
 ```
@@ -78,9 +81,9 @@ KC-API-KEY-VERSION: 2
 
 ## Base URLs
 
-| API | Base URL |
-|-----|----------|
-| Spot / Pro API | `https://api.kucoin.com` |
+| API                 | Base URL                         |
+| ------------------- | -------------------------------- |
+| Spot / Pro API      | `https://api.kucoin.com`         |
 | Classic Futures API | `https://api-futures.kucoin.com` |
 
 ## Code Examples

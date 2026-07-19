@@ -250,3 +250,42 @@ describe('strategy_4_2a live YAMLs (OQ-8 regeneration)', () => {
     }
   )
 })
+
+describe('strategy_1 live YAMLs (Task 06 exitOffsetSeconds >=6 migration)', () => {
+  const EXCHANGES = ['binance', 'bitget', 'bybit', 'gateio', 'kucoin', 'okx']
+
+  it.each(EXCHANGES)(
+    'live-configs/strategies/strategy_1-%s.yaml parses clean with the migrated exitOffsetSeconds',
+    exchange => {
+      const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', `strategy_1-${exchange}.yaml`)
+      const raw = YAML.parse(readFileSync(yamlPath, 'utf8')) as Record<string, unknown>
+
+      const config = parseEngineConfig({ mode: 'dry_run', exchanges: [], ...raw })
+
+      expect(config.strategies.length).toBeGreaterThan(0)
+      expect(config.strategies[0]?.id).toBe('strategy_1')
+      expect(config.strategies[0]?.enabled).toBe(true)
+      expect((config.strategies[0] as { exitOffsetSeconds?: number }).exitOffsetSeconds).toBe(6)
+    }
+  )
+
+  it('rejects exitOffsetSeconds=4 (below the new >=6 bound, R2)', () => {
+    expect(() =>
+      parseEngineConfig({
+        mode: 'dry_run',
+        exchanges: [],
+        strategies: [
+          {
+            id: 'strategy_1',
+            enabled: true,
+            negativeFundingThresholdPercent: -0.1,
+            entryOffsetSeconds: 3,
+            exitOffsetSeconds: 4,
+            amountUsd: 10,
+            leverage: 5,
+          },
+        ],
+      })
+    ).toThrow()
+  })
+})

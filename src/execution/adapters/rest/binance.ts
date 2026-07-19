@@ -20,7 +20,9 @@ const binanceSpec: CcxtAdapterSpec = {
       // If the current mode already matches what we want, this is safe to ignore.
       if (msg.includes('-4067') || msg.includes('Position side cannot be changed')) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const info = await (ccxtEx as any).fapiPrivateGetPositionSideDual?.() as { dualSidePosition: boolean } | undefined
+        const info = (await (ccxtEx as any).fapiPrivateGetPositionSideDual?.()) as
+          | { dualSidePosition: boolean }
+          | undefined
         if (info?.dualSidePosition === hedged) return
       }
       throw err
@@ -38,9 +40,7 @@ const binanceSpec: CcxtAdapterSpec = {
     if (ref.clientOrderId) p.origClientOrderId = ref.clientOrderId
     return p
   },
-  buildFetchOrderParams: (ref: OrderRef) => ref.exchangeOrderId
-    ? {}
-    : { origClientOrderId: ref.clientOrderId ?? '' },
+  buildFetchOrderParams: (ref: OrderRef) => (ref.exchangeOrderId ? {} : { origClientOrderId: ref.clientOrderId ?? '' }),
   buildAmendOrderParams: (ref: Required<Pick<OrderRef, 'symbol' | 'clientOrderId'>>) => ({
     origClientOrderId: ref.clientOrderId,
   }),
@@ -48,15 +48,19 @@ const binanceSpec: CcxtAdapterSpec = {
   buildExtras(ccxtEx: CcxtExchange) {
     return {
       async fetchFundingFeeIncome(symbol: string, fundingTs: number) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const rows: { symbol: string; income: string; asset: string; time: number; incomeType: string }[] = await (ccxtEx as any).fapiPrivateGetIncome({
+        const binanceEx = ccxtEx as unknown as {
+          fapiPrivateGetIncome(
+            params: Record<string, unknown>
+          ): Promise<{ symbol: string; income: string; asset: string; time: number | string; incomeType: string }[]>
+        }
+        const rows = await binanceEx.fapiPrivateGetIncome({
           symbol,
           incomeType: 'FUNDING_FEE',
           startTime: fundingTs - 10_000,
           endTime: fundingTs + 60_000,
           limit: 10,
         })
-        const match = rows?.find(r => r.incomeType === 'FUNDING_FEE')
+        const match = rows.find(r => r.incomeType === 'FUNDING_FEE')
         if (!match) return null
         return {
           symbol: match.symbol,

@@ -28,6 +28,7 @@ Step 3:
 ```
 
 Trading card format:
+
 ```
 Will BTC close above the following prices today? (Expires: 2026-03-20 16:00, 3h 20min remaining)
 
@@ -73,6 +74,7 @@ Step 1 (parallel):
 ```
 
 Analyze the raw OHLCV data and present:
+
 - Overall trend direction (based on recent closes and highs/lows pattern)
 - Short-term momentum (last few candles)
 - Recommended direction: **UP** or **DOWN**
@@ -129,6 +131,7 @@ okx account positions --instType EVENTS
 ```
 
 **Expiry check (MANDATORY before displaying anything):**
+
 - Infer expiry from the instrument ID (`instId`, API field):
   - `price_above` / `price_once_touch`: `YYMMDD-HHMM` → e.g. `260320-1600` = 2026-03-20 16:00 UTC+8
   - `price_up_down`: `YYMMDD-START-END` → expiry is the `END` time
@@ -216,6 +219,7 @@ Step 3: okx event markets <seriesId> --state preopen
 ```
 
 Use `state=preopen` to:
+
 - Warn the user before a contract expires and the next session is preopen
 - Help users plan ahead — they can see upcoming strike levels before trading opens
 - Distinguish from `event_browse`: browse only shows **currently tradeable** contracts; preopen shows **upcoming** contracts that cannot be traded yet

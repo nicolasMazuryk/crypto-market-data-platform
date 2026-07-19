@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
 ---
 
 **GateIO-specific notes:**
+
 - REST limit orders for all rungs (no WS for ladder entry)
 - `futures.orders` WS channel for rung fill events; timestamps in **seconds** (adapter × 1000)
 - `cancelIgnoreCode: 'TEXT_DUPLICATED'` for T_funding cancel of unfilled rungs

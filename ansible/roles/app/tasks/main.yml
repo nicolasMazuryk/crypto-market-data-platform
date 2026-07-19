@@ -18,8 +18,8 @@
       - --exclude=ansible/inventory/hosts.ini
       - -e
       - ssh -i ~/.ssh/nicolas -o StrictHostKeyChecking=no
-      - "{{ playbook_dir }}/../../"
-      - "nicolas@{{ ansible_host }}:{{ repo_dir }}/"
+      - '{{ playbook_dir }}/../../'
+      - 'nicolas@{{ ansible_host }}:{{ repo_dir }}/'
   delegate_to: localhost
   become: false
   changed_when: true
@@ -30,7 +30,7 @@
     state: directory
     owner: nicolas
     group: nicolas
-    mode: "0700"
+    mode: '0700'
 
 - name: Generate GitHub deploy key for future remote pulls
   ansible.builtin.command:
@@ -39,7 +39,7 @@
       - -t
       - ed25519
       - -N
-      - ""
+      - ''
       - -C
       - arbinet-deploy
       - -f
@@ -54,7 +54,7 @@
     state: directory
     owner: nicolas
     group: nicolas
-    mode: "0755"
+    mode: '0755'
 
 - name: Deploy ClickHouse system log TTL config
   ansible.builtin.template:
@@ -62,7 +62,7 @@
     dest: /opt/arbinet/clickhouse-config/system-logs.xml
     owner: nicolas
     group: nicolas
-    mode: "0644"
+    mode: '0644'
 
 - name: Deploy ClickHouse network bind config
   ansible.builtin.template:
@@ -70,23 +70,23 @@
     dest: /opt/arbinet/clickhouse-config/network.xml
     owner: nicolas
     group: nicolas
-    mode: "0644"
+    mode: '0644'
 
 - name: Template docker-compose.prod.yml
   ansible.builtin.template:
     src: docker-compose.prod.yml.j2
-    dest: "{{ docker_compose_file }}"
+    dest: '{{ docker_compose_file }}'
     owner: nicolas
     group: nicolas
-    mode: "0644"
+    mode: '0644'
 
 - name: Template production environment file
   ansible.builtin.template:
     src: env.prod.j2
-    dest: "{{ app_dir }}/.env"
+    dest: '{{ app_dir }}/.env'
     owner: nicolas
     group: nicolas
-    mode: "0600"
+    mode: '0600'
 
 - name: Build application image
   ansible.builtin.command:
@@ -100,7 +100,7 @@
 
 - name: Wait for ClickHouse to become healthy
   ansible.builtin.uri:
-    url: "http://localhost:{{ clickhouse_http_port }}/ping"
+    url: 'http://localhost:{{ clickhouse_http_port }}/ping'
     return_content: true
   register: clickhouse_healthcheck
   until: clickhouse_healthcheck.status == 200

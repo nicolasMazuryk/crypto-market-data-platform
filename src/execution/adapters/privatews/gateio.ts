@@ -17,16 +17,16 @@ export function createGateioPrivateWsAdapter(opts: GateioPrivateWsAdapterOptions
   const parseMessage = createGateioMessageParser()
   const spec: PrivateWsAdapterSpec = {
     exchange: 'gateio',
-    createClient: opts.wsClientFactory
-      ? opts.wsClientFactory
-      : (config: ExchangeConfig & { credentials?: ExchangeCredentials }) => {
-          const clientOpts: GateioWsClientOptions = {}
-          if (config.credentials) {
-            clientOpts.credentials = { apiKey: config.credentials.apiKey, apiSecret: config.credentials.apiSecret }
-          }
-          if (config.privateWsUrl) clientOpts.wsBaseUrl = config.privateWsUrl
-          return createGateioWsClient(clientOpts)
-        },
+    createClient:
+      opts.wsClientFactory ??
+      ((config: ExchangeConfig & { credentials?: ExchangeCredentials }) => {
+        const clientOpts: GateioWsClientOptions = {}
+        if (config.credentials) {
+          clientOpts.credentials = { apiKey: config.credentials.apiKey, apiSecret: config.credentials.apiSecret }
+        }
+        if (config.privateWsUrl) clientOpts.wsBaseUrl = config.privateWsUrl
+        return createGateioWsClient(clientOpts)
+      }),
     parseMessage: (raw, receivedAt, seq) => parseMessage(raw, receivedAt, seq),
   }
   return createPrivateWsAdapterFromSpec(spec, opts)

@@ -106,8 +106,12 @@ export function parseBybitMessage(
         filledQty: parseFloat(d.cumExecQty ?? '0'),
         reduceOnly: d.reduceOnly ?? false,
         status: mapBybitOrderStatus(d.orderStatus),
-        submittedAt: d.createdTime ? (v => v > 9_999_999_999_999 ? Math.floor(v / 1000) : v)(parseInt(d.createdTime, 10)) : receivedAt,
-        updatedAt: d.updatedTime ? (v => v > 9_999_999_999_999 ? Math.floor(v / 1000) : v)(parseInt(d.updatedTime, 10)) : receivedAt,
+        submittedAt: d.createdTime
+          ? (v => (v > 9_999_999_999_999 ? Math.floor(v / 1000) : v))(parseInt(d.createdTime, 10))
+          : receivedAt,
+        updatedAt: d.updatedTime
+          ? (v => (v > 9_999_999_999_999 ? Math.floor(v / 1000) : v))(parseInt(d.updatedTime, 10))
+          : receivedAt,
       }
       const px = parseFloat(d.price ?? '0')
       if (px > 0) order.price = px
@@ -152,7 +156,15 @@ export function parseBybitMessage(
     for (const item of items) {
       const d = item as BybitExecutionData
       if (process.env.BYBIT_EXEC_DEBUG === '1') {
-        process.stdout.write(JSON.stringify({ _debug: 'bybit.execution', symbol: d.symbol, execType: d.execType, execTime: d.execTime, execFee: d.execFee }) + '\n')
+        process.stdout.write(
+          JSON.stringify({
+            _debug: 'bybit.execution',
+            symbol: d.symbol,
+            execType: d.execType,
+            execTime: d.execTime,
+            execFee: d.execFee,
+          }) + '\n'
+        )
       }
       if (d.execType === 'Funding') {
         const fundingTime = d.execTime ? parseInt(d.execTime, 10) : receivedAt
@@ -169,13 +181,13 @@ export function parseBybitMessage(
           positionQty,
           receivedAt,
         })
-      } else if (
-        ['Trade', 'AdlTrade', 'BustTrade', 'Settle'].includes(d.execType) &&
-        d.execId
-      ) {
+      } else if (['Trade', 'AdlTrade', 'BustTrade', 'Settle'].includes(d.execType) && d.execId) {
         if (!d.orderLinkId) {
           if (process.env.BYBIT_EXEC_DEBUG === '1') {
-            process.stdout.write(JSON.stringify({ _debug: 'bybit.execution.skipped_no_link_id', symbol: d.symbol, execId: d.execId }) + '\n')
+            process.stdout.write(
+              JSON.stringify({ _debug: 'bybit.execution.skipped_no_link_id', symbol: d.symbol, execId: d.execId }) +
+                '\n'
+            )
           }
           continue
         }

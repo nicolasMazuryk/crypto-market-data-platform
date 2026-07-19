@@ -55,42 +55,47 @@ other absolute path outside the worktree
 Proposals outside any of these ranges will be rejected by the loader. Do not propose values outside these ranges, ever. Each param is listed under the strategy/strategies that use it — do not edit params your strategy does not own.
 
 ### strategy_1 (LONG — instant exit)
-- `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `exit_offset_seconds`:  >= 2       AND <= 5        ← **integer only** (2, 3, 4, or 5 — no decimals)
+
+- `funding_threshold`: >= 0.001 AND <= 0.015
+- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
+- `exit_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, or 5 — no decimals)
 
 ### strategy_2 (LONG — retracement exit)
-- `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `retracement_pct`:      >= 0.20    AND <= 2.00
-- `deadline_seconds`:     >= 5      AND <= 900       ← **integer only** (no decimals)
-- `sl_mult`:              >= 0.50     AND <= 4.0    ← SL at entry × (1 − F × mult)
+
+- `funding_threshold`: >= 0.001 AND <= 0.015
+- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
+- `retracement_pct`: >= 0.20 AND <= 2.00
+- `deadline_seconds`: >= 5 AND <= 900 ← **integer only** (no decimals)
+- `sl_mult`: >= 0.50 AND <= 4.0 ← SL at entry × (1 − F × mult)
 
 ### strategy_3a (SHORT — ride the drop)
-- `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `stop_loss`:            >= 0.002   AND <= 0.040
-- `tp_multiplier`:        >= 1.2     AND <= 5.0    ← TP_a = F × multiplier; values < 1 target less than the funding; only active in mode A
-- `tp_addend_pct`:        >= 0.1     AND <= 4.0   ← TP_b = F + addend_pct/100; only active in mode B
-- `deadline_seconds`:     >= 3      AND <= 900       ← **integer only** (no decimals)
+
+- `funding_threshold`: >= 0.001 AND <= 0.015
+- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
+- `stop_loss`: >= 0.002 AND <= 0.040
+- `tp_multiplier`: >= 1.2 AND <= 5.0 ← TP_a = F × multiplier; values < 1 target less than the funding; only active in mode A
+- `tp_addend_pct`: >= 0.1 AND <= 4.0 ← TP_b = F + addend_pct/100; only active in mode B
+- `deadline_seconds`: >= 3 AND <= 900 ← **integer only** (no decimals)
 
 ### strategy_4_1a (LONG — ladder limit)
-- `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `ladder_count`:         >= 2       AND <= 8        ← **integer only** (2, 3, 4, 5, 6, 7, or 8 — no decimals)
-- `ladder_top_mult`:      >= 0.3     AND <= 2.5
-- `ladder_bottom_mult`:   >= 0.8     AND <= 4.0
-- `take_profit`:          >= 0.001   AND <= 0.020
-- `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
-- `sl_mult`:              >= 1.0     AND <= 5.0    ← SL at P_avg × (1 − F × mult)
+
+- `funding_threshold`: >= 0.001 AND <= 0.015
+- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
+- `ladder_count`: >= 2 AND <= 8 ← **integer only** (2, 3, 4, 5, 6, 7, or 8 — no decimals)
+- `ladder_top_mult`: >= 0.3 AND <= 2.5
+- `ladder_bottom_mult`: >= 0.8 AND <= 4.0
+- `take_profit`: >= 0.001 AND <= 0.020
+- `deadline_seconds`: >= 10 AND <= 900 ← **integer only** (no decimals)
+- `sl_mult`: >= 1.0 AND <= 5.0 ← SL at P_avg × (1 − F × mult)
 
 ### strategy_4_2a (LONG — single limit)
-- `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `limit_offset_mult`:    >= 0.3     AND <= 3.0    ← entry at P × (1 − F × mult); default is 1.0
-- `take_profit`:          >= 0.001   AND <= 0.020
-- `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
-- `sl_mult`:              >= 0.6     AND <= 4.0    ← SL at entry × (1 − F × mult); MUST be > limit_offset_mult
+
+- `funding_threshold`: >= 0.001 AND <= 0.015
+- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
+- `limit_offset_mult`: >= 0.3 AND <= 3.0 ← entry at P × (1 − F × mult); default is 1.0
+- `take_profit`: >= 0.001 AND <= 0.020
+- `deadline_seconds`: >= 10 AND <= 900 ← **integer only** (no decimals)
+- `sl_mult`: >= 0.6 AND <= 4.0 ← SL at entry × (1 − F × mult); MUST be > limit_offset_mult
 
 ## Coupling rules
 
@@ -136,7 +141,7 @@ not useful; resist the urge to draft them.
    ```json
    {
      "rationale": "...the hypothesis you're testing, what you're changing now and why...",
-     "summary":   "one-line diff summary, used as the TSV description"
+     "summary": "one-line diff summary, used as the TSV description"
    }
    ```
 
@@ -149,7 +154,7 @@ not useful; resist the urge to draft them.
      this and rejects (then retries, then errors) if it is missing, empty,
      shorter than 15 chars, or one of the placeholder words `improved`,
      `regressed`, `keep`, `discard`, `updated`, `tweak`, `change`, `n/a`,
-     `none`, `tbd`. A bare status word is *never* an acceptable summary —
+     `none`, `tbd`. A bare status word is _never_ an acceptable summary —
      the row exists to teach the next iteration what was tried, so name the
      parameter and the value.
 
@@ -177,14 +182,14 @@ filesystem before editing — every such call is wasted tokens and time.
    - **Jump magnitudes on the same parameter.** Try a value that is
      multiplicatively (not incrementally) different — e.g. if you've been
      searching `funding_threshold` between 0.30%–0.60%, try `1.0%` or `0.05%`.
-     The point is to *gauge the regime*, not to refine the local minimum.
+     The point is to _gauge the regime_, not to refine the local minimum.
    - **Switch parameters.** Move to a different field — `stop_loss`,
      `tp_multiplier`, `entry_offset_seconds`, etc. — and tune it from scratch.
 
 2. **Parameters are coupled — re-tune after every change.** The optimum of one
    parameter depends on the values of the others. If you found
    `funding_threshold = 0.3%` was best, then changed `tp_multiplier` from 1.5
-   to 2 and improved further, the *original* funding_threshold optimum is no
+   to 2 and improved further, the _original_ funding_threshold optimum is no
    longer trustworthy. After any improvement on parameter B, return to
    parameter A and re-search it under the new B. The general loop:
    - improve A → improve B → re-improve A under new B → re-improve B under

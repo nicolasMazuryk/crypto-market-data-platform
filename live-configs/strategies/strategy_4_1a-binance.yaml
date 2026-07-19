@@ -7,7 +7,7 @@ strategies:
     ladderCount: 5
     ladderTopMult: 0.7
     ladderBottomMult: 1.8
-    takeProfitPct: 0.003
+    takeProfitPct: 0.3
     deadlineSeconds: 1800
     slMultiplier: 2.5
     amountUsd: 10

@@ -75,8 +75,8 @@ export function makeTypedEmitter<T>(): TypedEventEmitter<T> {
 // Binance listenKey TTL is 60 min; we keep-alive at 30 min and rotate the key at 50 min
 // to prevent expiry without ever holding a stale key for a full hour.
 const KEEPALIVE_INTERVAL_MS = 30 * 60 * 1_000
-const ROTATION_INTERVAL_MS  = 50 * 60 * 1_000
-const ROTATION_OVERLAP_MS   = 30 * 1_000
+const ROTATION_INTERVAL_MS = 50 * 60 * 1_000
+const ROTATION_OVERLAP_MS = 30 * 1_000
 
 function httpsRequest(method: 'POST' | 'PUT' | 'DELETE', url: string, apiKey: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -91,8 +91,12 @@ function httpsRequest(method: 'POST' | 'PUT' | 'DELETE', url: string, apiKey: st
     }
     const req = mod.request(options, res => {
       let body = ''
-      res.on('data', (chunk: string) => { body += chunk })
-      res.on('end', () => { resolve(body) })
+      res.on('data', (chunk: string) => {
+        body += chunk
+      })
+      res.on('end', () => {
+        resolve(body)
+      })
     })
     req.on('error', reject)
     req.end()
@@ -112,7 +116,9 @@ async function keepaliveListenKey(restBase: string, apiKey: string, listenKey: s
 
 function deleteListenKey(restBase: string, apiKey: string, listenKey: string): void {
   httpsRequest('DELETE', `${restBase}/fapi/v1/listenKey?listenKey=${encodeURIComponent(listenKey)}`, apiKey).catch(
-    () => {/* best-effort cleanup */}
+    () => {
+      /* best-effort cleanup */
+    }
   )
 }
 
@@ -160,7 +166,9 @@ export function createBinanceWsClient(opts: BinanceWsClientOptions): BinanceWsCl
   function openSocket(listenKey: string): Promise<WebSocket> {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(`${wsBase}/ws/${listenKey}`)
-      ws.once('open', () => { resolve(ws); })
+      ws.once('open', () => {
+        resolve(ws)
+      })
       ws.once('error', reject)
     })
   }
@@ -206,14 +214,20 @@ export function createBinanceWsClient(opts: BinanceWsClientOptions): BinanceWsCl
   }
 
   function clearTimers(): void {
-    if (keepaliveTimer !== null) { clearInterval(keepaliveTimer); keepaliveTimer = null }
-    if (rotationTimer !== null) { clearInterval(rotationTimer); rotationTimer = null }
+    if (keepaliveTimer !== null) {
+      clearInterval(keepaliveTimer)
+      keepaliveTimer = null
+    }
+    if (rotationTimer !== null) {
+      clearInterval(rotationTimer)
+      rotationTimer = null
+    }
   }
 
   return {
     async connect(): Promise<void> {
       disconnected = false
-      if (!apiKey) return  // no-credentials mode (test/mock)
+      if (!apiKey) return // no-credentials mode (test/mock)
 
       activeKey = await createListenKey(restBase, apiKey)
       const ws = await openSocket(activeKey)

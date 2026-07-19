@@ -12,7 +12,11 @@ export interface BinanceOrderWsAdapterOptions {
 function withTimeout<T>(p: Promise<T>): Promise<T> {
   return Promise.race([
     p,
-    new Promise<never>((_, reject) => setTimeout(() => { reject(new Error('WS_TIMEOUT')); }, ACK_TIMEOUT_MS)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        reject(new Error('WS_TIMEOUT'))
+      }, ACK_TIMEOUT_MS)
+    ),
   ])
 }
 

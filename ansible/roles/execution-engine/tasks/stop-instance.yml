@@ -2,23 +2,23 @@
 # Stop and disable a single execution-engine instance.
 # Required variable: combo_id (string, e.g. "strategy_3a-bybit")
 
-- name: "Check if execution-engine@{{ combo_id }} is active"
+- name: 'Check if execution-engine@{{ combo_id }} is active'
   ansible.builtin.command:
-    cmd: "systemctl is-active execution-engine@{{ combo_id }}.service"
+    cmd: 'systemctl is-active execution-engine@{{ combo_id }}.service'
   register: _instance_active
   failed_when: false
   changed_when: false
   check_mode: false
 
-- name: "Stop execution-engine@{{ combo_id }} gracefully (SIGTERM + 30s drain)"
+- name: 'Stop execution-engine@{{ combo_id }} gracefully (SIGTERM + 30s drain)'
   ansible.builtin.systemd:
-    name: "execution-engine@{{ combo_id }}.service"
+    name: 'execution-engine@{{ combo_id }}.service'
     state: stopped
   when: _instance_active.rc == 0
   failed_when: false
 
-- name: "Disable execution-engine@{{ combo_id }}"
+- name: 'Disable execution-engine@{{ combo_id }}'
   ansible.builtin.systemd:
-    name: "execution-engine@{{ combo_id }}.service"
+    name: 'execution-engine@{{ combo_id }}.service'
     enabled: false
   failed_when: false

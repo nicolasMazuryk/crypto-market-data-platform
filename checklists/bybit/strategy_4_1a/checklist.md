@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
 ---
 
 **Bybit-specific notes (CRITICAL):**
+
 - REST limit orders for all rungs (no WS adapter for ladder entry)
 - Bybit WS event timestamps in **microseconds (μs)** → adapter divides by 1000 for ms
 - Bybit echoes `clientOrderId` for limit fills → WS routing works for rung fills

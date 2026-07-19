@@ -61,15 +61,20 @@ export async function openSshTunnel(opts: {
   const proc = spawn(
     'ssh',
     [
-      '-i', sshKey,
-      '-L', `127.0.0.1:${localPort.toString()}:127.0.0.1:${remotePort.toString()}`,
+      '-i',
+      sshKey,
+      '-L',
+      `127.0.0.1:${localPort.toString()}:127.0.0.1:${remotePort.toString()}`,
       '-N',
-      '-o', 'StrictHostKeyChecking=no',
-      '-o', 'ExitOnForwardFailure=yes',
-      '-o', 'ServerAliveInterval=30',
+      '-o',
+      'StrictHostKeyChecking=no',
+      '-o',
+      'ExitOnForwardFailure=yes',
+      '-o',
+      'ServerAliveInterval=30',
       `${sshUser}@${sshHost}`,
     ],
-    { stdio: 'ignore' },
+    { stdio: 'ignore' }
   )
 
   proc.on('error', err => {

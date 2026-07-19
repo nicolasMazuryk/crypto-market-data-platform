@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_3.ts`, `src/execution/execution/manager
 ---
 
 **GateIO-specific notes:**
+
 - REST entry (requiresWsOrderAdapter=false for strategy_3a)
 - `futures.orders` WS channel for fills; timestamps in **seconds** (adapter × 1000)
 - `cancelIgnoreCode: 'TEXT_DUPLICATED'` treated as success for OCO cancels

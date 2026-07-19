@@ -12,7 +12,11 @@ export interface BybitOrderWsAdapterOptions {
 function withTimeout<T>(p: Promise<T>): Promise<T> {
   return Promise.race([
     p,
-    new Promise<never>((_, reject) => setTimeout(() => { reject(new Error('WS_TIMEOUT')); }, ACK_TIMEOUT_MS)),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        reject(new Error('WS_TIMEOUT'))
+      }, ACK_TIMEOUT_MS)
+    ),
   ])
 }
 
@@ -124,7 +128,7 @@ export function createBybitOrderWsAdapter(opts: BybitOrderWsAdapterOptions): Exc
           const retMsg = (response as { retMsg?: string }).retMsg ?? 'amend rejected'
           return rejectAck(ref.clientOrderId, new Error(retMsg))
         }
-         
+
         const data = (response as { data: { orderId: string; orderLinkId: string } }).data
         return {
           clientOrderId: data.orderLinkId,

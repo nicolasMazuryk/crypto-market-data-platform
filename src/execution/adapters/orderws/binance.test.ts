@@ -77,7 +77,11 @@ describe('createBinanceOrderWsAdapter', () => {
     const sdkInst = vi.mocked(WebsocketAPIClient).mock.results[0]?.value as {
       submitNewFuturesOrder: ReturnType<typeof vi.fn>
     }
-    sdkInst.submitNewFuturesOrder.mockReturnValue(new Promise(() => {/* never resolves */}))
+    sdkInst.submitNewFuturesOrder.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      })
+    )
     const ackPromise = adapter.createOrder({
       clientOrderId: 'cid-3',
       symbol: 'BTCUSDT',

@@ -142,7 +142,14 @@ async function main(): Promise<void> {
   unsubs.push(
     bus.on('ws.funding_fee', (event: FundingFeeEvent) => {
       fundingFeeEvents.push(event)
-      log({ event: 'ws.funding_fee', exchange: event.exchange, symbol: event.symbol, fundingAmount: event.fundingAmount, fundingRate: event.fundingRate, at: new Date().toISOString() })
+      log({
+        event: 'ws.funding_fee',
+        exchange: event.exchange,
+        symbol: event.symbol,
+        fundingAmount: event.fundingAmount,
+        fundingRate: event.fundingRate,
+        at: new Date().toISOString(),
+      })
     })
   )
 
@@ -166,7 +173,15 @@ async function main(): Promise<void> {
   unsubs.push(
     bus.on('exit.triggered', event => {
       settledReasons.push({ intentId: event.intentId, reason: event.reason, source: event.source })
-      log({ event: 'exit.triggered', intentId: event.intentId, exchange: event.exchange, symbol: event.symbol, reason: event.reason, source: event.source, at: new Date().toISOString() })
+      log({
+        event: 'exit.triggered',
+        intentId: event.intentId,
+        exchange: event.exchange,
+        symbol: event.symbol,
+        reason: event.reason,
+        source: event.source,
+        at: new Date().toISOString(),
+      })
     })
   )
 
@@ -183,7 +198,10 @@ async function main(): Promise<void> {
         for (const unsub of unsubs) unsub()
         await gracefulShutdown(handle, { drainSeconds: 5 })
       })
-    }) ?? (() => {/* bus may not have this event yet */})
+    }) ??
+      (() => {
+        /* bus may not have this event yet */
+      })
   )
 
   // ─── Hard timeout ──────────────────────────────────────────────────────────
@@ -208,8 +226,12 @@ async function main(): Promise<void> {
     })
   }
 
-  process.on('SIGINT', () => { shutdown('SIGINT'); })
-  process.on('SIGTERM', () => { shutdown('SIGTERM'); })
+  process.on('SIGINT', () => {
+    shutdown('SIGINT')
+  })
+  process.on('SIGTERM', () => {
+    shutdown('SIGTERM')
+  })
 
   // ─── Wait for all intents to exit, then run post-run assertions ────────────
 
@@ -218,7 +240,12 @@ async function main(): Promise<void> {
 
   unsubs.push(
     bus.on('intent.state_changed', (state: IntentState) => {
-      if (state.status === 'monitoring' || state.status === 'submitted' || state.status === 'acked' || state.status === 'working') {
+      if (
+        state.status === 'monitoring' ||
+        state.status === 'submitted' ||
+        state.status === 'acked' ||
+        state.status === 'working'
+      ) {
         activeIntents.add(state.intent.id)
       } else if (state.status === 'exited' || state.status === 'error' || state.status === 'cancelled') {
         activeIntents.delete(state.intent.id)
@@ -257,12 +284,16 @@ async function main(): Promise<void> {
     const failures: string[] = []
 
     if (timeoutExits.length > 0) {
-      failures.push(`${String(timeoutExits.length)} intent(s) exited via funding_fee_timeout (expected ws or rest_poll)`)
+      failures.push(
+        `${String(timeoutExits.length)} intent(s) exited via funding_fee_timeout (expected ws or rest_poll)`
+      )
     }
 
     const goodExits = wsExits.length + restPollExits.length
     if (allFundingFeeExits.length > 0 && goodExits !== allFundingFeeExits.length) {
-      failures.push(`${String(allFundingFeeExits.length - goodExits)} funding_fee exit(s) did not have source=ws or source=rest_poll`)
+      failures.push(
+        `${String(allFundingFeeExits.length - goodExits)} funding_fee exit(s) did not have source=ws or source=rest_poll`
+      )
     }
 
     if (failures.length > 0) {

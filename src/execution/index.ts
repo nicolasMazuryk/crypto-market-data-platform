@@ -416,7 +416,11 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
   // Build WS order adapters (used by strategy_1_ws, strategy_2, strategy_6 for low-latency order placement).
   // connect() is awaited so a broken adapter aborts engine startup rather than silently disabling WS placement.
   const orderWsAdapters = new Map<Exchange, ExchangeOrderWsAdapter>()
-  if (config.strategies.some(s => (s.id === 'strategy_1_ws' || s.id === 'strategy_2' || s.id === 'strategy_6') && s.enabled)) {
+  if (
+    config.strategies.some(
+      s => (s.id === 'strategy_1_ws' || s.id === 'strategy_2' || s.id === 'strategy_6') && s.enabled
+    )
+  ) {
     for (const cfg of config.exchanges.filter(e => e.enabled)) {
       try {
         const adapter = createOrderWsAdapter(cfg)

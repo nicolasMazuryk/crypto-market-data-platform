@@ -4,14 +4,17 @@
 **Deps:** 05 · **Closes:** H2, H9, H10, H12, S4.2a-guard, R2, R3 · **Spec:** `00_globals.md` §11.1, §13-R2/R3
 
 ## Goal
+
 Enforce **every** §11.1 bound (lines 249–265) in **both** loaders, sourced from the canonical registry (Task 05). Violations fail the run. Today the live zod is nearly bound-free and the backtest bounds that exist are **wrong values**.
 
 ## Spec anchors
+
 - `00_globals.md` §11.1 bounds table (lines 249–265).
 - §13-R2 (line 352) — `exit_offset_seconds > 5`, proposed 6; supersedes source `≥2`/live 4.
 - §13-R3 (line 353) — `deadline_seconds` 10–3600; supersedes source 2–180.
 
 ## Files to read
+
 - `00_globals.md` §11.1 (249–265).
 - `src/execution/config/schema.ts:79-171` — current live zod (mostly plain `z.number()`).
 - `src/backtesting/config/loader.ts:283-438` — current backtest `requireIntInRange`/`requirePositiveNumber` calls.
@@ -19,12 +22,14 @@ Enforce **every** §11.1 bound (lines 249–265) in **both** loaders, sourced fr
 - `framework/specs/gap-analysis.md` lines 111, 117–120.
 
 ## Files to edit
+
 - Canonical registry (`src/config/canonical-params.ts` from Task 05) — populate `bounds` per row.
 - `src/execution/config/schema.ts` — bounds emitted into the generated zod (`.min`/`.max`/`.refine`).
 - `src/backtesting/config/loader.ts` — bounds emitted into the generated backtest validator.
 - `live-configs/strategies/strategy_1-*.yaml` — migrate `exitOffsetSeconds: 4` → `6`.
 
 ## The change (numbered)
+
 1. **Fix wrong backtest bounds** (`loader.ts`):
    - `exit_offset_seconds`: currently `requireIntInRange(…, 2, 5, …)` (`loader.ts:298`) — **forbids 6**. Change to **≥ 6** (R2).
    - `deadline_seconds`: currently `5..900` (S2, `loader.ts:309`), `3..900` (S3a, `:329`), `10..900` (S4.1a `:345`, S4.2a `:359`) — change all to **10..3600** (R3).
@@ -43,6 +48,7 @@ Enforce **every** §11.1 bound (lines 249–265) in **both** loaders, sourced fr
 4. **Migrate offending live YAMLs.** `live-configs/strategies/strategy_1-*.yaml:7` carry `exitOffsetSeconds: 4`, which the new ≥6 bound rejects. **Migrate the value to 6** (do not add an alias — 4 is simply now out of bounds per R2).
 
 ## Verification
+
 - Unit test **per bound**: a below-min value and an above-max value each rejected with a clear message; an in-range value accepted. Cover both loaders.
 - Cross-field: `ladder_bottom_mult ≤ ladder_top_mult` rejected (both sides); `sl_multiplier ≤ limit_offset_mult` rejected for S4.2a (both sides).
 - Config-load test: migrated `strategy_1-binance.yaml` (now `exitOffsetSeconds: 6`) loads clean; a fixture with `4` is rejected.
@@ -50,6 +56,7 @@ Enforce **every** §11.1 bound (lines 249–265) in **both** loaders, sourced fr
 - `npm test` + `npm run lint` clean.
 
 ## Notes / blockers / open questions
+
 - Depends on Task 05 — bounds are populated as registry data there and emitted here; do not hand-write range checks in either loader.
 - R2 note (§13-R2): moving S1 to `exitOffsetSeconds: 6` **changes S1's economics** vs the 4 s live history — flag for backtest re-validation (Task 16), but the bound migration is in scope here.
 - The `take_profit_pct` floor (0.05) is shared with Task 07's unit guard — coordinate the error code/message so it reads `unit_suspect_fraction`, not a generic range error.

@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_4_1a.ts`, `src/execution/execution/mana
 ---
 
 **Bitget-specific notes:**
+
 - REST limit orders for all rungs (no WS adapter for ladder entry)
 - Bitget 'orders' WS channel for fill events; timestamps in ms (no conversion)
 - Bitget echoes `clientOrderId` for limit fills → WS routing works for rung fills

@@ -7,19 +7,19 @@
 
 ## Quick Reference
 
-| Goal | Command |
-|------|---------|
-| Normal deploy (dry-run, out of hours) | `npm run deploy -- -e deploy_execution=true` |
-| Promote to live mode | `npm run deploy -- -e deploy_execution=true -e execution_mode=live -e execution_engine_enabled=true` |
-| Deploy with in-hours acknowledgement | add `-e allow_in_hours_deploy=true` |
-| Rollback to previous SHA | `ansible-playbook ansible/playbooks/rollback-execution.yml -e target_sha=<sha>` |
-| Get current running SHA | `ssh server 'cat /opt/arbinet/execution/current/release'` |
-| Validate config locally | `npm run config:validate -- --config config/execution.live.yaml` |
-| Smoke-test alert path | `npm run alerts:test -- --severity page --message "pre-deploy smoke test"` |
-| Tail execution engine logs | `ssh server 'sudo journalctl -u execution-engine@dry-run -f'` |
-| Check engine health | `ssh server 'curl -s http://127.0.0.1:9466/ready'` |
-| Start dry-run manually | `ssh server 'sudo systemctl start execution-engine@dry-run'` |
-| Stop engine gracefully | `ssh server 'sudo systemctl stop execution-engine@dry-run'` |
+| Goal                                  | Command                                                                                              |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Normal deploy (dry-run, out of hours) | `npm run deploy -- -e deploy_execution=true`                                                         |
+| Promote to live mode                  | `npm run deploy -- -e deploy_execution=true -e execution_mode=live -e execution_engine_enabled=true` |
+| Deploy with in-hours acknowledgement  | add `-e allow_in_hours_deploy=true`                                                                  |
+| Rollback to previous SHA              | `ansible-playbook ansible/playbooks/rollback-execution.yml -e target_sha=<sha>`                      |
+| Get current running SHA               | `ssh server 'cat /opt/arbinet/execution/current/release'`                                            |
+| Validate config locally               | `npm run config:validate -- --config config/execution.live.yaml`                                     |
+| Smoke-test alert path                 | `npm run alerts:test -- --severity page --message "pre-deploy smoke test"`                           |
+| Tail execution engine logs            | `ssh server 'sudo journalctl -u execution-engine@dry-run -f'`                                        |
+| Check engine health                   | `ssh server 'curl -s http://127.0.0.1:9466/ready'`                                                   |
+| Start dry-run manually                | `ssh server 'sudo systemctl start execution-engine@dry-run'`                                         |
+| Stop engine gracefully                | `ssh server 'sudo systemctl stop execution-engine@dry-run'`                                          |
 
 ---
 
@@ -27,11 +27,11 @@
 
 Never deploy, restart, or roll back when a funding settlement is imminent. Avoid these UTC windows:
 
-| Window | Duration |
-|--------|----------|
+| Window      | Duration               |
+| ----------- | ---------------------- |
 | 23:55–00:05 | ±5 min around midnight |
-| 07:55–08:05 | ±5 min around 08:00 |
-| 15:55–16:05 | ±5 min around 16:00 |
+| 07:55–08:05 | ±5 min around 08:00    |
+| 15:55–16:05 | ±5 min around 16:00    |
 
 During these windows, open positions may be entering or exiting. Any forced service stop risks leaving orphaned orders on the exchange.
 
@@ -129,6 +129,7 @@ Minimum observation period before advancing: **24 hours with no unhandled alerts
 ### Phase 2 — Promote to live
 
 Only proceed when:
+
 - Dry-run has been running cleanly for ≥ 24 hours post-deploy
 - All pre-flight checklist items are satisfied (see [Pre-flight Checklist](#pre-flight-checklist))
 - A second engineer is available and watching
@@ -242,6 +243,7 @@ npm run deploy -- \
 ```
 
 The playbook will:
+
 1. Check that the live engine is not running (or fail if it is, unless `allow_in_hours_deploy=true`)
 2. Stop the execution engine gracefully (SIGTERM + 30s drain)
 3. Pull latest code from `main`
@@ -264,6 +266,7 @@ ssh -i ~/.ssh/nicolas nicolas@203.0.113.10 \
 ```
 
 Look for these log events in order:
+
 ```
 {"event":"engine.starting","mode":"dry_run",...}
 {"event":"lifecycle.markets_fetched",...}
@@ -273,6 +276,7 @@ Look for these log events in order:
 ```
 
 Check Prometheus metrics are being scraped:
+
 ```bash
 ssh -i ~/.ssh/nicolas nicolas@203.0.113.10 \
   'curl -s http://127.0.0.1:9464/metrics | grep -E "^(execution_|process_)" | head -20'
@@ -291,6 +295,7 @@ npm run deploy -- \
 ```
 
 Verify:
+
 ```bash
 ssh -i ~/.ssh/nicolas nicolas@203.0.113.10 \
   'curl -s http://127.0.0.1:9466/ready && \
@@ -366,6 +371,7 @@ ansible-playbook ansible/playbooks/rollback-execution.yml \
 ```
 
 The playbook will:
+
 1. Verify the release directory and Docker image exist for the target SHA
 2. Stop the current service gracefully (SIGTERM + 30s drain)
 3. Update the `current` symlink to the rollback SHA
@@ -411,6 +417,7 @@ PLAY RECAP: server ok=10 changed=3 failed=0
 ```
 
 If the rollback target image was pruned (docker image gc), rebuild from that SHA:
+
 ```bash
 ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
 cd /opt/arbinet/repo
@@ -418,6 +425,7 @@ git checkout <sha>
 docker build -t arbinet:<sha> .
 git checkout main
 ```
+
 Then re-run the rollback playbook.
 
 ---
@@ -429,6 +437,7 @@ Then re-run the rollback playbook.
 **What it means:** A WebSocket connection to one exchange has been down for more than 30 seconds.
 
 **Immediate steps:**
+
 ```bash
 # Check which exchange is disconnected
 ssh server 'sudo journalctl -u execution-engine@live -n 100 --no-pager | grep broker_disconnect'
@@ -443,11 +452,13 @@ ssh server 'ping -c 5 api.binance.com'
 ```
 
 **If the exchange is having an outage:**
+
 - The engine will keep retrying. Monitor for 5 minutes.
 - If the disconnect persists > 5 minutes and positions are open: consider stopping the engine (`sudo systemctl stop execution-engine@live`) to prevent orders from firing without a price feed.
 - Post status in `#trading-ops`.
 
 **If the network looks healthy but the adapter is stuck:**
+
 ```bash
 # Restart just the engine (graceful — will drain open positions first)
 ssh server 'sudo systemctl restart execution-engine@live'
@@ -462,6 +473,7 @@ ssh server 'sudo systemctl restart execution-engine@live'
 **What it means:** The engine crashed or received an unhandled fatal error. systemd will attempt to restart it.
 
 **Immediate steps:**
+
 ```bash
 # Check exit reason
 ssh server 'sudo journalctl -u execution-engine@live -n 200 --no-pager | tail -50'
@@ -474,12 +486,14 @@ ssh server 'curl -s http://127.0.0.1:9466/ready'
 ```
 
 **If the engine restarted cleanly:**
+
 - Check logs for `recovery.complete` — confirms position state was reconstructed from Postgres.
 - Check for orphaned Postgres WAL entries: `{"event":"wal.replay_count","count":N}` at startup.
 - Monitor for 10 minutes; post status in `#trading-ops`.
 
 **If the engine is crash-looping (systemd StartLimitBurst exceeded):**
 The paging unit `execution-engine-page@live.service` will have already fired. To investigate without auto-restart:
+
 ```bash
 ssh server 'sudo systemctl stop execution-engine@live'
 # Read last 500 lines of logs
@@ -495,6 +509,7 @@ Fix the root cause, then redeploy or rollback. Do not restart manually until you
 **What it means:** The risk engine tripped the kill switch (notional cap or concurrent-intent cap exceeded). Halt mode blocks new orders; it does not flatten existing positions. Existing positions may remain open until their normal exits unless an operator explicitly runs a flatten action.
 
 **Immediate steps:**
+
 ```bash
 # Check which cap was breached and current state
 ssh server 'sudo journalctl -u execution-engine@live -n 100 --no-pager | grep killSwitch'
@@ -504,6 +519,7 @@ cat config/execution.live.yaml | grep -A 5 'risk:'
 ```
 
 **If it looks like a legitimate risk breach:**
+
 - Do not reset the kill switch without understanding what caused the breach.
 - Check open positions before deciding next action. Halt and flatten are separate actions.
 - Either let positions close naturally or explicitly flatten them if exposure must be removed immediately.
@@ -511,6 +527,7 @@ cat config/execution.live.yaml | grep -A 5 'risk:'
 - Investigate before restarting.
 
 **If it looks like a false trigger (e.g., stale position count due to recovery bug):**
+
 - Stop and restart the engine — recovery will reconstruct the correct count from Postgres.
 - Monitor closely for 30 minutes post-restart.
 
@@ -523,12 +540,14 @@ cat config/execution.live.yaml | grep -A 5 'risk:'
 **What it means:** A high fraction of order submissions are being rejected by an exchange.
 
 **Immediate steps:**
+
 ```bash
 # Check which exchange and error codes
 ssh server 'sudo journalctl -u execution-engine@live -n 200 --no-pager | grep "order.reject"'
 ```
 
 Common causes:
+
 - **IP rate limit hit** — check Prometheus metric `execution_order_rejects_total{reason="rate_limit"}`. Reduce `FUNDING_RATE_SYMBOL_CONCURRENCY` or back off.
 - **Invalid leverage/size** — exchange changed minimum order size. Check exchange API docs.
 - **Expired API key** — rotate key per [configuration.md — Secret Rotation Procedure](./configuration.md#secret-rotation-procedure).
@@ -543,6 +562,7 @@ Common causes:
 **What it means:** The DB write queue has filled up (`writerQueueSize: 1000`), meaning Postgres can't keep up with the write rate.
 
 **Immediate steps:**
+
 ```bash
 # Check Postgres responsiveness
 ssh server 'docker exec arbinet-postgres pg_isready -U arbinet'
@@ -555,10 +575,12 @@ ssh server 'docker logs arbinet-postgres --tail 50'
 ```
 
 **If Postgres is healthy but slow:**
+
 - Check query performance: `docker exec arbinet-postgres psql -U arbinet -c "SELECT query, mean_exec_time FROM pg_stat_statements ORDER BY mean_exec_time DESC LIMIT 10;"`
 - The WAL file (`/data/execution-wal.jsonl`) is buffering writes — as long as the queue isn't overflowing, this is working as designed.
 
 **If Postgres is down:**
+
 - See [State Recovery: Postgres Down](#postgres-is-down-or-corrupt).
 
 ---
@@ -568,6 +590,7 @@ ssh server 'docker logs arbinet-postgres --tail 50'
 **What it means:** Prometheus cannot reach the engine's metrics endpoint at `http://127.0.0.1:9464/metrics`.
 
 **Immediate steps:**
+
 ```bash
 # Check if engine is running
 ssh server 'systemctl status execution-engine@live'
@@ -588,6 +611,7 @@ If the engine is running and the port is open, the issue is likely Prometheus co
 **What it means:** Cumulative PnL has fallen outside expected bounds (configured in Grafana alert rule).
 
 **Immediate steps:**
+
 - Check Grafana → Execution Engine → PnL panel for the magnitude and duration of the breach.
 - Check for unusual market conditions (high volatility, funding rate anomalies).
 - If the loss is larger than `maxNotionalUsd` × `stopLossPercent`, the risk system should have stopped positions automatically — check `risk.killSwitch.trip` logs.
@@ -603,6 +627,7 @@ If the engine is running and the port is open, the issue is likely Prometheus co
 The engine buffers uncommitted writes to a WAL file at `/data/execution-wal.jsonl`. Position state can be reconstructed from Postgres + WAL on restart.
 
 **If Postgres crashed but data is intact:**
+
 ```bash
 # Restart Postgres
 ssh server 'docker compose -f /opt/arbinet/docker-compose.prod.yml up -d postgres'
@@ -615,6 +640,7 @@ ssh server 'sudo systemctl start execution-engine@live'
 ```
 
 On startup, look for:
+
 ```
 {"event":"wal.replay_start","entries":N}
 {"event":"wal.replay_complete","written":N,"errors":0}
@@ -622,6 +648,7 @@ On startup, look for:
 ```
 
 **If Postgres data is corrupt (table or disk corruption):**
+
 ```bash
 # 1. Stop the engine immediately
 ssh server 'sudo systemctl stop execution-engine@live'

@@ -1,10 +1,12 @@
 ---
+
 # Task 24 — S6 substitute validation protocol (shadow → canary)
 
 **Phase:** 5 — Live-only concerns · **Priority:** P3 · **Parity:** live
 **Deps:** 09 · **Closes:** S6 validation, S6 nuance · **Spec:** 07_strategy_6.md §6.1 (not backtestable), §6.2 (substitute protocol), §2 (settled |F| at fill)
 
 ## Goal
+
 S6 is not backtestable (`07_strategy_6.md §6.1`; the backtest registry throws — conforms). Scaffold the
 `§6.2` substitute validation protocol — a **shadow phase** then a **canary phase** with pre-registered
 acceptance metrics — so S6 can be validated live-empirically instead of by simulation. Optionally fix
@@ -12,6 +14,7 @@ the settled-|F| nuance: TP/SL should use the **settled** rate re-fetched at MAIN
 selection-time rate carried on the intent.
 
 ## Spec anchors
+
 - `07_strategy_6.md §6.1` — two blockers (causal gating on a private WS event; fill inside the forbidden
   `drop_candle` §5.5.2) ⇒ not backtested at all.
 - `07_strategy_6.md §6.2` — shadow (≥2 wk, order submit stubbed at adapter, log-only) + canary (≥4 wk,
@@ -20,6 +23,7 @@ selection-time rate carried on the intent.
 - `00_globals.md §12.2` — S6 error-code taxonomy (`funding_event_timeout`, `close_pre_funding_failed`, …).
 
 ## Files to read
+
 - `src/backtesting/strategies/registry.ts:15-17` — `strategy_6` throws in backtest (conforms; do not change).
 - `src/execution/execution/manager.ts:2833-3170` — S6 live state machine (PRE_FUNDING → WS gate → MAIN → exit).
 - `src/execution/execution/manager.ts:3082-3100` — S6 `ws.funding_fee` gate + timeout → `funding_event_timeout`.
@@ -28,12 +32,14 @@ selection-time rate carried on the intent.
   selection-time rate, not a settled rate re-fetched at fill.
 
 ## Files to edit
+
 - New harness/docs under `src/execution/**` for the shadow phase (adapter-level order-submission stub +
   event-timeline logging). Prefer extending existing S6 logging over new files where possible.
 - `src/execution/execution/manager.ts:813,837-841` — optional nuance fix (re-fetch settled |F| at fill).
 - Acceptance-metric definitions (config or docs) with pre-registered thresholds.
 
 ## The change (numbered)
+
 1. **Shadow harness (≥2 weeks, all venues).** Run the full S6 state machine (`manager.ts:2833-3170`) with
    order submission **stubbed at the adapter** (log-only, no real orders). Capture per venue:
    (i) `ws.funding_fee` arrival rate; (ii) `T_event − T_settle` latency distribution;
@@ -54,6 +60,7 @@ selection-time rate carried on the intent.
    `manager.ts:837-841`. The live state machine otherwise already conforms — do not restructure it.
 
 ## Verification
+
 - Shadow harness produces the per-venue latency + timeout dataset with zero real orders submitted
   (adapter stub asserted).
 - Canary acceptance thresholds (a)–(e) are documented and evaluated as gates before scale-up; a run
@@ -63,6 +70,7 @@ selection-time rate carried on the intent.
 - Backtest still throws for `strategy_6` (`registry.ts:15-17` unchanged).
 
 ## Notes / blockers / open questions
+
 - Depends on Task 09 (S6 live state machine) being in place.
 - Nuance (item 4) is optional and small; it is the only S6 spec-vs-engine divergence found and can ship
   independently of the shadow/canary scaffolding.

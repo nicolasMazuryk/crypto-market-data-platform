@@ -4,22 +4,22 @@ Provisioning uses a reusable sub-account pool. `npm run provision` first reuses 
 
 ## Commands
 
-| Goal | Command |
-|------|---------|
-| Provision or reconcile live-ready capital | `npm run provision -- --strategy <id> --exchange <name> --capital <usdt>` |
-| List active and idle pool entries | `npm run provision:list` |
-| Release a strategy sub-account back to idle | `npm run provision:release -- --strategy <id> --exchange <name>` |
-| Sync exchange sub-account list into registry | `npm run provision:sync -- --exchange <name>` |
-| Validate registry | `npm run registry:validate` |
+| Goal                                         | Command                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| Provision or reconcile live-ready capital    | `npm run provision -- --strategy <id> --exchange <name> --capital <usdt>` |
+| List active and idle pool entries            | `npm run provision:list`                                                  |
+| Release a strategy sub-account back to idle  | `npm run provision:release -- --strategy <id> --exchange <name>`          |
+| Sync exchange sub-account list into registry | `npm run provision:sync -- --exchange <name>`                             |
+| Validate registry                            | `npm run registry:validate`                                               |
 
 ## Registry States
 
-| Status | Meaning |
-|--------|---------|
-| `active` | Assigned to a strategy and ready for live trading |
-| `idle` | In the exchange pool with zero allocated capital and no strategy assignment |
-| `provisioning` | Temporary in-flight state |
-| `failed` | Last provisioning attempt failed; see `notes` |
+| Status         | Meaning                                                                     |
+| -------------- | --------------------------------------------------------------------------- |
+| `active`       | Assigned to a strategy and ready for live trading                           |
+| `idle`         | In the exchange pool with zero allocated capital and no strategy assignment |
+| `provisioning` | Temporary in-flight state                                                   |
+| `failed`       | Last provisioning attempt failed; see `notes`                               |
 
 Idle entries have `assigned_strategy: null` and `allocated_capital_usdt: 0`. Active entries require `assigned_strategy`, `api_key`, and `api_secret`; OKX and KuCoin also require `api_passphrase`.
 

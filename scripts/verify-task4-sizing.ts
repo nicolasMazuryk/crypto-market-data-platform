@@ -14,7 +14,13 @@
  */
 
 import ccxt from 'ccxt'
-import { alignToLotStep, computeMinOrderQty, computeOrderQty, lotStep, meetsMinNotional } from '../src/execution/strategies/shared/sizing.js'
+import {
+  alignToLotStep,
+  computeMinOrderQty,
+  computeOrderQty,
+  lotStep,
+  meetsMinNotional,
+} from '../src/execution/strategies/shared/sizing.js'
 import type { MarketMetadata } from '../src/execution/markets/types.js'
 
 // Production config for binance/strategy_4_1a
@@ -112,7 +118,10 @@ async function main() {
 
   for (const sym of TARGET_SYMBOLS) {
     const m = ex.markets[sym]
-    if (!m) { console.log(`  ${sym}: not found`); continue }
+    if (!m) {
+      console.log(`  ${sym}: not found`)
+      continue
+    }
     const mkt = ccxtMarketToMetadata(m, 'binance')
     const t = tickers[sym]
     const price = t?.last ?? 0
@@ -141,9 +150,13 @@ async function main() {
     const strategyFilters = firstRung !== undefined && !meetsMinNotional(maxRungQty, topLimitPrice, mkt)
     if (strategyFilters) symbolsFiltered++
 
-    console.log(`  ${sym.split('/')[0]}: price=$${price.toPrecision(4)}, minCost=$${mkt.minCost ?? 'n/a'}, step=${step}`)
+    console.log(
+      `  ${sym.split('/')[0]}: price=$${price.toPrecision(4)}, minCost=$${mkt.minCost ?? 'n/a'}, step=${step}`
+    )
     console.log(`    totalQty=${qty}, baseQty=${baseQty}, remainder=${remainder}`)
-    console.log(`    strategy_4_1a early exit: ${strategyFilters ? '❌ FILTERED — max rung fails minNotional' : '✓ passes strategy filter'}`)
+    console.log(
+      `    strategy_4_1a early exit: ${strategyFilters ? '❌ FILTERED — max rung fails minNotional' : '✓ passes strategy filter'}`
+    )
 
     for (let i = 0; i < rungs.length; i++) {
       const rung = rungs[i]!
@@ -160,7 +173,9 @@ async function main() {
     console.log()
   }
 
-  console.log(`  Summary: ${totalPlaced} rungs would submit, ${totalSkipped} rungs skipped by minNotional guard, ${symbolsFiltered} symbol(s) filtered by strategy-level guard.`)
+  console.log(
+    `  Summary: ${totalPlaced} rungs would submit, ${totalSkipped} rungs skipped by minNotional guard, ${symbolsFiltered} symbol(s) filtered by strategy-level guard.`
+  )
   if (totalSkipped > 0 || symbolsFiltered > 0) {
     console.log('  ✓ Guard is firing correctly for low-notional symbols.')
   } else {

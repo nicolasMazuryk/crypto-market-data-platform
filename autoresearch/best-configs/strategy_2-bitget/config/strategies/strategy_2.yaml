@@ -1,11 +1,11 @@
 # Strategy 2: Negative Funding LONG - Retracement Exit
 # Hold long, wait for partial price retracement after the drop
 
-strategy_id: "strategy_2"
-direction: "long"
-funding_threshold: 0.007     # 0.7%
-entry_offset_seconds: 1       # Enter at T_funding - 5s
-retracement_pct: 2.0        # 200% retracement target
-deadline_seconds: 600          # Max hold after T_funding (10 minutes)
-sl_mult: 1.3                  # SL at entry × (1 − F × 1.3)
+strategy_id: 'strategy_2'
+direction: 'long'
+funding_threshold: 0.007 # 0.7%
+entry_offset_seconds: 1 # Enter at T_funding - 5s
+retracement_pct: 2.0 # 200% retracement target
+deadline_seconds: 600 # Max hold after T_funding (10 minutes)
+sl_mult: 1.3 # SL at entry × (1 − F × 1.3)
 funding_applied_on_same_second: false

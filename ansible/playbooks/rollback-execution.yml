@@ -15,17 +15,17 @@
     - ../group_vars/all.yml
 
   vars:
-    target_sha: ""
+    target_sha: ''
 
   tasks:
     - name: Validate target_sha is provided
       ansible.builtin.fail:
-        msg: "target_sha is required. Pass -e target_sha=<git-sha>"
+        msg: 'target_sha is required. Pass -e target_sha=<git-sha>'
       when: target_sha == ""
 
     - name: Check that release directory exists for target SHA
       ansible.builtin.stat:
-        path: "{{ execution_releases_dir }}/{{ target_sha }}"
+        path: '{{ execution_releases_dir }}/{{ target_sha }}'
       register: _release_stat
 
     - name: Fail if release directory does not exist
@@ -60,8 +60,8 @@
 
     - name: Update current symlink to target release
       ansible.builtin.file:
-        src: "{{ execution_releases_dir }}/{{ target_sha }}"
-        dest: "{{ execution_base_dir }}/current"
+        src: '{{ execution_releases_dir }}/{{ target_sha }}'
+        dest: '{{ execution_base_dir }}/current'
         state: link
         force: true
 
@@ -71,9 +71,9 @@
         dest: /etc/systemd/system/execution-engine@.service
         owner: root
         group: root
-        mode: "0644"
+        mode: '0644'
       vars:
-        execution_image_tag: "{{ target_sha }}"
+        execution_image_tag: '{{ target_sha }}'
 
     - name: Reload systemd after unit update
       ansible.builtin.systemd:
@@ -83,19 +83,19 @@
 
     - name: Start execution engine at rollback SHA
       ansible.builtin.systemd:
-        name: "execution-engine@{{ execution_mode }}.service"
+        name: 'execution-engine@{{ execution_mode }}.service'
         state: started
         daemon_reload: false
 
     - name: Wait for execution engine /ready after rollback
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ execution_health_port }}/ready"
+        url: 'http://127.0.0.1:{{ execution_health_port }}/ready'
         status_code: 200
       register: _ready
       until: _ready.status == 200
-      retries: "{{ execution_health_ready_retries }}"
-      delay: "{{ execution_health_ready_delay }}"
+      retries: '{{ execution_health_ready_retries }}'
+      delay: '{{ execution_health_ready_delay }}'
 
     - name: Report rollback success
       ansible.builtin.debug:
-        msg: "Rollback complete — execution-engine@{{ execution_mode }} is running {{ app_name }}:{{ target_sha }}"
+        msg: 'Rollback complete — execution-engine@{{ execution_mode }} is running {{ app_name }}:{{ target_sha }}'

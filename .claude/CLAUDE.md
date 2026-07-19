@@ -24,6 +24,7 @@ Funding rates should be collected backwards (newest -> oldest) and filtered to t
 ## Tech Stack
 
 ### Core
+
 - TypeScript 5.7 (ESM) + tsx
 - ClickHouse (Docker Compose for local, Hetzner server for production)
 - CCXT (exchange REST API)
@@ -32,6 +33,7 @@ Funding rates should be collected backwards (newest -> oldest) and filtered to t
 - Pino logger
 
 ### Infrastructure & Deployment
+
 - Terraform (Hetzner Cloud provider)
 - Ansible (server provisioning and deployment)
 - Docker Compose (ClickHouse persistent, workers one-shot)
@@ -41,6 +43,7 @@ Funding rates should be collected backwards (newest -> oldest) and filtered to t
 ## Commands
 
 ### Development
+
 ```bash
 npm start                # Run src/index.ts (markets sync)
 npm test                 # Run tests
@@ -55,6 +58,7 @@ npm run logs:clean       # Remove all log files
 ```
 
 ### Local Database
+
 ```bash
 npm run db:up            # Start ClickHouse
 npm run db:down          # Stop + remove containers
@@ -66,6 +70,7 @@ npm run db:shell         # ClickHouse client shell
 ```
 
 ### Local Sync Operations
+
 ```bash
 npm run sync:markets         # Run market sync locally
 npm run sync:funding         # Run funding rates sync locally
@@ -74,6 +79,7 @@ npm run validate:quotes      # Validate quotes locally
 ```
 
 ### Infrastructure & Deployment
+
 ```bash
 npm run infra:init           # Initialize Terraform
 npm run infra:plan           # Preview infrastructure changes
@@ -96,6 +102,7 @@ ssh -i ~/.ssh/nicolas nicolas@203.0.113.10
 ```
 
 ### Remote Workflow (canonical sequence)
+
 ```bash
 npm run remote:run:markets                  # 1. Sync market listings
 npm run remote:funding-backfill             # 2. Backfill historical funding rates
@@ -109,6 +116,7 @@ npm run backtest                            # 9. Run backtest locally
 ```
 
 ### Remote Timer Management
+
 ```bash
 npm run remote:timer:add:markets     # Enable + start market sync timer
 npm run remote:timer:add:funding     # Enable + start funding sync timer
@@ -137,12 +145,14 @@ Agent instructions: `autoresearch/program.md` — stable prompt prefix telling t
 Uses `.env` (see `.env.example`) for local configuration. Production `.env` is templated by Ansible on the server.
 
 ### Core Application
+
 - `NODE_ENV` - Environment (development/production)
 - `LOG_LEVEL` - Logging level (debug/info/warn/error)
 - `SYNC_DATA_PERIOD_START` - Shared sync start date for markets and funding rates (ISO 8601)
 - `SYNC_DATA_PERIOD_END` - Shared sync end date (null for open-ended)
 
 ### ClickHouse Database
+
 - `CLICKHOUSE_HOST` - Database host
 - `CLICKHOUSE_HTTP_PORT` - HTTP port (8123)
 - `CLICKHOUSE_NATIVE_PORT` - Native protocol port (9000)
@@ -151,10 +161,12 @@ Uses `.env` (see `.env.example`) for local configuration. Production `.env` is t
 - `CLICKHOUSE_PASSWORD` - Database password (can be empty for local)
 
 ### Application Paths
+
 - `DELISTINGS_DIR` - Directory for delisting JSON files (e.g., `src/markets/delistings`)
 - `MIGRATIONS_DIR` - Directory for SQL migration files (e.g., `src/db/migrations`)
 
 ### Funding Rate Sync Tuning
+
 - `FUNDING_RATE_MAX_RETRIES` - Retry attempts for failed requests (default: 5)
 - `FUNDING_RATE_BACKOFF_BASE_MS` - Initial backoff delay (default: 750ms)
 - `FUNDING_RATE_BACKOFF_MAX_MS` - Maximum backoff delay (default: 30s)
@@ -162,6 +174,7 @@ Uses `.env` (see `.env.example`) for local configuration. Production `.env` is t
 - `FUNDING_RATE_SYMBOL_CONCURRENCY` - Parallel symbol fetches (default: 5)
 
 ### Funding Download Tasks
+
 - `FUNDING_DOWNLOAD_TASKS_DATE_RANGE_START` - Inclusive start date (`YYYY-MM-DD`)
 - `FUNDING_DOWNLOAD_TASKS_DATE_RANGE_END` - Inclusive end date (`YYYY-MM-DD`)
 - `FUNDING_DOWNLOAD_TASKS_THRESHOLD` - Funding-rate cutoff used in create mode
@@ -169,6 +182,7 @@ Uses `.env` (see `.env.example`) for local configuration. Production `.env` is t
 - `FUNDING_DOWNLOAD_TASKS_EXCLUDED_EXCHANGES` - Comma-separated exchanges to skip
 
 ### Alerting
+
 - `SLACK_WEBHOOK_URL` - Slack webhook for alerts
 
 ## Development Workflow
@@ -188,6 +202,7 @@ Uses `.env` (see `.env.example`) for local configuration. Production `.env` is t
 ## Database Schema
 
 ### `arbinet.markets`
+
 ```sql
 CREATE TABLE IF NOT EXISTS arbinet.markets
 (
@@ -206,6 +221,7 @@ ORDER BY (exchange, symbol);
 ```
 
 ### `arbinet.funding_rates`
+
 ```sql
 CREATE TABLE IF NOT EXISTS arbinet.funding_rates
 (
@@ -228,6 +244,7 @@ Normalization removes separators and suffixes while preserving the USDT quote.
 Always store both the raw exchange symbol and the normalized symbol.
 
 Examples:
+
 - Binance: `BTCUSDT` -> `BTCUSDT`
 - OKX: `BTC-USDT-SWAP` -> `BTCUSDT`
 - Bybit: `BTCUSDT` -> `BTCUSDT`
@@ -239,6 +256,7 @@ Examples:
 ## Supported Exchanges
 
 Configured in `src/config/index.ts`:
+
 - Binance (binanceusdm)
 - Bybit (bybit)
 - OKX (okx)
@@ -273,6 +291,7 @@ source <(bash scripts/exchange-subkey.sh <exchange> <strategy>)
 ```
 
 Examples:
+
 ```bash
 source <(bash scripts/exchange-subkey.sh gateio strategy_1)
 gate-cli cex futures account get              # uses GATE_API_KEY/GATE_API_SECRET
@@ -304,6 +323,7 @@ Env vars emitted per exchange:
 **Never hardcode keys. Always source from registry via the script.**
 
 Available strategies per exchange (active — verify in registry.yaml):
+
 - `strategy_1`, `strategy_1_ws`, `strategy_2`, `strategy_4_1a`, `strategy_6`
 
 ## Development Notes

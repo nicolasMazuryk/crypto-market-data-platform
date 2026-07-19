@@ -2,9 +2,7 @@
   "arg": { "channel": "account" },
   "data": [
     {
-      "details": [
-        { "ccy": "USDT", "availBal": "9995.5", "frozenBal": "0", "cashBal": "9995.5" }
-      ],
+      "details": [{ "ccy": "USDT", "availBal": "9995.5", "frozenBal": "0", "cashBal": "9995.5" }],
       "bills": [
         {
           "bizType": "FUNDING_FEE",

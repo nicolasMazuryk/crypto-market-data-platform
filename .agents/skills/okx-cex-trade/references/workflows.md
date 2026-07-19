@@ -3,6 +3,7 @@
 ## Cross-Skill Workflows
 
 ### Spot market buy
+
 > User: "Buy $500 worth of ETH at market"
 
 ```
@@ -13,6 +14,7 @@
 ```
 
 ### Open long BTC perp with TP/SL
+
 > User: "Long 5 contracts BTC perp at market, TP at $105k, SL at $88k"
 
 ```
@@ -29,6 +31,7 @@
 > **Note:** TP/SL is attached directly to the order via `--tpTriggerPx`/`--slTriggerPx` — no separate `swap algo place` step needed. Use `swap algo place` only when adding TP/SL to an **existing** position.
 
 ### Adjust leverage then place order
+
 > User: "Set BTC perp to 5x leverage then go long 10 contracts"
 
 ```
@@ -49,9 +52,11 @@
 ```
 
 ### Place trailing stop on open position
+
 > User: "Set a 3% trailing stop on my open position"
 
 Spot example (no margin mode needed):
+
 ```
 1. okx-cex-portfolio okx account balance BTC               → confirm spot BTC holdings
 2. okx-cex-market    okx market ticker BTC-USDT            → current price reference
@@ -62,6 +67,7 @@ Spot example (no margin mode needed):
 ```
 
 Swap/Perpetual example:
+
 ```
 1. okx-cex-trade     okx swap positions                     → confirm size of open long
 2. okx-cex-market    okx market ticker BTC-USDT-SWAP        → current price reference
@@ -72,6 +78,7 @@ Swap/Perpetual example:
 ```
 
 Futures/Delivery example:
+
 ```
 1. okx-cex-trade     okx futures positions                  → confirm size of open long
 2. okx-cex-market    okx market ticker BTC-USDT-<YYMMDD>      → current price reference
@@ -82,6 +89,7 @@ Futures/Delivery example:
 ```
 
 ### Trade a stock token (TSLA / NVDA / AAPL)
+
 > User: "I want to long TSLA with 500 USDT"
 
 ```
@@ -108,6 +116,7 @@ Futures/Delivery example:
 ---
 
 ### Open linear swap by USDT amount
+
 > User: "用 200 USDT 做多 ETH 永续 (cross margin)"
 
 ```
@@ -129,6 +138,7 @@ Futures/Delivery example:
 ```
 
 ### Open inverse swap by USDT amount
+
 > User: "用 500 USDT 开一个 BTC 币本位永续多单"
 
 ```
@@ -149,6 +159,7 @@ Futures/Delivery example:
 ```
 
 ### Modify existing TP/SL (take-profit / stop-loss)
+
 > User: "把我 BTC 永续的止损改到 $85k" / "Change my BTC swap stop-loss to $85,000"
 
 TP/SL orders attached at placement time (via `--tpTriggerPx`/`--slTriggerPx`) are algo orders in OKX. To modify them, find the `algoId` first, then use `algo amend`.
@@ -177,6 +188,7 @@ For spot, the pattern is the same:
 ```
 
 ### Cancel all open spot orders
+
 > User: "Cancel all my open BTC spot orders"
 
 ```
@@ -186,6 +198,7 @@ For spot, the pattern is the same:
 ```
 
 ### Buy a BTC call option
+
 > User: "Buy 2 BTC call options at strike 95000 expiring end of March"
 
 ```
@@ -201,6 +214,7 @@ For spot, the pattern is the same:
 ```
 
 ### Check option portfolio Greeks
+
 > User: "What's my total delta exposure from options?"
 
 ```
@@ -213,24 +227,28 @@ For spot, the pattern is the same:
 ## Input / Output Examples
 
 **"Buy 0.05 BTC at market"**
+
 ```bash
 okx spot place --instId BTC-USDT --side buy --ordType market --sz 0.05
 # → Order placed: 7890123456 (OK)
 ```
 
 **"Set a limit sell for 0.1 ETH at $3500"**
+
 ```bash
 okx spot place --instId ETH-USDT --side sell --ordType limit --sz 0.1 --px 3500
 # → Order placed: 7890123457 (OK)
 ```
 
 **"Show my open spot orders"**
+
 ```bash
 okx spot orders
 # → table: ordId, instId, side, type, price, size, filled, state
 ```
 
 **"Long 10 contracts BTC perp at market (cross margin)"**
+
 ```bash
 okx swap place --instId BTC-USDT-SWAP --side buy --ordType market --sz 10 \
   --tdMode cross --posSide long
@@ -238,6 +256,7 @@ okx swap place --instId BTC-USDT-SWAP --side buy --ordType market --sz 10 \
 ```
 
 **"Long 10 contracts BTC perp with TP at $105k and SL at $88k"**
+
 ```bash
 okx swap place --instId BTC-USDT-SWAP --side buy --ordType market --sz 10 \
   --tdMode cross --posSide long \
@@ -246,6 +265,7 @@ okx swap place --instId BTC-USDT-SWAP --side buy --ordType market --sz 10 \
 ```
 
 **"Set take profit at $105k and stop loss at $88k on an existing BTC perp long"**
+
 ```bash
 okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType oco --sz 10 \
   --tdMode cross --posSide long \
@@ -255,18 +275,21 @@ okx swap algo place --instId BTC-USDT-SWAP --side sell --ordType oco --sz 10 \
 ```
 
 **"Close my ETH perp position"**
+
 ```bash
 okx swap close --instId ETH-USDT-SWAP --mgnMode cross --posSide long
 # → Position closed: ETH-USDT-SWAP long
 ```
 
 **"Set BTC perp leverage to 5x (cross)"**
+
 ```bash
 okx swap leverage --instId BTC-USDT-SWAP --lever 5 --mgnMode cross
 # → Leverage set: 5x BTC-USDT-SWAP
 ```
 
 **"Long 1 contract TSLA stock token at market (cross margin)"**
+
 ```bash
 okx swap place --instId TSLA-USDT-SWAP --side buy --ordType market --sz 1 \
   --tdMode cross --posSide long
@@ -274,6 +297,7 @@ okx swap place --instId TSLA-USDT-SWAP --side buy --ordType market --sz 1 \
 ```
 
 **"Open short on NVDA, 2 contracts"**
+
 ```bash
 okx swap place --instId NVDA-USDT-SWAP --side sell --ordType market --sz 2 \
   --tdMode cross --posSide short
@@ -281,6 +305,7 @@ okx swap place --instId NVDA-USDT-SWAP --side sell --ordType market --sz 2 \
 ```
 
 **"Place a 2% trailing stop on my BTC perp long"**
+
 ```bash
 okx swap algo trail --instId BTC-USDT-SWAP --side sell --sz 10 \
   --tdMode cross --posSide long --callbackRatio 0.02
@@ -288,12 +313,14 @@ okx swap algo trail --instId BTC-USDT-SWAP --side sell --sz 10 \
 ```
 
 **"Place a 3% trailing stop on my spot BTC"**
+
 ```bash
 okx spot algo trail --instId BTC-USDT --side sell --sz 0.01 --callbackRatio 0.03
 # → Trailing stop placed: TRAIL456 (OK)
 ```
 
 **"Place a 2% trailing stop on my BTC futures long"**
+
 ```bash
 okx futures algo trail --instId BTC-USDT-<YYMMDD> --side sell --sz 5 \
   --tdMode cross --posSide long --callbackRatio 0.02
@@ -301,18 +328,21 @@ okx futures algo trail --instId BTC-USDT-<YYMMDD> --side sell --sz 5 \
 ```
 
 **"Close my BTC futures long position"**
+
 ```bash
 okx futures close --instId BTC-USDT-260328 --mgnMode cross --posSide long
 # → Position closed: BTC-USDT-260328 long
 ```
 
 **"Set BTC futures leverage to 10x (cross)"**
+
 ```bash
 okx futures leverage --instId BTC-USDT-260328 --lever 10 --mgnMode cross
 # → Leverage set: 10x BTC-USDT-260328
 ```
 
 **"Place a TP at $105k and SL at $88k on my ETH futures long"**
+
 ```bash
 okx futures algo place --instId ETH-USDT-260328 --side sell --ordType oco --sz 5 \
   --tdMode cross --posSide long \
@@ -322,30 +352,35 @@ okx futures algo place --instId ETH-USDT-260328 --side sell --ordType oco --sz 5
 ```
 
 **"Show my open swap positions"**
+
 ```bash
 okx swap positions
 # → table: instId, side, size, avgPx, upl, uplRatio, lever
 ```
 
 **"What are my recent fill trades for BTC spot?"**
+
 ```bash
 okx spot fills --instId BTC-USDT
 # → table: instId, side, fillPx, fillSz, fee, ts
 ```
 
 **"Show me the BTC option chain expiring March 28"**
+
 ```bash
 okx option instruments --uly BTC-USD --expTime 250328
 # → table: instId, expTime, stk, optType (C/P), state
 ```
 
 **"What's the IV and delta for BTC options expiring March 28?"**
+
 ```bash
 okx option greeks --uly BTC-USD --expTime 250328
 # → table: instId, delta, gamma, theta, vega, iv (markVol), markPx
 ```
 
 **"Buy 1 BTC call at strike 95000 expiring March 28, limit at 0.005 BTC"**
+
 ```bash
 okx option place --instId BTC-USD-250328-95000-C \
   --side buy --ordType limit --tdMode cash --sz 1 --px 0.005
@@ -353,6 +388,7 @@ okx option place --instId BTC-USD-250328-95000-C \
 ```
 
 **"Show my open option positions"**
+
 ```bash
 okx option positions
 # → table: instId, posSide, pos, avgPx, upl, delta, gamma, theta, vega

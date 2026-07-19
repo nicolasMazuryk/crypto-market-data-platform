@@ -30,7 +30,7 @@ function quoteLargeIntegersInJson(text: string): string {
   let escaped = false
 
   while (i < text.length) {
-    const ch = text[i]!
+    const ch = text.charAt(i)
 
     if (inString) {
       out += ch
@@ -175,7 +175,7 @@ const gateioSpec: CcxtAdapterSpec = {
     if (ref.exchangeOrderId) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const raw = await (ccxtEx as any).fetchOrder(ref.exchangeOrderId, unified) as CcxtOrder
+        const raw = (await (ccxtEx as any).fetchOrder(ref.exchangeOrderId, unified)) as CcxtOrder
         return raw
       } catch {
         return undefined
@@ -186,7 +186,7 @@ const gateioSpec: CcxtAdapterSpec = {
     for (const text of [clientId, `t-${clientId}`]) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const raw = await (ccxtEx as any).fetchOrder('', unified, { text }) as CcxtOrder
+        const raw = (await (ccxtEx as any).fetchOrder('', unified, { text })) as CcxtOrder | undefined
         if (raw) return raw
       } catch {
         // try next

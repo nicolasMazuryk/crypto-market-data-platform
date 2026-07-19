@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_1.ts`, `src/execution/execution/manager
 ---
 
 **GateIO-specific notes:**
+
 - No clientOrderId transformation (no canonicalize dash-strip)
 - Private WS: futures order fills on `futures.orders` channel; timestamps in **seconds** (× 1000 to get ms)
 - Funding fee events: `account.book` channel with `bizType` containing fund-related text

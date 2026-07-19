@@ -662,7 +662,7 @@ describe('ExecutionManager', () => {
     const rest = makeRestAdapter()
     const { manager } = makeManager({ restAdapter: rest })
 
-    manager.prewarmLeverage('binance', 'BTCUSDT', 5)
+    void manager.prewarmLeverage('binance', 'BTCUSDT', 5)
     await new Promise(r => setTimeout(r, 10)) // let the fire-and-forget settle
 
     await manager.submit(makeIntent())
@@ -683,7 +683,7 @@ describe('ExecutionManager', () => {
     const { manager } = makeManager({ restAdapter: rest })
 
     // Start prewarm without awaiting — registers the in-flight promise
-    manager.prewarmLeverage('binance', 'BTCUSDT', 5)
+    void manager.prewarmLeverage('binance', 'BTCUSDT', 5)
 
     // Submit runs concurrently and must join the in-flight prewarm promise
     const submitPromise = manager.submit(makeIntent())
@@ -699,7 +699,7 @@ describe('ExecutionManager', () => {
     vi.mocked(rest.setLeverage).mockRejectedValueOnce(new Error('timeout')).mockResolvedValue(undefined)
     const { manager } = makeManager({ restAdapter: rest })
 
-    manager.prewarmLeverage('binance', 'BTCUSDT', 4)
+    void manager.prewarmLeverage('binance', 'BTCUSDT', 4)
     await new Promise(r => setTimeout(r, 10)) // let rejected prewarm settle
 
     const state = await manager.submit(makeIntent())
@@ -890,7 +890,9 @@ describe('TELEM-02: WS close fill path', () => {
     customMonitor.triggerExit(intent.id, 'timed')
     await new Promise(r => setTimeout(r, 10))
 
-    const closeCall = vi.mocked(rest.createOrder).mock.calls.find(c => c[0].reduceOnly === true && c[0].type === 'market')
+    const closeCall = vi
+      .mocked(rest.createOrder)
+      .mock.calls.find(c => c[0].reduceOnly === true && c[0].type === 'market')
     expect(closeCall).toBeDefined()
     const closeCid = closeCall![0].clientOrderId
 
@@ -1089,7 +1091,9 @@ describe('Task 3 fixes', () => {
   it('deadline branch: close order placed before any oco.cancel.attempt log', async () => {
     const rest = makeRestAdapter()
     vi.mocked(rest.getOpenOrders).mockResolvedValue([])
-    vi.mocked(rest.getPositions).mockResolvedValue([{ exchange: 'binance', symbol: 'BTCUSDT', qty: 0.001, side: 'long', leverage: 5, updatedAt: Date.now() }])
+    vi.mocked(rest.getPositions).mockResolvedValue([
+      { exchange: 'binance', symbol: 'BTCUSDT', qty: 0.001, side: 'long', leverage: 5, updatedAt: Date.now() },
+    ])
     const monitor = makeMonitor()
     const { manager, intent } = await setupMonitoringIntent(rest, monitor)
 
@@ -1097,7 +1101,13 @@ describe('Task 3 fixes', () => {
     const origCreateOrder = vi.mocked(rest.createOrder)
     origCreateOrder.mockImplementation(async params => {
       callOrder.push(`createOrder:${params.type}:${params.reduceOnly ? 'reduce' : 'normal'}`)
-      return { clientOrderId: params.clientOrderId, exchangeOrderId: `eid-${params.clientOrderId}`, status: 'accepted', submittedAt: Date.now(), ackedAt: Date.now() }
+      return {
+        clientOrderId: params.clientOrderId,
+        exchangeOrderId: `eid-${params.clientOrderId}`,
+        status: 'accepted',
+        submittedAt: Date.now(),
+        ackedAt: Date.now(),
+      }
     })
     const origCancelOrder = vi.mocked(rest.cancelOrder)
     origCancelOrder.mockImplementation(async () => {
@@ -1147,8 +1157,15 @@ describe('Task 4 — FSM ordering, Binance routing, close partial fills', () => 
     vi.mocked(rest.createOrder).mockImplementation(
       params =>
         new Promise<OrderAck>(res => {
-          resolveCreate = () =>
-            { res({ clientOrderId: params.clientOrderId, exchangeOrderId: 'eid', status: 'accepted', submittedAt: Date.now(), ackedAt: Date.now() }); }
+          resolveCreate = () => {
+            res({
+              clientOrderId: params.clientOrderId,
+              exchangeOrderId: 'eid',
+              status: 'accepted',
+              submittedAt: Date.now(),
+              ackedAt: Date.now(),
+            })
+          }
         })
     )
     vi.mocked(rest.getOpenOrders).mockResolvedValue([])
@@ -1185,8 +1202,15 @@ describe('Task 4 — FSM ordering, Binance routing, close partial fills', () => 
     vi.mocked(rest.createOrder).mockImplementation(
       params =>
         new Promise<OrderAck>(res => {
-          resolveCreate = () =>
-            { res({ clientOrderId: params.clientOrderId, exchangeOrderId: 'eid', status: 'accepted', submittedAt: Date.now(), ackedAt: Date.now() }); }
+          resolveCreate = () => {
+            res({
+              clientOrderId: params.clientOrderId,
+              exchangeOrderId: 'eid',
+              status: 'accepted',
+              submittedAt: Date.now(),
+              ackedAt: Date.now(),
+            })
+          }
         })
     )
     vi.mocked(rest.getOpenOrders).mockResolvedValue([])
@@ -1257,7 +1281,12 @@ describe('Task 4 — FSM ordering, Binance routing, close partial fills', () => 
     // Emit partial close fill — should emit order.filled but NOT exit
     bus.emit('ws.order', {
       exchange: 'binance',
-      order: makeOrder(closeCid, { status: 'partially_filled', filledQty: 0.0005, avgFillPrice: 50100, reduceOnly: true }),
+      order: makeOrder(closeCid, {
+        status: 'partially_filled',
+        filledQty: 0.0005,
+        avgFillPrice: 50100,
+        reduceOnly: true,
+      }),
       seq: 2,
       receivedAt: Date.now(),
     })

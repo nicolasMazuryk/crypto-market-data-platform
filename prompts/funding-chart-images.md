@@ -14,23 +14,23 @@ Two tables are queried. Schemas (relevant columns shown):
 
 **`funding_rate`** — one row per funding event.
 
-| column            | type     | notes                                          |
-|-------------------|----------|------------------------------------------------|
-| `exchange`        | String   | e.g. `binance`                                 |
-| `symbol`          | String   | e.g. `BTCUSDT`                                 |
-| `exchange_symbol` | String   | exchange-native symbol form                    |
-| `funding_time`    | DateTime | settlement timestamp (UTC, second precision)   |
-| `funding_rate`    | Float64  | raw decimal (e.g. `-0.003` means `-0.3%`)      |
+| column            | type     | notes                                        |
+| ----------------- | -------- | -------------------------------------------- |
+| `exchange`        | String   | e.g. `binance`                               |
+| `symbol`          | String   | e.g. `BTCUSDT`                               |
+| `exchange_symbol` | String   | exchange-native symbol form                  |
+| `funding_time`    | DateTime | settlement timestamp (UTC, second precision) |
+| `funding_rate`    | Float64  | raw decimal (e.g. `-0.003` means `-0.3%`)    |
 
 **`orderbook`** — 1-second OHLC for bids and asks, separately.
 
-| column      | type     |
-|-------------|----------|
-| `exchange`  | String   |
-| `symbol`    | String   |
-| `ts`        | DateTime |
-| `bid_open`, `bid_high`, `bid_low`, `bid_close` | Float64 |
-| `ask_open`, `ask_high`, `ask_low`, `ask_close` | Float64 |
+| column                                         | type     |
+| ---------------------------------------------- | -------- |
+| `exchange`                                     | String   |
+| `symbol`                                       | String   |
+| `ts`                                           | DateTime |
+| `bid_open`, `bid_high`, `bid_low`, `bid_close` | Float64  |
+| `ask_open`, `ask_high`, `ask_low`, `ask_close` | Float64  |
 
 `bid_*` describes the best bid's 1s candle; `ask_*` describes the best ask's 1s candle. They are independent OHLC series for the same second.
 
@@ -100,13 +100,13 @@ Nothing else belongs here. All behavioral configuration goes in YAML.
 
 ```yaml
 # ── Filtering ────────────────────────────────────────────────
-funding_rate_threshold: -0.003       # raw decimal; -0.003 means -0.3%
-threshold_mode: lte                  # lte | gte | abs_gte
-exchanges: []                        # optional whitelist; [] = all
-symbols: []                          # optional whitelist; [] = all
+funding_rate_threshold: -0.003 # raw decimal; -0.003 means -0.3%
+threshold_mode: lte # lte | gte | abs_gte
+exchanges: [] # optional whitelist; [] = all
+symbols: [] # optional whitelist; [] = all
 date_range:
-  from: "2025-01-01T00:00:00Z"       # optional, ISO-8601 UTC
-  to:   "2025-12-31T23:59:59Z"       # optional
+  from: '2025-01-01T00:00:00Z' # optional, ISO-8601 UTC
+  to: '2025-12-31T23:59:59Z' # optional
 
 # ── Window around funding event ──────────────────────────────
 pre_seconds: 30
@@ -116,20 +116,21 @@ post_seconds: 180
 output_dir: ./out
 image_width: 1920
 image_height: 900
-overwrite: false                     # if false, skip when file exists
+overwrite: false # if false, skip when file exists
 
 # ── Performance ──────────────────────────────────────────────
-worker_count: null                   # null = os.cpus().length
+worker_count: null # null = os.cpus().length
 db_concurrency_per_worker: 4
 
 # ── Visual options ───────────────────────────────────────────
 show_fib_ladder: true
-show_spread_shade: false             # faint band between bid/ask close
+show_spread_shade: false # faint band between bid/ask close
 ```
 
 `threshold_mode` mapping:
-- `lte`     — `funding_rate <= threshold` (default; sweeps significantly negative funding).
-- `gte`     — `funding_rate >= threshold` (positive-funding sweeps).
+
+- `lte` — `funding_rate <= threshold` (default; sweeps significantly negative funding).
+- `gte` — `funding_rate >= threshold` (positive-funding sweeps).
 - `abs_gte` — `abs(funding_rate) >= |threshold|` (catches both directions).
 
 ---
@@ -140,8 +141,8 @@ show_spread_shade: false             # faint band between bid/ask close
 
 Query the `funding_rate` table for rows matching the configured threshold. The condition is built from `threshold_mode`:
 
-- `lte`     — rows where `funding_rate` is less than or equal to the threshold.
-- `gte`     — rows where `funding_rate` is greater than or equal to the threshold.
+- `lte` — rows where `funding_rate` is less than or equal to the threshold.
+- `gte` — rows where `funding_rate` is greater than or equal to the threshold.
 - `abs_gte` — rows where the absolute value of `funding_rate` is at least the absolute threshold.
 
 Additional optional `WHERE` clauses narrow by `exchange IN (...)`, `symbol IN (...)`, and `funding_time BETWEEN ... AND ...` from the YAML config. Result columns: `exchange`, `symbol`, `funding_time`, `funding_rate`. Ordered ascending by `funding_time`, then `exchange`, then `symbol`. The query streams (JSONEachRow format) so the main thread can dispatch events to workers as they arrive rather than after the full set is buffered.
@@ -164,21 +165,21 @@ Workers run these queries with bounded concurrency (`db_concurrency_per_worker`)
 
 ### 7.2 Color palette
 
-| element              | color     | notes                                  |
-|----------------------|-----------|----------------------------------------|
-| chart background     | `#0d1117` |                                        |
-| grid lines           | `#1e222d` | 1px, solid                             |
-| axis tick text       | `#787b86` | 11px monospace                         |
-| header text          | `#d1d4dc` | 13–14px                                |
-| bid up (filled)      | `#26a69a` | teal-green                             |
-| bid down (filled)    | `#ef5350` | red                                    |
-| ask up (hollow)      | `#26a69a` | outline only, 1.5px stroke             |
-| ask down (hollow)    | `#ef5350` | outline only, 1.5px stroke             |
-| funding event line   | `#7aa2ff` | dashed `[4,3]`, opacity 0.75           |
-| Fib ladder line      | `#3a4055` | dashed `[2,4]`, opacity 0.7            |
-| Fib ladder label     | `#9aa3b8` | 11px monospace                         |
-| funding badge border | `#30363d` | 0.5px                                  |
-| funding badge bg     | `#161b22` |                                        |
+| element              | color     | notes                        |
+| -------------------- | --------- | ---------------------------- |
+| chart background     | `#0d1117` |                              |
+| grid lines           | `#1e222d` | 1px, solid                   |
+| axis tick text       | `#787b86` | 11px monospace               |
+| header text          | `#d1d4dc` | 13–14px                      |
+| bid up (filled)      | `#26a69a` | teal-green                   |
+| bid down (filled)    | `#ef5350` | red                          |
+| ask up (hollow)      | `#26a69a` | outline only, 1.5px stroke   |
+| ask down (hollow)    | `#ef5350` | outline only, 1.5px stroke   |
+| funding event line   | `#7aa2ff` | dashed `[4,3]`, opacity 0.75 |
+| Fib ladder line      | `#3a4055` | dashed `[2,4]`, opacity 0.7  |
+| Fib ladder label     | `#9aa3b8` | 11px monospace               |
+| funding badge border | `#30363d` | 0.5px                        |
+| funding badge bg     | `#161b22` |                              |
 
 ### 7.3 Layout
 
@@ -235,7 +236,7 @@ Replaces TradingView's Fib retracement labeling with **cumulative price-drop per
 Algorithm:
 
 - `chartHigh` = the maximum of every `ask_high` across the entire window.
-- `chartLow`  = the minimum of every `bid_low`  across the entire window.
+- `chartLow` = the minimum of every `bid_low` across the entire window.
 - `totalDropPct = (chartLow − chartHigh) / chartHigh × 100` — negative when the chart fell, which is the expected case for significant negative funding.
 - Generate six levels at the fractions `0, 0.2, 0.4, 0.6, 0.8, 1.0`. For each fraction `t`:
   - The level's price is linearly interpolated between `chartHigh` (at `t = 0`) and `chartLow` (at `t = 1`).
@@ -252,10 +253,12 @@ Rendering:
 ### 7.8 Header text
 
 Top-left:
+
 ```
 SYMBOL · 1s · exchange
 2025-01-15 08:00:00 UTC
 ```
+
 Top-right: the funding rate badge described in §7.3.
 
 ---

@@ -4,17 +4,17 @@ description: "This skill should be used when the user asks about 'account balanc
 license: MIT
 metadata:
   author: okx
-  version: "1.3.3"
-  homepage: "https://www.okx.com"
+  version: '1.3.3'
+  homepage: 'https://www.okx.com'
   agent:
     requires:
-      bins: ["okx"]
+      bins: ['okx']
     install:
       - id: npm
         kind: node
-        package: "@okx_ai/okx-trade-cli@1.3.3"
-        bins: ["okx"]
-        label: "Install okx CLI (npm)"
+        package: '@okx_ai/okx-trade-cli@1.3.3'
+        bins: ['okx']
+        label: 'Install okx CLI (npm)'
 ---
 
 # OKX CEX Portfolio & Account CLI
@@ -66,6 +66,7 @@ Branch in this order — first match wins:
 ### Step B — Confirm trading mode
 
 **Resolution rules:**
+
 1. Current message intent is clear (e.g. "real" / "实盘" / "live" → live; "test" / "模拟" / "demo" → demo) → use it and inform the user
 2. Current message has no explicit declaration → check conversation context for a previous choice:
    - Found → reuse it, inform user
@@ -73,10 +74,10 @@ Branch in this order — first match wins:
 
 **How to apply the mode depends on auth method (detected in Step A):**
 
-| Auth method | Live (实盘) | Demo (模拟盘) |
-|---|---|---|
-| **API Key** | `--profile <live-profile>` | `--profile <demo-profile>` |
-| **OAuth** | *(no flag needed, live is default)* | `--demo` |
+| Auth method | Live (实盘)                         | Demo (模拟盘)              |
+| ----------- | ----------------------------------- | -------------------------- |
+| **API Key** | `--profile <live-profile>`          | `--profile <demo-profile>` |
+| **OAuth**   | _(no flag needed, live is default)_ | `--demo`                   |
 
 - **API Key users**: run `okx config show --json` to discover available profile names and their `demo` settings. Use `--profile <name>` to select the correct one.
 - **OAuth users**: omit flags for live trading; add `--demo` for simulated trading. Do **not** use `--profile` to switch modes.
@@ -84,6 +85,7 @@ Branch in this order — first match wins:
 ### Handling Authentication Errors
 
 **Authentication error** (error contains "401", "Session expired", or "Run `okx auth login` first"):
+
 1. **Stop immediately** — do not retry the same command
 2. Inform the user: "Authentication failed. Your session may have expired."
 3. Load `okx-cex-auth` skill and follow the re-authentication steps
@@ -91,10 +93,10 @@ Branch in this order — first match wins:
 
 ## Demo vs Live Mode
 
-| Mode | Funds | API Key param | OAuth param |
-|---|---|---|---|
-| 实盘 (live) | Real funds | `--profile <live-profile>` | *(default, no flag)* |
-| 模拟盘 (demo) | Simulated funds | `--profile <demo-profile>` | `--demo` |
+| Mode          | Funds           | API Key param              | OAuth param          |
+| ------------- | --------------- | -------------------------- | -------------------- |
+| 实盘 (live)   | Real funds      | `--profile <live-profile>` | _(default, no flag)_ |
+| 模拟盘 (demo) | Simulated funds | `--profile <demo-profile>` | `--demo`             |
 
 ```bash
 # API Key user
@@ -107,6 +109,7 @@ okx --demo account balance                   # 模拟盘
 ```
 
 **Rules:**
+
 - **Read commands** (balance, positions, bills, etc.): always state which mode was used
 - **Write commands** (`transfer`, `set-position-mode`): **mode must be confirmed before execution** (see "Credential & Profile Check" Step B); transfer especially — wrong mode means wrong account
 - Every response after a command must append: `[mode: live]` or `[mode: demo]`
@@ -150,30 +153,31 @@ okx account transfer --ccy USDT --amt 100 --from 6 --to 18
 
 ### Read Commands
 
-| # | Command | Type | Description |
-|---|---|---|---|
-| 1 | `okx account balance [ccy]` | READ | Trading account equity, available, frozen |
-| 2a | `okx account asset-balance [ccy]` | READ | Funding account balance (per-currency list) |
-| 2b | `okx account asset-balance [ccy] --valuation [--valuationCcy <ccy>]` | READ | Same + total asset valuation across trading/funding/earn; denomination defaults to USDT, override with `--valuationCcy BTC` |
-| 3 | `okx account positions` | READ | Open contract/swap positions |
-| 4 | `okx account positions-history` | READ | Closed positions + realized PnL |
-| 5 | `okx account bills` | READ | Account ledger (deposits, withdrawals, trades) |
-| 6 | `okx account fees --instType <type>` | READ | My trading fee tier (maker/taker) |
-| 7 | `okx account config` | READ | Account level, position mode, UID |
-| 8 | `okx account max-size --instId <id> --tdMode <mode>` | READ | Max buy/sell size at current price |
-| 9 | `okx account max-avail-size --instId <id> --tdMode <mode>` | READ | Available size for next order |
-| 10 | `okx account max-withdrawal [ccy]` | READ | Max withdrawable per currency |
+| #   | Command                                                              | Type | Description                                                                                                                 |
+| --- | -------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `okx account balance [ccy]`                                          | READ | Trading account equity, available, frozen                                                                                   |
+| 2a  | `okx account asset-balance [ccy]`                                    | READ | Funding account balance (per-currency list)                                                                                 |
+| 2b  | `okx account asset-balance [ccy] --valuation [--valuationCcy <ccy>]` | READ | Same + total asset valuation across trading/funding/earn; denomination defaults to USDT, override with `--valuationCcy BTC` |
+| 3   | `okx account positions`                                              | READ | Open contract/swap positions                                                                                                |
+| 4   | `okx account positions-history`                                      | READ | Closed positions + realized PnL                                                                                             |
+| 5   | `okx account bills`                                                  | READ | Account ledger (deposits, withdrawals, trades)                                                                              |
+| 6   | `okx account fees --instType <type>`                                 | READ | My trading fee tier (maker/taker)                                                                                           |
+| 7   | `okx account config`                                                 | READ | Account level, position mode, UID                                                                                           |
+| 8   | `okx account max-size --instId <id> --tdMode <mode>`                 | READ | Max buy/sell size at current price                                                                                          |
+| 9   | `okx account max-avail-size --instId <id> --tdMode <mode>`           | READ | Available size for next order                                                                                               |
+| 10  | `okx account max-withdrawal [ccy]`                                   | READ | Max withdrawable per currency                                                                                               |
 
 ### Write Commands
 
-| # | Command | Type | Description |
-|---|---|---|---|
-| 11 | `okx account set-position-mode <mode>` | WRITE | Switch net/hedge position mode |
-| 12 | `okx account transfer` | WRITE | Transfer funds between accounts |
+| #   | Command                                | Type  | Description                     |
+| --- | -------------------------------------- | ----- | ------------------------------- |
+| 11  | `okx account set-position-mode <mode>` | WRITE | Switch net/hedge position mode  |
+| 12  | `okx account transfer`                 | WRITE | Transfer funds between accounts |
 
 ## Cross-Skill Workflows
 
 ### Pre-trade balance check
+
 > User: "I want to buy 0.1 BTC — do I have enough USDT?"
 
 ```
@@ -186,6 +190,7 @@ okx account transfer --ccy USDT --amt 100 --from 6 --to 18
 ```
 
 ### Pre-bot balance check
+
 > User: "I want to start a BTC grid bot with 1000 USDT"
 
 ```
@@ -199,6 +204,7 @@ okx account transfer --ccy USDT --amt 100 --from 6 --to 18
 ```
 
 ### Review open positions and P&L
+
 > User: "Show me my current positions and how they're performing"
 
 ```
@@ -208,6 +214,7 @@ okx account transfer --ccy USDT --amt 100 --from 6 --to 18
 ```
 
 ### Transfer and trade
+
 > User: "Move 500 USDT from my funding account to trade BTC"
 
 ```
@@ -220,6 +227,7 @@ okx account transfer --ccy USDT --amt 100 --from 6 --to 18
 ```
 
 ### Check max position size before entering
+
 > User: "How much BTC can I buy with cross margin?"
 
 ```
@@ -276,9 +284,9 @@ Before any authenticated command: see [Credential & Profile Check](#credential--
 okx account balance [ccy] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `ccy` | No | - | Filter to a single currency (e.g., `USDT`) |
+| Param | Required | Default | Description                                |
+| ----- | -------- | ------- | ------------------------------------------ |
+| `ccy` | No       | -       | Filter to a single currency (e.g., `USDT`) |
 
 Returns table: `currency`, `equity`, `available`, `frozen`. Only shows currencies with balance > 0.
 
@@ -290,11 +298,11 @@ Returns table: `currency`, `equity`, `available`, `frozen`. Only shows currencie
 okx account asset-balance [ccy] [--valuation] [--valuationCcy <ccy>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `ccy` | No | - | Filter to a specific currency (e.g., `USDT`); does not affect valuation denomination |
-| `--valuation` | No | false | Also show total asset valuation across all account types (trading/funding/earn) |
-| `--valuationCcy` | No | `USDT` | Currency in which to denominate the total asset valuation (e.g., `USDT`, `BTC`). Only used when `--valuation` is set. |
+| Param            | Required | Default | Description                                                                                                           |
+| ---------------- | -------- | ------- | --------------------------------------------------------------------------------------------------------------------- |
+| `ccy`            | No       | -       | Filter to a specific currency (e.g., `USDT`); does not affect valuation denomination                                  |
+| `--valuation`    | No       | false   | Also show total asset valuation across all account types (trading/funding/earn)                                       |
+| `--valuationCcy` | No       | `USDT`  | Currency in which to denominate the total asset valuation (e.g., `USDT`, `BTC`). Only used when `--valuation` is set. |
 
 Returns: `ccy`, `bal`, `availBal`, `frozenBal`. Only shows currencies with balance > 0.
 
@@ -310,10 +318,10 @@ With `--valuation`: additionally prints a valuation summary table with `totalBal
 okx account positions [--instType <type>] [--instId <id>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instType` | No | - | Filter: `SWAP`, `FUTURES`, `OPTION` |
-| `--instId` | No | - | Filter to specific instrument |
+| Param        | Required | Default | Description                         |
+| ------------ | -------- | ------- | ----------------------------------- |
+| `--instType` | No       | -       | Filter: `SWAP`, `FUTURES`, `OPTION` |
+| `--instId`   | No       | -       | Filter to specific instrument       |
 
 Returns: `instId`, `instType`, `side` (posSide), `pos`, `avgPx`, `upl` (unrealized PnL), `lever`. Only shows positions with size ≠ 0.
 
@@ -335,12 +343,12 @@ Returns: `instId`, `direction`, `openAvgPx`, `closeAvgPx`, `realizedPnl`, `uTime
 okx account bills [--archive] [--instType <type>] [--ccy <ccy>] [--limit <n>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--archive` | No | false | Access older records (archive endpoint) |
-| `--instType` | No | - | Filter by instrument type |
-| `--ccy` | No | - | Filter by currency |
-| `--limit` | No | 100 | Number of records |
+| Param        | Required | Default | Description                             |
+| ------------ | -------- | ------- | --------------------------------------- |
+| `--archive`  | No       | false   | Access older records (archive endpoint) |
+| `--instType` | No       | -       | Filter by instrument type               |
+| `--ccy`      | No       | -       | Filter by currency                      |
+| `--limit`    | No       | 100     | Number of records                       |
 
 Returns: `billId`, `instId`, `type`, `ccy`, `balChg`, `bal`, `ts`.
 
@@ -352,10 +360,10 @@ Returns: `billId`, `instId`, `type`, `ccy`, `balChg`, `bal`, `ts`.
 okx account fees --instType <type> [--instId <id>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instType` | Yes | - | `SPOT`, `SWAP`, `FUTURES`, `OPTION` |
-| `--instId` | No | - | Specific instrument (optional) |
+| Param        | Required | Default | Description                         |
+| ------------ | -------- | ------- | ----------------------------------- |
+| `--instType` | Yes      | -       | `SPOT`, `SWAP`, `FUTURES`, `OPTION` |
+| `--instId`   | No       | -       | Specific instrument (optional)      |
 
 Returns: `level`, `maker`, `taker`, `makerU`, `takerU`, `ts`.
 
@@ -377,11 +385,11 @@ Returns: `uid`, `acctLv` (account level), `posMode` (net/long_short_mode), `auto
 okx account max-size --instId <id> --tdMode <mode> [--px <price>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--instId` | Yes | - | Instrument ID |
-| `--tdMode` | Yes | - | `cash` (spot), `cross`, or `isolated` |
-| `--px` | No | - | Reference price (uses mark price if omitted) |
+| Param      | Required | Default | Description                                  |
+| ---------- | -------- | ------- | -------------------------------------------- |
+| `--instId` | Yes      | -       | Instrument ID                                |
+| `--tdMode` | Yes      | -       | `cash` (spot), `cross`, or `isolated`        |
+| `--px`     | No       | -       | Reference price (uses mark price if omitted) |
 
 Returns: `instId`, `maxBuy`, `maxSell`.
 
@@ -413,10 +421,10 @@ Returns table: `ccy`, `maxWd`, `maxWdEx` (with borrowing). Shows all currencies 
 okx account set-position-mode <net|long_short_mode> [--json]
 ```
 
-| Value | Behavior |
-|---|---|
-| `net` | One-directional (default) — long and short net out |
-| `long_short_mode` | Hedge mode — long and short can coexist |
+| Value             | Behavior                                           |
+| ----------------- | -------------------------------------------------- |
+| `net`             | One-directional (default) — long and short net out |
+| `long_short_mode` | Hedge mode — long and short can coexist            |
 
 > **Warning**: Switching modes when positions are open may cause unexpected behavior. Check `okx account positions` first.
 
@@ -429,14 +437,14 @@ okx account transfer --ccy <ccy> --amt <n> --from <acctType> --to <acctType> \
   [--transferType <type>] [--subAcct <name>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `--ccy` | Yes | - | Currency to transfer (e.g., `USDT`) |
-| `--amt` | Yes | - | Amount to transfer |
-| `--from` | Yes | - | Source account type: `6`=funding, `18`=trading |
-| `--to` | Yes | - | Destination account type: `6`=funding, `18`=trading |
-| `--transferType` | No | `0` | `0`=within account, `1`=to sub-account, `2`=from sub-account |
-| `--subAcct` | No | - | Sub-account name (required for sub-account transfers) |
+| Param            | Required | Default | Description                                                  |
+| ---------------- | -------- | ------- | ------------------------------------------------------------ |
+| `--ccy`          | Yes      | -       | Currency to transfer (e.g., `USDT`)                          |
+| `--amt`          | Yes      | -       | Amount to transfer                                           |
+| `--from`         | Yes      | -       | Source account type: `6`=funding, `18`=trading               |
+| `--to`           | Yes      | -       | Destination account type: `6`=funding, `18`=trading          |
+| `--transferType` | No       | `0`     | `0`=within account, `1`=to sub-account, `2`=from sub-account |
+| `--subAcct`      | No       | -       | Sub-account name (required for sub-account transfers)        |
 
 Returns: `transId`, `ccy`, `amt`.
 
@@ -444,69 +452,77 @@ Returns: `transId`, `ccy`, `amt`.
 
 ## MCP Tool Reference
 
-| Tool | Description |
-|---|---|
-| `account_get_balance` | Trading account balance |
-| `account_get_asset_balance` | Funding account balance. Use `showValuation=true` to include total asset valuation across trading/funding/earn accounts. Use `valuationCcy` (default `"USDT"`) to set the denomination for the valuation total — e.g. `valuationCcy="BTC"` returns the total in BTC. |
-| `account_get_positions` | Open positions |
-| `account_get_positions_history` | Closed position history |
-| `account_get_bills` | Account bills (recent) |
-| `account_get_bills_archive` | Account bills (archive) |
-| `account_get_trade_fee` | Trading fee tier |
-| `account_get_config` | Account configuration |
-| `account_get_max_size` | Max order size |
-| `account_get_max_avail_size` | Max available size |
-| `account_get_max_withdrawal` | Max withdrawable |
-| `account_set_position_mode` | Set position mode |
-| `account_transfer` | Transfer between accounts |
+| Tool                            | Description                                                                                                                                                                                                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `account_get_balance`           | Trading account balance                                                                                                                                                                                                                                              |
+| `account_get_asset_balance`     | Funding account balance. Use `showValuation=true` to include total asset valuation across trading/funding/earn accounts. Use `valuationCcy` (default `"USDT"`) to set the denomination for the valuation total — e.g. `valuationCcy="BTC"` returns the total in BTC. |
+| `account_get_positions`         | Open positions                                                                                                                                                                                                                                                       |
+| `account_get_positions_history` | Closed position history                                                                                                                                                                                                                                              |
+| `account_get_bills`             | Account bills (recent)                                                                                                                                                                                                                                               |
+| `account_get_bills_archive`     | Account bills (archive)                                                                                                                                                                                                                                              |
+| `account_get_trade_fee`         | Trading fee tier                                                                                                                                                                                                                                                     |
+| `account_get_config`            | Account configuration                                                                                                                                                                                                                                                |
+| `account_get_max_size`          | Max order size                                                                                                                                                                                                                                                       |
+| `account_get_max_avail_size`    | Max available size                                                                                                                                                                                                                                                   |
+| `account_get_max_withdrawal`    | Max withdrawable                                                                                                                                                                                                                                                     |
+| `account_set_position_mode`     | Set position mode                                                                                                                                                                                                                                                    |
+| `account_transfer`              | Transfer between accounts                                                                                                                                                                                                                                            |
 
 ---
 
 ## Input / Output Examples
 
 **"How much USDT do I have?"**
+
 ```bash
 okx account balance USDT
 # → currency: USDT | equity: 5000.00 | available: 4500.00 | frozen: 500.00
 ```
 
 **"Show all my open positions"**
+
 ```bash
 okx account positions
 # → table: instId, instType, side, pos, avgPx, upl, lever
 ```
 
 **"What's my trading history and realized PnL?"**
+
 ```bash
 okx account positions-history
 # → table: instId, direction, openAvgPx, closeAvgPx, realizedPnl, uTime
 ```
 
 **"Show my recent account activity"**
+
 ```bash
 okx account bills --limit 20
 # → table: billId, instId, type, ccy, balChg, bal, ts
 ```
 
 **"What are my trading fees for SWAP?"**
+
 ```bash
 okx account fees --instType SWAP
 # → level: VIP1 | maker: -0.0001 | taker: 0.0005
 ```
 
 **"How much BTC can I buy in cross margin?"**
+
 ```bash
 okx account max-size --instId BTC-USDT-SWAP --tdMode cross
 # → instId: BTC-USDT-SWAP | maxBuy: 12.5 | maxSell: 12.5
 ```
 
 **"Transfer 200 USDT from funding to trading"**
+
 ```bash
 okx account transfer --ccy USDT --amt 200 --from 6 --to 18
 # → Transfer: TXN123456 (USDT 200)
 ```
 
 **"Check my account config"**
+
 ```bash
 okx account config
 # → uid: 123456789 | acctLv: 2 | posMode: net | autoLoan: false
@@ -516,14 +532,15 @@ okx account config
 
 OKX splits assets across multiple sub-accounts. The `--valuation` breakdown maps directly:
 
-| Account type | `details` key | Used for | Check with |
-|---|---|---|---|
-| Trading (unified) | `trading` | Spot, margin, swap, futures, options | `okx account balance` or `details.trading` in `--valuation` |
-| Funding | `funding` | Deposits/withdrawals, idle funds | `okx account asset-balance` or `details.funding` in `--valuation` |
-| Earn | `earn` | Simple earn, staking, savings | `details.earn` in `--valuation` |
-| Classic | `classic` | Classic account (legacy, less common) | `details.classic` in `--valuation` |
+| Account type      | `details` key | Used for                              | Check with                                                        |
+| ----------------- | ------------- | ------------------------------------- | ----------------------------------------------------------------- |
+| Trading (unified) | `trading`     | Spot, margin, swap, futures, options  | `okx account balance` or `details.trading` in `--valuation`       |
+| Funding           | `funding`     | Deposits/withdrawals, idle funds      | `okx account asset-balance` or `details.funding` in `--valuation` |
+| Earn              | `earn`        | Simple earn, staking, savings         | `details.earn` in `--valuation`                                   |
+| Classic           | `classic`     | Classic account (legacy, less common) | `details.classic` in `--valuation`                                |
 
 **Typical flow when user says "I have X USDT but can't trade":**
+
 1. `okx account asset-balance --valuation` → look at each `details.*` field
 2. If `details.funding` is large and `details.trading` is small → the funds are in the funding account
 3. Transfer: `okx account transfer --ccy USDT --amt <n> --from 6 --to 18`

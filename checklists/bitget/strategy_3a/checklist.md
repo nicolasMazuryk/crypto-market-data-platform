@@ -8,6 +8,7 @@ Code: `src/execution/strategies/strategy_3a.ts`, `src/execution/execution/manage
 ---
 
 **Bitget-specific notes:**
+
 - REST entry (no WS adapter for strategy_3a)
 - Bitget 'orders' WS channel for fill events; timestamps in ms (no conversion)
 - Bitget echoes `clientOrderId` → WS routing is primary for entry and exit fills

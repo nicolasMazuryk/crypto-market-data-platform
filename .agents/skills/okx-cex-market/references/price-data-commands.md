@@ -6,9 +6,9 @@
 okx market ticker <instId> [--json]
 ```
 
-| Param | Required | Description |
-|---|---|---|
-| `instId` | Yes | Instrument ID (e.g., `BTC-USDT`, `BTC-USDT-SWAP`) |
+| Param    | Required | Description                                       |
+| -------- | -------- | ------------------------------------------------- |
+| `instId` | Yes      | Instrument ID (e.g., `BTC-USDT`, `BTC-USDT-SWAP`) |
 
 Returns: `last` · `high24h` · `low24h` · `vol24h` (base currency) · `sodUtc8` (24h change %)
 
@@ -25,9 +25,9 @@ okx market ticker BTC-USDT
 okx market tickers <instType> [--json]
 ```
 
-| Param | Required | Values |
-|---|---|---|
-| `instType` | Yes | `SPOT` `SWAP` `FUTURES` `OPTION` |
+| Param      | Required | Values                           |
+| ---------- | -------- | -------------------------------- |
+| `instType` | Yes      | `SPOT` `SWAP` `FUTURES` `OPTION` |
 
 Returns table: `instId` · `last` · `high24h` · `low24h` · `vol24h`
 
@@ -44,10 +44,10 @@ okx market tickers SWAP
 okx market orderbook <instId> [--sz <n>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `instId` | Yes | - | Instrument ID |
-| `--sz` | No | 5 | Depth levels per side (1–400) |
+| Param    | Required | Default | Description                   |
+| -------- | -------- | ------- | ----------------------------- |
+| `instId` | Yes      | -       | Instrument ID                 |
+| `--sz`   | No       | 5       | Depth levels per side (1–400) |
 
 Returns: top asks (ascending) and bids (descending) with price and size. Display shows top 5 per side regardless of `--sz`.
 
@@ -65,10 +65,10 @@ okx market orderbook BTC-USDT-SWAP --sz 20
 okx market trades <instId> [--limit <n>] [--json]
 ```
 
-| Param | Required | Default |
-|---|---|---|
-| `instId` | Yes | - |
-| `--limit` | No | 100 |
+| Param     | Required | Default |
+| --------- | -------- | ------- |
+| `instId`  | Yes      | -       |
+| `--limit` | No       | 100     |
 
 Returns: `tradeId` · `px` · `sz` · `side` (`buy`/`sell`) · `ts`
 
@@ -84,13 +84,13 @@ okx market trades BTC-USDT --limit 20
 okx market candles <instId> [--bar <bar>] [--limit <n>] [--after <ts>] [--before <ts>] [--json]
 ```
 
-| Param | Required | Default | Description |
-|---|---|---|---|
-| `instId` | Yes | - | Instrument ID |
-| `--bar` | No | `1m` | Time granularity (see values below) |
-| `--limit` | No | 100 | Number of candles |
-| `--after` | No | - | Return candles **before** this timestamp (ms) — paginate backward in time |
-| `--before` | No | - | Return candles **after** this timestamp (ms) — paginate forward in time |
+| Param      | Required | Default | Description                                                               |
+| ---------- | -------- | ------- | ------------------------------------------------------------------------- |
+| `instId`   | Yes      | -       | Instrument ID                                                             |
+| `--bar`    | No       | `1m`    | Time granularity (see values below)                                       |
+| `--limit`  | No       | 100     | Number of candles                                                         |
+| `--after`  | No       | -       | Return candles **before** this timestamp (ms) — paginate backward in time |
+| `--before` | No       | -       | Return candles **after** this timestamp (ms) — paginate forward in time   |
 
 `--bar` values: `1m` `3m` `5m` `15m` `30m` `1H` `2H` `4H` `6H` `12H` `1D` `1W` `1M`
 

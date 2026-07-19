@@ -9,8 +9,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Execution engine is down"
-          description: "engine_up has been 0 or absent for > 1 minute"
+          summary: 'Execution engine is down'
+          description: 'engine_up has been 0 or absent for > 1 minute'
 
       # Kill switch tripped
       - alert: KillSwitchHalted
@@ -19,8 +19,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Kill switch is in halted mode"
-          description: "The kill switch has been tripped — no new orders will be placed"
+          summary: 'Kill switch is in halted mode'
+          description: 'The kill switch has been tripped — no new orders will be placed'
 
       # No fills around a funding window (missed opportunity or broken flow)
       - alert: NoFillsAroundFunding
@@ -32,8 +32,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "No fills in 15 min on {{ $labels.exchange }}/{{ $labels.strategy }}"
-          description: "Intents are being decided but none are filling — check order adapter and WS connection for {{ $labels.exchange }}"
+          summary: 'No fills in 15 min on {{ $labels.exchange }}/{{ $labels.strategy }}'
+          description: 'Intents are being decided but none are filling — check order adapter and WS connection for {{ $labels.exchange }}'
 
       # WS reconnect storm
       - alert: WsReconnectStorm
@@ -42,8 +42,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "WebSocket reconnect storm on {{ $labels.exchange }}"
-          description: "More than 3 WS reconnects/min on {{ $labels.exchange }} for 2+ minutes"
+          summary: 'WebSocket reconnect storm on {{ $labels.exchange }}'
+          description: 'More than 3 WS reconnects/min on {{ $labels.exchange }} for 2+ minutes'
 
       # WS fully disconnected
       - alert: WsDisconnected
@@ -52,8 +52,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "WebSocket disconnected on {{ $labels.exchange }}"
-          description: "WS connection_state is 0 (disconnected) for {{ $labels.exchange }} for 2+ minutes"
+          summary: 'WebSocket disconnected on {{ $labels.exchange }}'
+          description: 'WS connection_state is 0 (disconnected) for {{ $labels.exchange }} for 2+ minutes'
 
       # Persistence queue growing — writes piling up
       - alert: PersistenceQueueHigh
@@ -62,8 +62,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Persistence write queue depth > 100"
-          description: "persistence_queue_size={{ $value }} — DB writes are falling behind"
+          summary: 'Persistence write queue depth > 100'
+          description: 'persistence_queue_size={{ $value }} — DB writes are falling behind'
 
       # Persistence drops
       - alert: PersistenceDrops
@@ -72,8 +72,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Persistence writes being dropped"
-          description: "persistence_dropped_total is increasing — data loss in progress"
+          summary: 'Persistence writes being dropped'
+          description: 'persistence_dropped_total is increasing — data loss in progress'
 
       # High intent error rate (excluding expected cap_exceeded)
       - alert: HighIntentErrorRate
@@ -83,8 +83,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High intent rejection rate on {{ $labels.exchange }}/{{ $labels.strategy }}"
-          description: "rejection code={{ $labels.code }} rate={{ $value }}/s"
+          summary: 'High intent rejection rate on {{ $labels.exchange }}/{{ $labels.strategy }}'
+          description: 'rejection code={{ $labels.code }} rate={{ $value }}/s'
 
       # Stale funding snapshots
       - alert: FundingSnapshotsStale
@@ -93,5 +93,5 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "{{ $value }} stale funding snapshots on {{ $labels.exchange }}"
-          description: "Funding data not refreshing for {{ $value }} symbol(s) — symbols may have been delisted on {{ $labels.exchange }} or the funding puller is stuck"
+          summary: '{{ $value }} stale funding snapshots on {{ $labels.exchange }}'
+          description: 'Funding data not refreshing for {{ $value }} symbol(s) — symbols may have been delisted on {{ $labels.exchange }} or the funding puller is stuck'

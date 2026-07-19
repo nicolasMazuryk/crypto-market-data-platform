@@ -21,9 +21,9 @@ Everything else — the branch model, the commit-on-improve / reset-on-regress r
 
 ## Optimization Target
 
-- **Metric to maximize:** `total net PnL` (higher is better — note this is the *inverse* direction of `val_bpb`, so the keep/discard comparison must be flipped)
+- **Metric to maximize:** `total net PnL` (higher is better — note this is the _inverse_ direction of `val_bpb`, so the keep/discard comparison must be flipped)
 - **Iteration cap per run:** configurable, default `50` (replacing autoresearch's open-ended loop)
-- **What the agent is allowed to modify:** **only** the YAML configuration file(s) that belong to *its own* `(strategy, variation)`. It must not touch configs belonging to any other strategy or variation, and it must not touch any non-config files.
+- **What the agent is allowed to modify:** **only** the YAML configuration file(s) that belong to _its own_ `(strategy, variation)`. It must not touch configs belonging to any other strategy or variation, and it must not touch any non-config files.
 
 ## Existing Infrastructure (Do Not Rebuild, Do Not Modify)
 
@@ -48,18 +48,18 @@ Design every interface (config schema, CLI, file layout, git model, logs) with t
 
 There are 5 strategies, some with variations (e.g. `strategy_3a`, `strategy_3b`), each runnable against multiple exchanges. Each `(strategy, variation, exchange)` triple is an **independent autoresearch run** with its own iteration budget. Example:
 
-| # | Strategy    | Exchange |
-|---|-------------|----------|
-| 1 | strategy_1  | binance  |
-| 2 | strategy_1  | okx      |
-| 3 | strategy_1  | bitget   |
-| 4 | strategy_2  | bybit    |
-| 5 | strategy_2  | gateio   |
-| 6 | strategy_2  | kucoin   |
-| 7 | strategy_3a | okx      |
-| 8 | strategy_3a | binance  |
-| 9 | strategy_3b | bybit    |
-| ... | ...       | ...      |
+| #   | Strategy    | Exchange |
+| --- | ----------- | -------- |
+| 1   | strategy_1  | binance  |
+| 2   | strategy_1  | okx      |
+| 3   | strategy_1  | bitget   |
+| 4   | strategy_2  | bybit    |
+| 5   | strategy_2  | gateio   |
+| 6   | strategy_2  | kucoin   |
+| 7   | strategy_3a | okx      |
+| 8   | strategy_3a | binance  |
+| 9   | strategy_3b | bybit    |
+| ... | ...         | ...      |
 
 Requirements:
 
@@ -80,7 +80,7 @@ This must work correctly whether the prior run ended cleanly at the iteration ca
 
 ## What I Want You To Build
 
-1. **Analyze `karpathy/autoresearch`** end-to-end. Identify *only* the changes strictly needed to repurpose it. At minimum this covers:
+1. **Analyze `karpathy/autoresearch`** end-to-end. Identify _only_ the changes strictly needed to repurpose it. At minimum this covers:
    - The functions / scripts in the repo
    - `program.md` (the agent's instruction file — needs rewriting for our domain, metric direction, allowed-edit scope, iteration cap, and resume behavior)
    - `results.tsv` schema (PnL-relevant columns instead of `val_bpb` / `memory_gb`)
@@ -88,6 +88,7 @@ This must work correctly whether the prior run ended cleanly at the iteration ca
    - Anything else genuinely required
 
    Explicitly call out what you are **not** changing and why, to confirm the core loop is preserved.
+
 2. **Build the orchestration scaffolding** that:
    - Reads the manually-specified matrix config file
    - Spawns one isolated autoresearch instance per `(strategy, variation, exchange)` row
