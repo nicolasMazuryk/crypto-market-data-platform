@@ -15,7 +15,6 @@ charts/
 data/
 !src/backtesting/data/
 
-tasks/
 !ansible/roles/*/tasks/
 !ansible/roles/*/tasks/*.yml
 src/markets/snapshots/

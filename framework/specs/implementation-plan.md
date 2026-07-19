@@ -1,0 +1,60 @@
+# Implementation Plan — ordered task index
+
+Tasks are totally ordered; **no task depends on a higher-numbered task** (no forward deps). Sequencing spine (from the plan): **(1) surface reduction → (2) shared foundations/contracts → (3) parity-critical core model → (4) per-strategy conformance → (5) live-only concerns.** Each task file (`tasks/NN-<slug>.md`) is self-contained and sized for a single ~80k-token read+edit+verify window.
+
+**Parity legend:** `both` = touches backtest+live (parity-breaking); `bt` = backtest only; `live` = live only; `cfg` = config/schema; `none` = removal/tooling.
+
+## Phase 1 — Surface reduction (shrink before conforming)
+
+| NN | Title | Goal | Deps | Priority | Parity |
+|---|---|---|---|---|---|
+| 01 | Remove safe backtest-only spec-less strategies | Delete `strategy_4_1b`, `strategy_4_2b`, `strategy_4_3b`, `strategy_spot_futures` (no live-config/fleet/active-matrix refs). Strip variants from shared files; delete `strategy-spot-futures.ts` + its engine special-path. | — | P1 | none |
+| 02 | Remove `strategy_4_3a` | Delete the only spec-less **exec-wired** rule + its 6 live-configs + `strategy-4-3.ts`/`strategy_4_3a.ts` (both `4_3a`/`4_3b` variants now gone → whole files). | 01 | P1 | none |
+| 03 | Remove `strategy_3b` variant | Strip `_3b` branch from shared `strategy-3.ts`/`strategy_3.ts` (keep `_3a`); delete 6 live-configs + exec mutual-exclusion entries. | — | P1 | none |
+| 04 | Remove `strategy_5` + autoresearch infra | Delete active `matrix.yaml:161` row, strategy_5-specific autoresearch code (`matrix/loader.ts`, `paths.ts`, `git/diff-gate.ts`, `agent/prompt-builder.ts`, `types.ts`) + backtest cross-exchange special path. | — | P2 | none |
+
+## Phase 2 — Shared foundations & contracts (interfaces everything else asserts against)
+
+| NN | Title | Goal | Deps | Priority | Parity |
+|---|---|---|---|---|---|
+| 05 | Single canonical param schema (§11.2.1) | One canonical registry (name+unit+sign+default+bounds+per-exchange override) generating **both** backtest snake_case and live camelCase schemas; reconcile every §10.2 row; kill hand-maintained divergence. | 01–03 | **P0** | cfg |
+| 06 | Hard parameter bounds (§11.1) | Enforce every §11.1 bound in both loaders: `exit_offset≥6` (R2), `deadline 10–3600` (R3), `funding_fee_timeout 5–120`, `ladder_count 2–20`, `bottom>top`, `sl_mult` per-strategy ranges + `slMultiplier>limitOffsetMult` (S4.2a), `retracement 0<v≤1`, `take_profit 0.05–5.0`, thresholds, `stop_loss 0.2–5.0`. | 05 | **P0** | cfg |
+| 07 | Unit-mismatch protection (§11.2) | `take_profit_pct<0.05 → unit_suspect_fraction` hard error (R4); `retracement>1.0` reject; `.strict()` unknown-key rejection; wrong-unit = error not warning. | 05, 06 | **P0** | cfg |
+| 08 | CI schema round-trip test (§11.2.4) | Every canonical param → both schemas → re-parse → numeric compare; run in CI. | 05 | P1 | cfg |
+| 09 | S6 threshold key migration (R6) | Canonical `fundingThresholdPercent`; accept legacy `funding_threshold` one cycle with deprecation warn; update engine reads (`strategy_6.ts:29`, `execution/scheduler.ts:63`, `strategies/types.ts:64`). | 05 | P1 | cfg |
+| 10 | Terminal-state enums (§12) | Rename `exit_reason` in both engines to §12.1 (`timed/funding_fee_event/funding_fee_timeout/tp_hit/sl_hit/deadline/kill_switch_flatten`); add `error_code` to backtest output (§12.2). | 05 | P1 | both |
+
+## Phase 3 — Parity-critical core model (mostly backtest; the optimism fixes)
+
+| NN | Title | Goal | Deps | Priority | Parity |
+|---|---|---|---|---|---|
+| 11 | `T_drop` localization + lookahead guard (§3) | Replace the naïve detector with the §3.1 algorithm (`drop_move`/`red_range`/`Q`/argmax/tie-breaks); fallback = `T_settle+window` + `no_drop_localized`; add 3 keys; wire `lookahead-guard.ts` into the runner (§3.2). | 05, 06 | **P0** | bt |
+| 12 | Latency + fill model (§4) | Inject `order_latency_ms=1000` on every action; `market_slippage_pct` on every market/stop fill; stop gap-through; reduce-only qty cap; lot-step/minCost feasibility. | 05, 06 | **P0** | bt |
+| 13 | Accrual boundary fix (§5.1) | Test funding at `T_settle` (not `T_drop`) for S1/S2; fill-time incl latency; remove `funding_applied_on_same_second` toggle (OQ-4). | 11, 12 | P1 | bt |
+| 14 | Same-candle rules (§5.5) | SL-exception on entry candle (rule 1); entry-vs-SL both fire worst (rule 4); credit-gated ≥`drop_candle+1` structural (rule 2). | 11, 12 | P1 | bt |
+| 15 | Backtest outputs + conservatism report (§10.3, §14) | Emit `t_drop_offset_s` (null on `no_drop_localized`), `error_code`, `funding_received`; confirm/fix percent units (OQ-5); report active conservatisms + measured bias. | 10, 11 | P2 | bt |
+
+## Phase 4 — Per-strategy conformance (group order L → S → R → D)
+
+| NN | Title | Goal | Deps | Priority | Parity |
+|---|---|---|---|---|---|
+| 16 | S1 backtest exit un-rekey (R2) | Key the timed exit to `T_settle+exit_offset` (not detected `T_drop`); rely on Task 6 for the ≥6 bound; record `t_drop_offset_s` bucketing. | 06, 11, 13 | P1 | bt |
+| 17 | S1-WS backtest build (OQ-1) | New `strategy-1-ws.ts`: `T_drop`-emulated event exit ≥`drop_candle+1`, `ws_exit_extra_delay_seconds`, `ws_event_miss_rate>0` timeout path that must occur; register + `VALID_STRATEGY_IDS`. | 11, 12, 13, 14 | P1 | bt |
+| 18 | S2 backtest tracker fix | Running-low starts at `T_drop` arming (not `T_settle`, `strategy-2.ts:105`); anchor = entry-decision price (not `T_settle`-open); add ws-miss timeout arming path. | 11, 12, 13, 14 | P1 | bt |
+| 19 | S4.1a R11 ladder lifecycle (both) | SL placed with ladder at `P_avg_full`; TP on first fill re-placed per deeper fill; unfilled rungs cancelled only at exit; largest-remainder split; min-notional drop; top-rung skip; `ladder_no_fills`; `FUNDING_PNL=0` (R7). Fix live `manager.ts:3362-3434` + backtest `strategy-4-1.ts`. | 06, 10, 12, 14 | **P0** | both |
+| 20 | S4.2a R11 single-limit lifecycle (both) | SL placed with entry limit at `P_limit`-derived price; `limit_expired` terminal (backtest missing); `FUNDING_PNL=0`. Fix live `manager.ts:577-610` anchor + backtest `strategy-4-2.ts`. Requires valid live YAMLs (OQ-8). | 06, 10, 12, 14 | P1 | both |
+
+## Phase 5 — Live-only concerns
+
+| NN | Title | Goal | Deps | Priority | Parity |
+|---|---|---|---|---|---|
+| 21 | S3a backtest cost realism | Confirm S3a backtest conforms once latency/slippage (Task 12) land; add co-run guard parity check. (Thin task — may close as no-op after 12.) | 12 | P3 | bt |
+| 22 | Live per-exchange deltas & guards | Stagger 100ms default for okx/gateio/kucoin/bitget (F3); stale-snapshot 60s (G2); S6 descending sort for positive threshold (G3); S2 tracker ±5s upper bound (F7); REST funding-fee poll for S2/S6 + all venues (OQ-6); rate-limit reservation/priority (OQ-2). | 05, 09 | P2 | live |
+| 23 | Kill-switch enum reconciliation (OQ-3) | Reconcile spec §7.1 `off/paused/flatten` with code `live/dry_run/drain_only/halted`; document authoritative mapping; align `exit_reason` `kill_switch_flatten`. | 10 | P2 | live |
+| 24 | S6 validation protocol + rate nuance | Scaffold shadow(≥2wk)→canary(≥4wk) harness with pre-registered acceptance metrics (§6.2); optionally re-fetch settled \|F\| at MAIN fill. | 09 | P3 | live |
+
+## Critical path
+
+`01 → 02` and `03`, `04` (removals, parallelizable) → **`05` (canonical schema, gates everything cfg)** → `06 → 07`, `08`, `09`, `10` → **`11`, `12` (backtest core, gate all bt strategy work)** → `13 → 14` → `16/17/18` and `19/20` → `21/22/23/24`.
+
+P0 must-do-first cluster: **05, 06, 07, 11, 12, 19** — the canonical schema, its bounds/unit guards, backtest latency+`T_drop`, and the S4.1a lifecycle (the single most broken strategy, live + backtest).

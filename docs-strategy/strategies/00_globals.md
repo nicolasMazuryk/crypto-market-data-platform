@@ -370,7 +370,7 @@ Wherever the backtest must simplify, the simplification must **hurt** the simula
 | Simplification | Bias |
 |---|---|
 | Trade-through-only limit fills | fewer/never-better maker fills → understates TP hit rate |
-| 1 s injected latency on every action (live ≈ 0.8 s), except LIMIT orders | worse entries/exits |
+| 1 s injected latency on every action (live ≈ 0.8 s) | worse entries/exits |
 | `T_drop` fallback = latest window edge on non-localization | latest possible arming → tracker sees fewer lows, S1-WS exits latest |
 | SL-first / worst-ordering conflict resolution | worst fill of any ambiguous candle |
 | `ws_event_miss_rate > 0` (timeout paths must occur) | occasional worst-path exits that live rarely takes |
