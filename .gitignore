@@ -29,3 +29,6 @@ ansible/inventory/hosts.ini
 # Terraform
 **/.terraform/providers/
 terraform/terraform.tfvars
+
+# Framework
+tasks/
