@@ -10,7 +10,6 @@ export type StrategyId =
   | 'strategy_3b'
   | 'strategy_4_1a'
   | 'strategy_4_2a'
-  | 'strategy_4_3a'
   | 'strategy_6'
 
 export type Side = 'long' | 'short'
@@ -135,24 +134,6 @@ export interface Strategy4_2aConfig {
   leverage: number
 }
 
-/** Strategy 4.3a: Tight-timing limit LONG, no funding accrual. */
-export interface Strategy4_3aConfig {
-  id: 'strategy_4_3a'
-  enabled: boolean
-  negativeFundingThresholdPercent: number
-  /** Typically 2s — stresses the scheduler/skew budget. */
-  entryOffsetSeconds: number
-  /** Entry limit offset multiplier: limitPrice = P × (1 − |F%| × entryMult / 100) */
-  entryMult: number
-  /** SL distance multiplier: slPct = |F%| × slMultiplier */
-  slMultiplier: number
-  /** Take-profit in percent (e.g. 0.3 for 0.3%) anchored to fill price */
-  takeProfitPct: number
-  deadlineSeconds: number
-  amountUsd: number
-  leverage: number
-}
-
 export type StrategyConfig =
   | Strategy1Config
   | Strategy1WsConfig
@@ -161,7 +142,6 @@ export type StrategyConfig =
   | Strategy3bConfig
   | Strategy4_1aConfig
   | Strategy4_2aConfig
-  | Strategy4_3aConfig
   | Strategy6Config
 
 /**

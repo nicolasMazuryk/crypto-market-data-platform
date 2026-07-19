@@ -9,7 +9,6 @@ const StrategyNameEnum = z.enum([
   'strategy_3b',
   'strategy_4_1a',
   'strategy_4_2a',
-  'strategy_4_3a',
   'strategy_6',
 ])
 

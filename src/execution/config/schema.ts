@@ -20,7 +20,6 @@ import type {
   Strategy3bConfig,
   Strategy4_1aConfig,
   Strategy4_2aConfig,
-  Strategy4_3aConfig,
   Strategy6Config,
 } from '../strategies/types.js'
 
@@ -144,18 +143,6 @@ const StrategyRawSchema = z.discriminatedUnion('id', [
       message: 'slMultiplier must be greater than limitOffsetMult',
     }),
   z.object({
-    id: z.literal('strategy_4_3a'),
-    enabled: z.boolean().default(false),
-    negativeFundingThresholdPercent: z.number().default(-0.4),
-    entryOffsetSeconds: z.number().default(2),
-    entryMult: z.number().default(0.75),
-    slMultiplier: z.number().default(1.5),
-    takeProfitPct: z.number().default(0.3),
-    deadlineSeconds: z.number().default(60),
-    amountUsd: z.number().default(20),
-    leverage: z.number().default(4),
-  }),
-  z.object({
     id: z.literal('strategy_6'),
     enabled: z.boolean().default(false),
     mainSide: z.enum(['long', 'short']),
@@ -220,7 +207,6 @@ const RiskRawSchema = z.object({
       strategy_3b: PerStrategyRiskRawSchema.optional(),
       strategy_4_1a: PerStrategyRiskRawSchema.optional(),
       strategy_4_2a: PerStrategyRiskRawSchema.optional(),
-      strategy_4_3a: PerStrategyRiskRawSchema.optional(),
       strategy_6: PerStrategyRiskRawSchema.optional(),
     })
     .default({}),
@@ -353,7 +339,7 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
   const hasShort = has3a || has3b
   const hasLong = parsed.strategies.some(
     s =>
-      ['strategy_1', 'strategy_1_ws', 'strategy_2', 'strategy_4_1a', 'strategy_4_2a', 'strategy_4_3a'].includes(s.id) &&
+      ['strategy_1', 'strategy_1_ws', 'strategy_2', 'strategy_4_1a', 'strategy_4_2a'].includes(s.id) &&
       s.enabled
   )
   if (hasShort && hasLong) {
@@ -402,7 +388,6 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
       | Strategy2Config
       | Strategy4_1aConfig
       | Strategy4_2aConfig
-      | Strategy4_3aConfig
       | Strategy6Config
   })
 

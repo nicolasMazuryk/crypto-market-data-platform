@@ -195,7 +195,7 @@ describe('Config Loader', () => {
     })
   })
 
-  it('loads all 8 strategy configs without error', () => {
+  it('loads all 7 strategy configs without error', () => {
     const strategies = [
       'strategy_1',
       'strategy_2',
@@ -203,7 +203,6 @@ describe('Config Loader', () => {
       'strategy_3b',
       'strategy_4_1a',
       'strategy_4_2a',
-      'strategy_4_3a',
       'strategy_5',
     ]
 

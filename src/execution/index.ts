@@ -55,7 +55,6 @@ import { createStrategy2Rule } from './strategies/strategy_2.js'
 import { createStrategy3Rule } from './strategies/strategy_3.js'
 import { createStrategy4_1aRule } from './strategies/strategy_4_1a.js'
 import { createStrategy4_2aRule } from './strategies/strategy_4_2a.js'
-import { createStrategy4_3aRule } from './strategies/strategy_4_3a.js'
 import { createStrategy6Rule } from './strategies/strategy_6.js'
 import { preflight } from './execution/preflight.js'
 import { createFundingEventScheduler } from './execution/scheduler.js'
@@ -620,9 +619,6 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
   }
   if (configsByStrategy.has('strategy_4_2a')) {
     strategyRegistry.register(createStrategy4_2aRule({ ids, refPrice }))
-  }
-  if (configsByStrategy.has('strategy_4_3a')) {
-    strategyRegistry.register(createStrategy4_3aRule({ ids, refPrice }))
   }
   if (configsByStrategy.has('strategy_6')) {
     strategyRegistry.register(createStrategy6Rule({ ids, refPrice }))

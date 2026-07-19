@@ -336,19 +336,6 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         sl_mult: requirePositiveNumber(merged, 'sl_mult', ctx),
       }
 
-    case 'strategy_4_3a':
-      return {
-        strategy_id: strategyId,
-        direction: 'long',
-        funding_threshold: requirePositiveNumber(merged, 'funding_threshold', ctx),
-        entry_offset_seconds: requireIntInRange(merged, 'entry_offset_seconds', 1, 5, ctx),
-        entry_mult: requirePositiveNumber(merged, 'entry_mult', ctx),
-        sl_mult: requirePositiveNumber(merged, 'sl_mult', ctx),
-        take_profit: requirePositiveNumber(merged, 'take_profit', ctx),
-        deadline_seconds: requireIntInRange(merged, 'deadline_seconds', 10, 900, ctx),
-        funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
-      }
-
     case 'strategy_5': {
       const main_exchange = requireString(merged, 'main_exchange', ctx)
       if (!SUPPORTED_EXCHANGES.includes(main_exchange)) {

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { Strategy41 } from '../../strategies/strategy-4-1.js'
 import { Strategy42 } from '../../strategies/strategy-4-2.js'
-import { Strategy43 } from '../../strategies/strategy-4-3.js'
 import { buildWindow, makeFundingEvent, BINANCE_FEES, DEFAULT_SLIPPAGE } from './fixtures.js'
 
 const TOLERANCE = 1e-10
@@ -434,89 +433,3 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
   })
 })
 
-describe('E2E: Strategy 4.3 — Limit with SL/TP', () => {
-  it('Scenario 12: Filled, SL triggered', () => {
-    const strategy = new Strategy43('strategy_4_3a')
-    strategy.initialize(
-      {
-        strategy_id: 'strategy_4_3a',
-        direction: 'long',
-        funding_threshold: 0.006,
-        entry_offset_seconds: 2,
-        entry_mult: 0.75,
-        sl_mult: 1.5,
-        take_profit: 0.003,
-        deadline_seconds: 60,
-        funding_applied_on_same_second: false,
-      },
-      BINANCE_FEES,
-      DEFAULT_SLIPPAGE
-    )
-
-    const fundingTime = new Date('2025-06-01T00:00:00Z')
-    // F = 1%
-    // Entry limit at P * (1 - 0.01 * 0.75) = P * 0.9925
-    // SL at P * (1 - 0.01 * 1.5) = P * 0.985
-    // Price drops through entry and then through SL
-
-    const window = buildWindow({
-      fundingTime,
-      basePrice: 50000,
-      priceFn: offset => {
-        if (offset < 0) return 50000
-        return 50000 - offset * 50 // Continuous drop
-      },
-    })
-
-    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('SL_HIT')
-    expect(result.pnl.net_pnl).toBeLessThan(0)
-  })
-
-  it('Scenario 13: Filled, deadline exit', () => {
-    const strategy = new Strategy43('strategy_4_3a')
-    strategy.initialize(
-      {
-        strategy_id: 'strategy_4_3a',
-        direction: 'long',
-        funding_threshold: 0.006,
-        entry_offset_seconds: 2,
-        entry_mult: 0.75,
-        sl_mult: 1.5,
-        take_profit: 0.003,
-        deadline_seconds: 60,
-        funding_applied_on_same_second: false,
-      },
-      BINANCE_FEES,
-      DEFAULT_SLIPPAGE
-    )
-
-    const fundingTime = new Date('2025-06-01T00:00:00Z')
-    // F = 1%
-    // P_current ask_open at T-2 = 50005 (with ~5 spread on 50000)
-    // Entry limit at P * (1 - 0.01 * 0.75) = 50005 * 0.9925 = 49629.96
-    // SL at P * (1 - 0.01 * 1.5) = 50005 * 0.985 = 49254.925
-    // TP at fill_price * 1.003 = ~49779
-    //
-    // Price drops to 49600 (below entry limit to fill) then stays at 49650
-    // which is above SL (49255) but below TP (49779)
-    const window = buildWindow({
-      fundingTime,
-      basePrice: 50000,
-      priceFn: offset => {
-        if (offset < -1) return 50000
-        if (offset <= 1) return 49550 // Drop to fill entry (ask_low < 49630)
-        return 49650 // Stay between SL and TP
-      },
-    })
-
-    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('DEADLINE')
-  })
-})

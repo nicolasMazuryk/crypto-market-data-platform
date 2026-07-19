@@ -98,14 +98,6 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 - `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
 - `sl_mult`:              >= 0.6     AND <= 4.0    ← SL at entry × (1 − F × mult); MUST be > limit_offset_mult
 
-### strategy_4_3a (LONG — limit with SL/TP)
-- `funding_threshold`:    >= 0.001  AND <= 0.015
-- `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `entry_mult`:           >= 0.3     AND <= 3.0    ← entry at P × (1 − F × mult); default is 1.0
-- `sl_mult`:              >= 0.5     AND <= 4.0    ← SL at P × (1 − F × mult); MUST be > entry_mult
-- `take_profit`:          >= 0.002   AND <= 0.020
-- `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
-
 ### strategy_5 (SHORT on target — main-exchange-driven cross-exchange)
 - `main_exchange_funding_threshold`: >= 0.002 AND <= 0.015
 - `min_funding_spread`:              >= 0.001 AND <= 0.015

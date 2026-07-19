@@ -184,25 +184,6 @@ export interface Strategy42Config {
   sl_mult: number
 }
 
-/** Strategy 4.3: Negative Funding LONG - Limit Entry with SL/TP */
-export interface Strategy43Config {
-  strategy_id: 'strategy_4_3a'
-  direction: 'long'
-  funding_threshold: number
-  /** Seconds before T_funding to enter (>= 2, market-order latency) */
-  entry_offset_seconds: number
-  /** Multiplier for entry limit price offset */
-  entry_mult: number
-  /** Multiplier for stop-loss distance */
-  sl_mult: number
-  /** Take-profit distance (e.g., 0.003 for 0.3%) */
-  take_profit: number
-  /** Max seconds after T_funding before forced exit (2..180) */
-  deadline_seconds: number
-  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
-  funding_applied_on_same_second: boolean
-}
-
 /** Strategy 5: Main-Exchange-Driven Cross-Exchange Short */
 export interface Strategy5Config {
   strategy_id: 'strategy_5'
@@ -231,7 +212,6 @@ export type StrategyConfig =
   | Strategy3Config
   | Strategy41Config
   | Strategy42Config
-  | Strategy43Config
   | Strategy5Config
 
 /** Fully resolved config: base merged with strategy */
@@ -248,7 +228,6 @@ export const VALID_STRATEGY_IDS = [
   'strategy_3b',
   'strategy_4_1a',
   'strategy_4_2a',
-  'strategy_4_3a',
   'strategy_5',
 ] as const
 
