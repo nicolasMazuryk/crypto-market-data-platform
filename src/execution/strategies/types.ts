@@ -7,7 +7,6 @@ export type StrategyId =
   | 'strategy_1_ws'
   | 'strategy_2'
   | 'strategy_3a'
-  | 'strategy_3b'
   | 'strategy_4_1a'
   | 'strategy_4_2a'
   | 'strategy_6'
@@ -92,11 +91,6 @@ export interface Strategy3aConfig extends Strategy3SharedConfig {
   tpVariant: 'A'
 }
 
-export interface Strategy3bConfig extends Strategy3SharedConfig {
-  id: 'strategy_3b'
-  tpVariant: 'B'
-}
-
 /** Strategy 4.1a: Ladder LONG, no funding accrual (limits fill after T_funding). */
 export interface Strategy4_1aConfig {
   id: 'strategy_4_1a'
@@ -139,7 +133,6 @@ export type StrategyConfig =
   | Strategy1WsConfig
   | Strategy2Config
   | Strategy3aConfig
-  | Strategy3bConfig
   | Strategy4_1aConfig
   | Strategy4_2aConfig
   | Strategy6Config

@@ -18,7 +18,6 @@ strategies:
     amountUsd: 10                           # USD — notional per intent
     leverage: 4                             # x — leverage applied at the exchange
 
-  # strategy_3a and strategy_3b are mutually exclusive — enable at most one.
   - id: strategy_3a
     enabled: true
     negativeFundingThresholdPercent: -0.25  # % — minimum funding rate to trigger entry
@@ -29,17 +28,6 @@ strategies:
     deadlineSeconds: 300                    # s — max time in position before forced exit
     amountUsd: 10                           # USD — notional per intent
     leverage: 4                             # x
-
-  #- id: strategy_3b
-  #  enabled: false
-  #  negativeFundingThresholdPercent: -0.4
-  #  entryOffsetSeconds: 4
-  #  stopLossPercent: 1.0
-  #  tpVariantAMultiplier: 1.5
-  #  tpVariantBOffsetPercent: 0.4
-  #  deadlineSeconds: 300
-  #  amountUsd: 10
-  #  leverage: 4
 
 # ── Risk limits ───────────────────────────────────────────────────────────────
 risk:
@@ -52,9 +40,6 @@ risk:
     strategy_3a:
       maxConcurrentIntents: 20              # count — conservative for dry-run testing
       maxNotionalUsd: 200000               # USD
-    strategy_3b:
-      maxConcurrentIntents: 2000            # count
-      maxNotionalUsd: 2000                 # USD
 
 # ── Testing knobs (uncomment to use) ─────────────────────────────────────────
 # testing:

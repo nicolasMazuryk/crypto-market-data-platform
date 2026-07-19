@@ -22,8 +22,7 @@ strategies:
   #   amountUsd: 10                           # USD
   #   leverage: 4                             # x
 
-  # strategy_3a and strategy_3b are mutually exclusive — enable at most one.
-  # TP is computed from |fundingRate| at decision time (tpVariantAMultiplier / tpVariantBOffsetPercent).
+  # TP is computed from |fundingRate| at decision time (tpVariantAMultiplier).
   - id: strategy_3a
     enabled: true
     negativeFundingThresholdPercent: -0.4  # % — entry threshold
@@ -35,17 +34,6 @@ strategies:
     amountUsd: 10                           # USD
     leverage: 5                             # x
 
-  #- id: strategy_3b
-  #  enabled: false
-  #  negativeFundingThresholdPercent: -0.4
-  #  entryOffsetSeconds: 4
-  #  stopLossPercent: 1.0
-  #  tpVariantAMultiplier: 1.5
-  #  tpVariantBOffsetPercent: 0.4
-  #  deadlineSeconds: 300
-  #  amountUsd: 10
-  #  leverage: 4
-
 # ── Risk limits ───────────────────────────────────────────────────────────────
 risk:
   globalMaxConcurrentIntents: 10000         # count
@@ -56,9 +44,6 @@ risk:
       maxConcurrentIntents: 2000            # count
       maxNotionalUsd: 200000               # USD
     strategy_3a:
-      maxConcurrentIntents: 2000            # count
-      maxNotionalUsd: 200000               # USD
-    strategy_3b:
       maxConcurrentIntents: 2000            # count
       maxNotionalUsd: 200000               # USD
 

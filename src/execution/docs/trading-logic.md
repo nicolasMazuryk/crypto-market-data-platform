@@ -2,14 +2,14 @@
 
 ## Signal source
 
-All three strategies share the same signal: **predicted funding rate on USDT-margined perpetual swaps**. `FundingRateSource` polls each exchange REST endpoint every `fundingPullMs` milliseconds (default 15,000 ms) and caches a snapshot per `(exchange, symbol)`. `FundingEventScheduler` wakes `wakeBeforeHourEndMs` (default 300,000 ms = 5 min) before each hourly boundary and evaluates symbols whose `nextFundingTimestamp` falls within `fundingWindowMs` (default 300,000 ms) of that boundary.
+Both strategies share the same signal: **predicted funding rate on USDT-margined perpetual swaps**. `FundingRateSource` polls each exchange REST endpoint every `fundingPullMs` milliseconds (default 15,000 ms) and caches a snapshot per `(exchange, symbol)`. `FundingEventScheduler` wakes `wakeBeforeHourEndMs` (default 300,000 ms = 5 min) before each hourly boundary and evaluates symbols whose `nextFundingTimestamp` falls within `fundingWindowMs` (default 300,000 ms) of that boundary.
 
 A symbol is eligible for evaluation when:
 - Its snapshot is fresh (age < 2 × `fundingPullMs`)
 - `market.status === 'trading'`
 - The signal condition below is met
 
-**Signal condition** — identical across all three strategies:
+**Signal condition** — identical across both strategies:
 
 ```
 snap.fundingRatePercent ≤ -|negativeFundingThresholdPercent|
@@ -83,40 +83,22 @@ The first exit to trigger (SL, TP, or deadline) causes the manager to cancel the
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
-| `enabled` | boolean | `false` | Must be `true`; mutually exclusive with `strategy_3b` |
+| `enabled` | boolean | `false` | Must be `true` |
 | `negativeFundingThresholdPercent` | number | `-0.5` | Same signal filter as strategy_1 |
 | `entryOffsetSeconds` | number | `10` | Same as strategy_1 |
 | `stopLossPercent` | number | `1` | SL distance from entry in % (exits short if price rises by this %) |
 | `tpVariantAMultiplier` | number | `1.5` | TP distance = \|fundingRatePercent\| × this multiplier |
-| `tpVariantBOffsetPercent` | number | `0.4` | Used by strategy_3b only; ignored here |
 | `deadlineSeconds` | number | `300` | Max hold from `nextFundingTimestamp` before forced market close |
 | `amountUsd` | number | `20` | Target notional in USD |
 | `leverage` | number | `4` | Position leverage |
 
----
-
-## Strategy 3b — Negative funding SHORT, TP = |F| + offset
-
-Identical to strategy_3a in every respect except the take-profit distance formula:
-
-```
-tpPct = |fundingRatePercent| + tpVariantBOffsetPercent   (default offset: 0.4%)
-TP price = P_entry × (1 − tpPct / 100)
-```
-
-`tpVariantBOffsetPercent` is a fixed additive offset rather than a multiplier. For a −1.0% funding rate: strategy_3a gives TP = 1.5%, strategy_3b gives TP = 1.4%. For a −0.5% rate: 3a = 0.75%, 3b = 0.9%.
-
-**Mutually exclusive with strategy_3a**: config parsing raises a `ConfigError` if both have `enabled: true`. The `tpVariant` field stored in Postgres (`'A'` or `'B'`) is an audit label only; the execution manager uses the computed `tpPct` directly and never reads `tpVariant`.
-
-### Config keys (`id: 'strategy_3b'`)
-
-Identical to strategy_3a except `id: 'strategy_3b'`. The `tpVariantAMultiplier` key is present in config but ignored; only `tpVariantBOffsetPercent` is used.
+The `tpVariant` field stored in Postgres (`'A'`) is an audit label only; the execution manager uses the computed `tpPct` directly and never reads `tpVariant`.
 
 ---
 
 ## Shared sizing rule
 
-All three strategies compute order quantity via `computeOrderQty` in [`src/execution/strategies/shared/sizing.ts`](../strategies/shared/sizing.ts):
+Both strategies compute order quantity via `computeOrderQty` in [`src/execution/strategies/shared/sizing.ts`](../strategies/shared/sizing.ts):
 
 ```
 contractSize = market.contractSize  (> 0; default 1 for standard linear perps)
@@ -176,11 +158,11 @@ All checks run in [`src/execution/execution/preflight.ts`](../execution/prefligh
 
 | Order | Strategy | Type | Side | Notes |
 |---|---|---|---|---|
-| Entry | All | Market | Buy (strategy_1) / Sell (strategy_3a, 3b) | Submitted at `entryAt` |
+| Entry | All | Market | Buy (strategy_1) / Sell (strategy_3a) | Submitted at `entryAt` |
 | Timed exit | strategy_1 | Market, reduce-only | Sell | Submitted when `exitAt` timer fires |
-| Take profit | strategy_3a, strategy_3b | Limit, reduce-only | Buy | Placed immediately after entry fill; price = `P_entry × (1 − tpPct/100)` |
-| Stop loss | strategy_3a, strategy_3b | Stop-market, reduce-only | Buy | Placed immediately after entry fill; price = `P_entry × (1 + slPct/100)` |
-| Deadline close | strategy_3a, strategy_3b | Market, reduce-only | Buy | Submitted if deadline reached before SL/TP fill |
+| Take profit | strategy_3a | Limit, reduce-only | Buy | Placed immediately after entry fill; price = `P_entry × (1 − tpPct/100)` |
+| Stop loss | strategy_3a | Stop-market, reduce-only | Buy | Placed immediately after entry fill; price = `P_entry × (1 + slPct/100)` |
+| Deadline close | strategy_3a | Market, reduce-only | Buy | Submitted if deadline reached before SL/TP fill |
 
 ---
 

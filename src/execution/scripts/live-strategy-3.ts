@@ -1,5 +1,5 @@
 /**
- * Live driver for strategy_3a / strategy_3b against exchange mainnet.
+ * Live driver for strategy_3a against exchange mainnet.
  * Runs the engine for one funding cycle on a manually-chosen symbol and prints a post-trade summary.
  *
  * Usage:
@@ -11,7 +11,7 @@
  *   tsx --env-file=.env src/execution/scripts/live-strategy-3.ts --config config/execution.live-okx-test.yaml --exchange okx --symbol ETHUSDT --funding 17:30:00 --ack-live-funding-override
  *
  * Prerequisites: exchange API key and secret set in .env (e.g. BINANCE_API_KEY / GATEIO_API_KEY).
- * Config must have exactly one of strategy_3a or strategy_3b enabled (they are mutually exclusive).
+ * Config must have strategy_3a enabled.
  *
  * Strategy 3 goes short on high-negative-funding symbols — the position pays funding,
  * so fundingAmount in trade.summary will be negative. Net PnL is modelled as:
@@ -157,7 +157,7 @@ async function main(): Promise<void> {
               const totalFundingFee = fundingFees.reduce((sum, f) => sum + f.fundingAmount, 0)
               // For a short: profit from price movement is (entryPrice - exitPrice) / entryPrice
               const priceDeltaPct = (((entryPrice - exitPrice) / entryPrice) * 100).toFixed(4)
-              const stratCfg = handle.config.strategies.find(s => s.id === 'strategy_3a' || s.id === 'strategy_3b')
+              const stratCfg = handle.config.strategies.find(s => s.id === 'strategy_3a')
               const amountUsd =
                 stratCfg !== undefined && 'amountUsd' in stratCfg ? (stratCfg as { amountUsd: number }).amountUsd : 0
 

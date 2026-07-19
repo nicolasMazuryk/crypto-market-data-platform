@@ -124,7 +124,7 @@ export interface Strategy2Config {
 
 /** Strategy 3: Negative Funding SHORT - Ride the Drop */
 export interface Strategy3Config {
-  strategy_id: 'strategy_3a' | 'strategy_3b'
+  strategy_id: 'strategy_3a'
   direction: 'short'
   funding_threshold: number
   /** Seconds before T_funding to enter (>= 2, market-order latency) */
@@ -225,7 +225,6 @@ export const VALID_STRATEGY_IDS = [
   'strategy_1',
   'strategy_2',
   'strategy_3a',
-  'strategy_3b',
   'strategy_4_1a',
   'strategy_4_2a',
   'strategy_5',

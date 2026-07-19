@@ -1,6 +1,6 @@
 # Strategy Execution Engine — Documentation
 
-The Strategy Execution Engine evaluates funding-rate arbitrage opportunities across six USDT-margined perpetual-swap exchanges (Binance, Bybit, OKX, Bitget, Gate.io, KuCoin Futures), submits and manages orders over REST and WebSocket, and persists every lifecycle event to Postgres. It runs as a single Node.js process on a Hetzner Cloud server alongside a full observability stack (Prometheus, Grafana, Loki, Jaeger, Alertmanager) and supports three strategies (`strategy_1`, `strategy_3a`, `strategy_3b`) with a configurable dry-run mode for safe testing before live deployment.
+The Strategy Execution Engine evaluates funding-rate arbitrage opportunities across six USDT-margined perpetual-swap exchanges (Binance, Bybit, OKX, Bitget, Gate.io, KuCoin Futures), submits and manages orders over REST and WebSocket, and persists every lifecycle event to Postgres. It runs as a single Node.js process on a Hetzner Cloud server alongside a full observability stack (Prometheus, Grafana, Loki, Jaeger, Alertmanager) and supports two strategies (`strategy_1`, `strategy_3a`) with a configurable dry-run mode for safe testing before live deployment.
 
 ## Doc set
 

@@ -77,26 +77,6 @@ runs:
   #   exchange: kucoin
   #   agent: claude
 
-  # # strategy_3b
-  # - strategy: strategy_3b
-  #   exchange: binance
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: bybit
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: okx
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: bitget
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: gateio
-  #   agent: claude
-  # - strategy: strategy_3b
-  #   exchange: kucoin
-  #   agent: claude
-
   # # strategy_4_1a
   # - strategy: strategy_4_1a
   #   exchange: binance

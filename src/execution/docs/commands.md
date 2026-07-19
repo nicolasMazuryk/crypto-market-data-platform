@@ -63,7 +63,7 @@ Accepts the same flags as `execution:live`.
 
 ### `npm run config:validate`
 
-Validate a config file without starting the engine. Runs two-stage validation: structural (Zod schema, collects all field errors) then semantic (cross-field rules: duplicate exchanges, mutual exclusion of `strategy_3a`/`strategy_3b`, live notional ceiling).
+Validate a config file without starting the engine. Runs two-stage validation: structural (Zod schema, collects all field errors) then semantic (cross-field rules: duplicate exchanges, LONG/SHORT co-run guard, live notional ceiling).
 
 ```bash
 npm run config:validate -- --config config/execution.dry-run.yaml
@@ -453,7 +453,7 @@ tsx --env-file=.env src/execution/scripts/live-strategy-3.ts \
 | `--timeout-minutes` | number | no | `20` | Kill the driver after this many minutes |
 | `--funding-fee-grace-seconds` | number | no | `10` | Wait this many seconds after funding event before shutdown |
 
-`live-strategy-3.ts` requires exactly one of `strategy_3a`/`strategy_3b` enabled in config (mutually exclusive).
+`live-strategy-3.ts` requires `strategy_3a` enabled in config.
 
 **Prerequisites**: `BINANCE_API_KEY`, `BINANCE_API_SECRET` in `.env`.
 

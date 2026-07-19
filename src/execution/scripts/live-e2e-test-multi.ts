@@ -378,7 +378,6 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
           perStrategy: {
             strategy_1: { maxConcurrentIntents: 2, maxNotionalUsd: 500 },
             strategy_3a: { maxConcurrentIntents: 2, maxNotionalUsd: 500 },
-            strategy_3b: { maxConcurrentIntents: 2, maxNotionalUsd: 500 },
           },
         },
         countIntents: () => manager.list().filter(s => !['exited', 'error', 'cancelled'].includes(s.status)).length,
@@ -606,7 +605,7 @@ async function runExchangeTest(spec: ExchangeSpec, run: TestRun): Promise<void> 
       fail('open position verify', err)
     }
 
-    // For strategy_3a/3b: verify SL/TP orders were placed
+    // For strategy_3a: verify SL/TP orders were placed
     if (run.exitPolicy.kind === 'sl_tp_deadline') {
       await sleep(1000)
       try {

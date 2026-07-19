@@ -22,7 +22,7 @@ export class Strategy3 implements BaseStrategy {
   private feeSchedule!: FeeSchedule
   private slippage = 0
 
-  constructor(variant: 'strategy_3a' | 'strategy_3b') {
+  constructor(variant: 'strategy_3a') {
     this.id = variant
   }
 

@@ -49,7 +49,7 @@ Exit 0 = valid. Exit 1 = one or more errors printed to stderr.
 
 The validator runs two stages in sequence:
 1. **Structural** (`schema.ts` Zod `.safeParse`) — collects all type/enum/required errors at once and reports them together.
-2. **Semantic** (`parseEngineConfig`) — cross-field rules: live safety ceiling, `strategy_3a`/`strategy_3b` mutual exclusivity, funding-time override bounds (−1h to +24h).
+2. **Semantic** (`parseEngineConfig`) — cross-field rules: live safety ceiling, LONG/SHORT co-run guard, funding-time override bounds (−1h to +24h).
 
 ## Secrets Matrix
 
@@ -91,13 +91,13 @@ One entry per exchange. The `exchanges` array in the mode-specific file replaces
 
 ### `strategies[]`
 
-Only `strategy_1`, `strategy_3a`, and `strategy_3b` are wired. `strategy_3a` and `strategy_3b` are mutually exclusive (semantic validation enforces this).
+Only `strategy_1` and `strategy_3a` are wired.
 
 See [trading-logic.md](./trading-logic.md) for full per-strategy parameter semantics.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `id` | enum | — | `strategy_1` \| `strategy_3a` \| `strategy_3b` |
+| `id` | enum | — | `strategy_1` \| `strategy_3a` |
 | `enabled` | bool | — | Whether this strategy fires |
 | `negativeFundingThresholdPercent` | % | — | Minimum (most negative) funding rate to trigger entry |
 | `entryOffsetSeconds` | s | — | Seconds before funding time to open the position |

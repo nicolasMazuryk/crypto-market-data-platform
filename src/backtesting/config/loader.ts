@@ -288,8 +288,7 @@ function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig
         funding_applied_on_same_second: requireBoolean(merged, 'funding_applied_on_same_second', ctx),
       }
 
-    case 'strategy_3a':
-    case 'strategy_3b': {
+    case 'strategy_3a': {
       const tp_mode = requireString(merged, 'tp_mode', ctx)
       if (tp_mode !== 'A' && tp_mode !== 'B') {
         throw new Error(`${ctx}: 'tp_mode' must be 'A' or 'B', got '${tp_mode}'`)

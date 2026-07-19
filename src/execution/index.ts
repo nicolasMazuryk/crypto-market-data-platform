@@ -609,10 +609,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     strategyRegistry.register(createStrategy2Rule({ ids, refPrice }))
   }
   if (configsByStrategy.has('strategy_3a')) {
-    strategyRegistry.register(createStrategy3Rule({ variant: 'A', ids, refPrice }))
-  }
-  if (configsByStrategy.has('strategy_3b')) {
-    strategyRegistry.register(createStrategy3Rule({ variant: 'B', ids, refPrice }))
+    strategyRegistry.register(createStrategy3Rule({ ids, refPrice }))
   }
   if (configsByStrategy.has('strategy_4_1a')) {
     strategyRegistry.register(createStrategy4_1aRule({ ids, refPrice }))

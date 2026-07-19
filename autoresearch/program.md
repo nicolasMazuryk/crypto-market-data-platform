@@ -72,7 +72,7 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 - `deadline_seconds`:     >= 5      AND <= 900       ← **integer only** (no decimals)
 - `sl_mult`:              >= 0.50     AND <= 4.0    ← SL at entry × (1 − F × mult)
 
-### strategy_3a / strategy_3b (SHORT — ride the drop)
+### strategy_3a (SHORT — ride the drop)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
 - `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `stop_loss`:            >= 0.002   AND <= 0.040

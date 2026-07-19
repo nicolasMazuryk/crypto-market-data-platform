@@ -21,8 +21,6 @@ export function createStrategy(id: StrategyId): BaseStrategy {
       return new Strategy2()
     case 'strategy_3a':
       return new Strategy3('strategy_3a')
-    case 'strategy_3b':
-      return new Strategy3('strategy_3b')
     case 'strategy_4_1a':
       return new Strategy41('strategy_4_1a')
     case 'strategy_4_2a':

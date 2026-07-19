@@ -166,20 +166,6 @@ describe('Config Loader', () => {
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
     })
 
-    it('accepts deadline_seconds=60 for strategy_3b', () => {
-      const tmpPath = writeTempYaml(
-        'strategy_id: strategy_3b\nfunding_threshold: 0.004\nentry_offset_seconds: 5\nstop_loss: 0.01\ntp_mode: B\ntp_multiplier: 1.5\ntp_addend_pct: 0.4\ndeadline_seconds: 60\nfunding_applied_on_same_second: true\n'
-      )
-      expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
-    })
-
-    it('rejects deadline_seconds=2 for strategy_3b (below minimum 3)', () => {
-      const tmpPath = writeTempYaml(
-        'strategy_id: strategy_3b\nfunding_threshold: 0.004\nentry_offset_seconds: 5\nstop_loss: 0.01\ntp_mode: B\ntp_multiplier: 1.5\ntp_addend_pct: 0.4\ndeadline_seconds: 2\nfunding_applied_on_same_second: true\n'
-      )
-      expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
-    })
-
     it('accepts ladder_count=2 (valid lower edge)', () => {
       const tmpPath = writeTempYaml(
         'strategy_id: strategy_4_1a\nfunding_threshold: 0.006\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit: 0.002\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_mult: 1.5\n'
@@ -195,12 +181,11 @@ describe('Config Loader', () => {
     })
   })
 
-  it('loads all 7 strategy configs without error', () => {
+  it('loads all 6 strategy configs without error', () => {
     const strategies = [
       'strategy_1',
       'strategy_2',
       'strategy_3a',
-      'strategy_3b',
       'strategy_4_1a',
       'strategy_4_2a',
       'strategy_5',

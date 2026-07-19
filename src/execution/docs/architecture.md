@@ -13,7 +13,7 @@
 | **Funding rate source** | [`src/execution/funding/source.ts`](../funding/source.ts) | Polls each exchange's REST funding-rate endpoint every ~15 s; caches results as `Map<exchange, Map<symbol, FundingSnapshot>>`; marks snapshots stale after 2× pull interval; emits `funding.snapshot` events when values change. Exchange-specific pullers in `src/execution/funding/{binance,bybit,okx,bitget,gateio,kucoin}.ts`. |
 | **Funding event scheduler** | [`src/execution/execution/scheduler.ts`](../execution/scheduler.ts) | Wakes N ms before each hourly funding window boundary; filters eligible symbols by window and staleness; calls `StrategyEvaluator`; pre-warms leverage per symbol via single-flight deduplication. Supports a fixed-time override for testing. Catches up if the engine starts mid-window. |
 | **Strategy evaluator** | [`src/execution/strategies/evaluator.ts`](../strategies/evaluator.ts) | Receives a funding event and cached snapshots; evaluates all registered strategy rules; deduplicates intents by `(strategy, exchange, symbol, nextFundingTimestamp)`; emits `intent.decided` on the bus. |
-| **Strategy registry** | [`src/execution/strategies/registry.ts`](../strategies/registry.ts) | Map-based registry — single source of truth for which strategies are active. Only `strategy_1`, `strategy_3a`, and `strategy_3b` are registered in the live engine. |
+| **Strategy registry** | [`src/execution/strategies/registry.ts`](../strategies/registry.ts) | Map-based registry — single source of truth for which strategies are active. Only `strategy_1` and `strategy_3a` are registered in the live engine. |
 | **Execution manager** | [`src/execution/execution/manager.ts`](../execution/manager.ts) | Central intent state machine. Subscribes to `intent.decided` on the bus; runs `writeIntentSync` → preflight → leverage set → `writeOrderSync` → `createOrder(entry)`. After entry fill: places SL + TP exit orders, arms the position monitor. On exit fill or timer: cancels the opposing exit order and closes the intent. Handles WS events, REST polling fallback (Bitget, KuCoin), partial fills, orphaned reduce-only order sweeps, smart risk preemption (cancel worst intent if a cap would be breached), and full `flattenAll()` on shutdown. |
 | **Preflight** | [`src/execution/execution/preflight.ts`](../execution/preflight.ts) | Validates each intent before any REST call: market existence, leverage cap, order quantity (lot-size rounding), min-notional check, balance sufficiency (margin calculation), global and per-strategy concurrent-intent caps, global and per-strategy notional caps, kill-switch state. Returns a typed error code on rejection. |
 | **Position monitor** | [`src/execution/execution/monitor.ts`](../execution/monitor.ts) | Arms exit timers after entry fill: simple delay for timed exits, or a parallel set of SL fill / TP fill / deadline timers for bracket exits. Uses clock skew to adjust deadlines. Emits `exitRequested` when any condition fires. |
@@ -54,7 +54,7 @@ FundingEventScheduler  (wakes N ms before each hourly window)
   └─ calls StrategyEvaluator.evaluate(fundingEvent, snapshots)
 
 StrategyEvaluator
-  └─ applies strategy_1 / strategy_3a / strategy_3b rules
+  └─ applies strategy_1 / strategy_3a rules
   └─ deduplicates by (strategy, exchange, symbol, nextFundingTimestamp)
   └─ emits intent.decided → EventBus
 

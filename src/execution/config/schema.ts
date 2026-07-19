@@ -17,7 +17,6 @@ import type {
   Strategy1WsConfig,
   Strategy2Config,
   Strategy3aConfig,
-  Strategy3bConfig,
   Strategy4_1aConfig,
   Strategy4_2aConfig,
   Strategy6Config,
@@ -107,7 +106,6 @@ const StrategyRawSchema = z.discriminatedUnion('id', [
     leverage: z.number().default(4),
   }),
   z.object({ id: z.literal('strategy_3a'), ...Strategy3SharedFields }),
-  z.object({ id: z.literal('strategy_3b'), ...Strategy3SharedFields }),
   z
     .object({
       id: z.literal('strategy_4_1a'),
@@ -204,7 +202,6 @@ const RiskRawSchema = z.object({
       strategy_1_ws: PerStrategyRiskRawSchema.optional(),
       strategy_2: PerStrategyRiskRawSchema.optional(),
       strategy_3a: PerStrategyRiskRawSchema.optional(),
-      strategy_3b: PerStrategyRiskRawSchema.optional(),
       strategy_4_1a: PerStrategyRiskRawSchema.optional(),
       strategy_4_2a: PerStrategyRiskRawSchema.optional(),
       strategy_6: PerStrategyRiskRawSchema.optional(),
@@ -329,23 +326,18 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
     seen.add(e.exchange)
   }
 
-  // strategy_3a and strategy_3b are mutually exclusive
-  const has3a = parsed.strategies.some(s => s.id === 'strategy_3a' && s.enabled)
-  const has3b = parsed.strategies.some(s => s.id === 'strategy_3b' && s.enabled)
-  if (has3a && has3b) throw new ConfigError('strategies', 'strategy_3a and strategy_3b are mutually exclusive')
-
-  // Prevent simultaneous LONG (S1/S2/S4_*a) and SHORT (S3a/S3b) on the same exchange+symbol
+  // Prevent simultaneous LONG (S1/S2/S4_*a) and SHORT (S3a) on the same exchange+symbol
   // (they would offset each other within the same funding window).
-  const hasShort = has3a || has3b
+  const has3a = parsed.strategies.some(s => s.id === 'strategy_3a' && s.enabled)
   const hasLong = parsed.strategies.some(
     s =>
       ['strategy_1', 'strategy_1_ws', 'strategy_2', 'strategy_4_1a', 'strategy_4_2a'].includes(s.id) &&
       s.enabled
   )
-  if (hasShort && hasLong) {
+  if (has3a && hasLong) {
     throw new ConfigError(
       'strategies',
-      'LONG strategies (strategy_1, strategy_2, strategy_4_*a) and SHORT strategies (strategy_3a/3b) cannot both be enabled — they offset each other within the same funding window'
+      'LONG strategies (strategy_1, strategy_2, strategy_4_*a) and SHORT strategy (strategy_3a) cannot both be enabled — they offset each other within the same funding window'
     )
   }
 
@@ -381,7 +373,6 @@ export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig 
 
   const strategies: StrategyConfig[] = parsed.strategies.map(s => {
     if (s.id === 'strategy_3a') return { ...s, tpVariant: 'A' as const } as Strategy3aConfig
-    if (s.id === 'strategy_3b') return { ...s, tpVariant: 'B' as const } as Strategy3bConfig
     return s as
       | Strategy1Config
       | Strategy1WsConfig

@@ -4,7 +4,7 @@ import { createIds } from '../core/ids.js'
 import type { FundingSnapshot } from '../funding/types.js'
 import type { MarketMetadata } from '../markets/types.js'
 import { createStrategy3Rule } from './strategy_3.js'
-import type { EvalContext, Strategy3aConfig, Strategy3bConfig } from './types.js'
+import type { EvalContext, Strategy3aConfig } from './types.js'
 
 function makeSnapshot(overrides: Partial<FundingSnapshot> = {}): FundingSnapshot {
   return {
@@ -52,20 +52,6 @@ const BASE_CONFIG_3A: Strategy3aConfig = {
   leverage: 5,
 }
 
-const BASE_CONFIG_3B: Strategy3bConfig = {
-  id: 'strategy_3b',
-  tpVariant: 'B',
-  enabled: true,
-  negativeFundingThresholdPercent: -0.4,
-  entryOffsetSeconds: 5,
-  stopLossPercent: 1.0,
-  tpVariantAMultiplier: 1.5,
-  tpVariantBOffsetPercent: 0.4,
-  deadlineSeconds: 300,
-  amountUsd: 10,
-  leverage: 5,
-}
-
 function makeCtx(overrides: Partial<EvalContext> = {}): EvalContext {
   const snap = makeSnapshot()
   return {
@@ -83,9 +69,9 @@ function makeCtx(overrides: Partial<EvalContext> = {}): EvalContext {
   }
 }
 
-describe('createStrategy3Rule — variant A', () => {
+describe('createStrategy3Rule', () => {
   const ids = createIds()
-  const rule = createStrategy3Rule({ variant: 'A', ids, refPrice: () => 1000 })
+  const rule = createStrategy3Rule({ ids, refPrice: () => 1000 })
 
   it('returns intent when threshold met', () => {
     const intents = rule.evaluate(makeCtx())
@@ -134,7 +120,7 @@ describe('createStrategy3Rule — variant A', () => {
   })
 
   it('returns empty when config id is not strategy_3a', () => {
-    const ctx = makeCtx({ config: BASE_CONFIG_3B })
+    const ctx = makeCtx({ config: { ...BASE_CONFIG_3A, id: 'strategy_4_1a' } as unknown as EvalContext['config'] })
     expect(rule.evaluate(ctx)).toHaveLength(0)
   })
 
@@ -154,12 +140,12 @@ describe('createStrategy3Rule — variant A', () => {
   })
 
   it('returns empty when refPrice is undefined', () => {
-    const ruleNoPrice = createStrategy3Rule({ variant: 'A', ids, refPrice: () => undefined })
+    const ruleNoPrice = createStrategy3Rule({ ids, refPrice: () => undefined })
     expect(ruleNoPrice.evaluate(makeCtx())).toHaveLength(0)
   })
 
   it('returns empty when qty computation fails (price too high for amountUsd)', () => {
-    const ruleHighPrice = createStrategy3Rule({ variant: 'A', ids, refPrice: () => 50000 })
+    const ruleHighPrice = createStrategy3Rule({ ids, refPrice: () => 50000 })
     expect(ruleHighPrice.evaluate(makeCtx())).toHaveLength(0)
   })
 
@@ -184,46 +170,5 @@ describe('createStrategy3Rule — variant A', () => {
     const [a] = rule.evaluate(makeCtx())
     const [b] = rule.evaluate(ctx2)
     expect(a?.id).not.toBe(b?.id)
-  })
-})
-
-describe('createStrategy3Rule — variant B', () => {
-  const ids = createIds()
-  const rule = createStrategy3Rule({ variant: 'B', ids, refPrice: () => 1000 })
-
-  it('variant B: tpPct = |F| + 0.4 (F=-0.6% → tpPct=1.0)', () => {
-    const ctx = makeCtx({ config: BASE_CONFIG_3B })
-    const [intent] = rule.evaluate(ctx)
-    expect(intent?.exitPolicy).toMatchObject({
-      kind: 'sl_tp_deadline',
-      slPct: 1.0,
-      tpPct: 1.0,
-      tpVariant: 'B',
-    })
-  })
-
-  it('side is short', () => {
-    const ctx = makeCtx({ config: BASE_CONFIG_3B })
-    const [intent] = rule.evaluate(ctx)
-    expect(intent?.side).toBe('short')
-  })
-
-  it('returns empty when config id is not strategy_3b', () => {
-    const ctx = makeCtx({ config: BASE_CONFIG_3A })
-    expect(rule.evaluate(ctx)).toHaveLength(0)
-  })
-
-  it('deadlineAt === nextFundingTimestamp + deadlineSeconds * 1000', () => {
-    const ctx = makeCtx({ config: BASE_CONFIG_3B })
-    const [intent] = rule.evaluate(ctx)
-    expect((intent?.exitPolicy as { deadlineAt: number }).deadlineAt).toBe(1_700_000_000_000 + 300_000)
-  })
-
-  it('produces deterministic intent id for same key', () => {
-    const ctx = makeCtx({ config: BASE_CONFIG_3B })
-    const [a] = rule.evaluate(ctx)
-    const [b] = rule.evaluate(ctx)
-    expect(a?.id).toBeDefined()
-    expect(a?.id).toBe(b?.id)
   })
 })

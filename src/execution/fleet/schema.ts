@@ -6,7 +6,6 @@ const StrategyNameEnum = z.enum([
   'strategy_1_ws',
   'strategy_2',
   'strategy_3a',
-  'strategy_3b',
   'strategy_4_1a',
   'strategy_4_2a',
   'strategy_6',

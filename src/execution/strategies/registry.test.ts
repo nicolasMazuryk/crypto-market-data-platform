@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { EvalContext, StrategyRule, TradeIntent } from './types.js'
 import { createStrategyRegistry } from './registry.js'
 
-function makeRule(id: 'strategy_1' | 'strategy_3a' | 'strategy_3b'): StrategyRule {
+function makeRule(id: 'strategy_1' | 'strategy_3a'): StrategyRule {
   return {
     id,
     evaluate(_ctx: EvalContext): TradeIntent[] {
