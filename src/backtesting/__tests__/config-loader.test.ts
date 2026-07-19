@@ -46,17 +46,6 @@ describe('Config Loader', () => {
     }
   })
 
-  it('loads strategy_5 config', () => {
-    const stratPath = path.join(process.cwd(), 'config', 'strategies', 'strategy_5.yaml')
-    const config = loadConfig(stratPath, BASE_CONFIG)
-
-    if (config.strategy.strategy_id === 'strategy_5') {
-      expect(config.strategy.main_exchange).toBe('binance')
-      expect(config.strategy.exclude_exchanges).toEqual([])
-      expect(config.strategy.main_exchange_funding_threshold).toBe(0.005)
-    }
-  })
-
   it('merges strategy overrides over base config', () => {
     const stratPath = path.join(process.cwd(), 'config', 'strategies', 'strategy_1.yaml')
     const config = loadConfig(stratPath, BASE_CONFIG)
@@ -65,12 +54,6 @@ describe('Config Loader', () => {
     expect(config.strategy.strategy_id).toBe('strategy_1')
     // Base fields still present
     expect(config.base.fees.binance?.taker_fee).toBe(0.0005)
-  })
-
-  it('defaults funding_time_tolerance_seconds to 60 when absent', () => {
-    const stratPath = path.join(process.cwd(), 'config', 'strategies', 'strategy_5.yaml')
-    const config = loadConfig(stratPath, BASE_CONFIG)
-    expect(config.base.funding_time_tolerance_seconds).toBe(60)
   })
 
   it('throws for non-existent base config', () => {
@@ -181,15 +164,8 @@ describe('Config Loader', () => {
     })
   })
 
-  it('loads all 6 strategy configs without error', () => {
-    const strategies = [
-      'strategy_1',
-      'strategy_2',
-      'strategy_3a',
-      'strategy_4_1a',
-      'strategy_4_2a',
-      'strategy_5',
-    ]
+  it('loads all 5 strategy configs without error', () => {
+    const strategies = ['strategy_1', 'strategy_2', 'strategy_3a', 'strategy_4_1a', 'strategy_4_2a']
 
     for (const name of strategies) {
       const stratPath = path.join(process.cwd(), 'config', 'strategies', `${name}.yaml`)

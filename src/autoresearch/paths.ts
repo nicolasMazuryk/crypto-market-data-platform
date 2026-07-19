@@ -47,13 +47,7 @@ export function getBranchName(tag: string): string {
 }
 
 export function tagForRow(row: MatrixRow): string {
-  if (row.strategy === 'strategy_5' && 'main_exchange' in row) {
-    return `strategy_5-${row.main_exchange}`
-  }
-  if ('exchange' in row) {
-    return `${row.strategy}-${row.exchange}`
-  }
-  throw new Error(`Cannot derive tag for row: ${JSON.stringify(row)}`)
+  return `${row.strategy}-${row.exchange}`
 }
 
 export function allowedEditPathsForStrategy(strategy: string): string[] {

@@ -85,8 +85,6 @@ function makeSpec(): RunSpec {
     tag: TAG,
     strategy: STRATEGY,
     exchange: 'binance',
-    main_exchange: null,
-    exclude_exchanges: null,
     iterations: 5,
     iteration_timeout_ms: 60_000,
     backtest_timeout_ms: 60_000,

@@ -56,37 +56,12 @@ function normalizeRow(raw: Record<string, unknown>, idx: number): MatrixRow {
     agent = agentRaw
   }
 
-  if (strategy === 'strategy_5') {
-    const main_exchange = raw.main_exchange
-    if (typeof main_exchange !== 'string' || main_exchange.length === 0) {
-      throw new Error(`matrix.yaml runs[${String(idx)}]: strategy_5 requires 'main_exchange'`)
-    }
-    if ('exchange' in raw) {
-      throw new Error(`matrix.yaml runs[${String(idx)}]: strategy_5 must not set 'exchange'`)
-    }
-    const excludeRaw = raw.exclude_exchanges
-    let exclude_exchanges: string[] = []
-    if (excludeRaw !== undefined && excludeRaw !== null) {
-      if (!Array.isArray(excludeRaw)) {
-        throw new Error(`matrix.yaml runs[${String(idx)}]: strategy_5 'exclude_exchanges' must be an array`)
-      }
-      exclude_exchanges = excludeRaw as string[]
-    }
-    return {
-      strategy: 'strategy_5',
-      main_exchange,
-      exclude_exchanges,
-      agent,
-      ...(iterations === undefined ? {} : { iterations }),
-    }
-  }
-
   const exchange = raw.exchange
   if (typeof exchange !== 'string' || exchange.length === 0) {
     throw new Error(`matrix.yaml runs[${String(idx)}]: '${strategy}' requires 'exchange'`)
   }
   if ('main_exchange' in raw || 'exclude_exchanges' in raw) {
-    throw new Error(`matrix.yaml runs[${String(idx)}]: only strategy_5 uses 'main_exchange'/'exclude_exchanges'`)
+    throw new Error(`matrix.yaml runs[${String(idx)}]: 'main_exchange'/'exclude_exchanges' are not supported`)
   }
   return {
     strategy,
@@ -152,33 +127,14 @@ export function loadMatrix(matrixPath: string): MatrixFile {
 
 export function toRunSpec(row: MatrixRow, matrix: MatrixFile): RunSpec {
   const iterations = row.iterations ?? matrix.default_iterations
-  if (row.strategy === 'strategy_5' && 'main_exchange' in row) {
-    return {
-      tag: tagForRow(row),
-      strategy: row.strategy,
-      exchange: null,
-      main_exchange: row.main_exchange,
-      exclude_exchanges: row.exclude_exchanges,
-      iterations,
-      iteration_timeout_ms: matrix.iteration_timeout_ms,
-      backtest_timeout_ms: matrix.backtest_timeout_ms,
-      per_iteration_budget_usd: matrix.per_iteration_budget_usd,
-      agent: row.agent,
-    }
+  return {
+    tag: tagForRow(row),
+    strategy: row.strategy,
+    exchange: row.exchange,
+    iterations,
+    iteration_timeout_ms: matrix.iteration_timeout_ms,
+    backtest_timeout_ms: matrix.backtest_timeout_ms,
+    per_iteration_budget_usd: matrix.per_iteration_budget_usd,
+    agent: row.agent,
   }
-  if ('exchange' in row) {
-    return {
-      tag: tagForRow(row),
-      strategy: row.strategy,
-      exchange: row.exchange,
-      main_exchange: null,
-      exclude_exchanges: null,
-      iterations,
-      iteration_timeout_ms: matrix.iteration_timeout_ms,
-      backtest_timeout_ms: matrix.backtest_timeout_ms,
-      per_iteration_budget_usd: matrix.per_iteration_budget_usd,
-      agent: row.agent,
-    }
-  }
-  throw new Error(`Cannot build RunSpec for row: ${JSON.stringify(row)}`)
 }

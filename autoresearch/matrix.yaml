@@ -1,9 +1,7 @@
 # autoresearch run matrix
 #
-# Each entry is a (strategy, exchange[-pair]) tuple the orchestrator will
-# iteratively tune. Tags are derived:
-#   - non-cross-exchange: <strategy>-<exchange>
-#   - strategy_5        : strategy_5-<exchange_a>_<exchange_b>
+# Each entry is a (strategy, exchange) tuple the orchestrator will
+# iteratively tune. Tags are derived as <strategy>-<exchange>.
 #
 # Per-row fields:
 #   agent: claude | claude   (default: claude) — which coding agent drives the propose step
@@ -116,12 +114,6 @@ runs:
   # - strategy: strategy_4_2a
   #   exchange: kucoin
   #   agent: claude
-
-  # strategy_5
-  - strategy: strategy_5
-    main_exchange: binance
-    exclude_exchanges: []
-    agent: claude
 
   # strategy_spot_futures
   # - strategy: strategy_spot_futures

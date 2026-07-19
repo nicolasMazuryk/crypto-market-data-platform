@@ -2,22 +2,12 @@ export type IterationStatus = 'keep' | 'discard' | 'error'
 
 export type AgentKind = 'claude' | 'codex'
 
-export interface MatrixRowNonCross {
+export interface MatrixRow {
   strategy: string
   exchange: string
   iterations?: number
   agent: AgentKind
 }
-
-export interface MatrixRowCross {
-  strategy: 'strategy_5'
-  main_exchange: string
-  exclude_exchanges: string[]
-  iterations?: number
-  agent: AgentKind
-}
-
-export type MatrixRow = MatrixRowNonCross | MatrixRowCross
 
 export interface MatrixFile {
   default_iterations: number
@@ -33,8 +23,6 @@ export interface RunSpec {
   tag: string
   strategy: string
   exchange: string | null
-  main_exchange: string | null
-  exclude_exchanges: string[] | null
   iterations: number
   iteration_timeout_ms: number
   backtest_timeout_ms: number

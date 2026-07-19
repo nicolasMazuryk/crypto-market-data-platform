@@ -82,11 +82,6 @@ export interface BaseConfig {
   slippage: SlippageConfig
   /** Reporting config */
   reporting: ReportingConfig
-  /**
-   * Max seconds two exchanges' funding_time values may differ and still be
-   * considered the same funding event (Strategy 5 cross-exchange join).
-   */
-  funding_time_tolerance_seconds: number
   /** Funding settlement detection config */
   funding_settlement: FundingSettlementConfig
 }
@@ -184,35 +179,8 @@ export interface Strategy42Config {
   sl_mult: number
 }
 
-/** Strategy 5: Main-Exchange-Driven Cross-Exchange Short */
-export interface Strategy5Config {
-  strategy_id: 'strategy_5'
-  direction: 'short'
-  /** Most-liquid exchange whose funding event triggers the setup */
-  main_exchange: string
-  /** Exchanges to exclude from the target set (main is auto-excluded) */
-  exclude_exchanges: string[]
-  /** Min |F| on main_exchange to qualify as a setup */
-  main_exchange_funding_threshold: number
-  /** Min (F_target - F_main); main must be more negative than target by at least this */
-  min_funding_spread: number
-  /** Stop loss as fraction of entry price; SL = entry * (1 + stop_loss) for short */
-  stop_loss: number
-  /** TP_distance = |F_main| * tp_multiplier; TP = entry * (1 - TP_distance) */
-  tp_multiplier: number
-  entry_offset_seconds: number
-  deadline_seconds: number
-  funding_applied_on_same_second: boolean
-}
-
 /** Union of all strategy configs */
-export type StrategyConfig =
-  | Strategy1Config
-  | Strategy2Config
-  | Strategy3Config
-  | Strategy41Config
-  | Strategy42Config
-  | Strategy5Config
+export type StrategyConfig = Strategy1Config | Strategy2Config | Strategy3Config | Strategy41Config | Strategy42Config
 
 /** Fully resolved config: base merged with strategy */
 export interface ResolvedConfig {
@@ -221,13 +189,6 @@ export interface ResolvedConfig {
 }
 
 /** All valid strategy IDs */
-export const VALID_STRATEGY_IDS = [
-  'strategy_1',
-  'strategy_2',
-  'strategy_3a',
-  'strategy_4_1a',
-  'strategy_4_2a',
-  'strategy_5',
-] as const
+export const VALID_STRATEGY_IDS = ['strategy_1', 'strategy_2', 'strategy_3a', 'strategy_4_1a', 'strategy_4_2a'] as const
 
 export type StrategyId = (typeof VALID_STRATEGY_IDS)[number]

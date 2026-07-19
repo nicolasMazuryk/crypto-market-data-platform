@@ -12,8 +12,6 @@ function spec(overrides: Partial<RunSpec> = {}): RunSpec {
     tag: 'strategy_1-binance',
     strategy: 'strategy_1',
     exchange: 'binance',
-    main_exchange: null,
-    exclude_exchanges: null,
     iterations: 50,
     iteration_timeout_ms: 600_000,
     backtest_timeout_ms: 600_000,
@@ -62,27 +60,5 @@ describe('buildPrompt', () => {
     const prefix2 = p2.slice(0, p2.indexOf(marker))
     expect(prefix1).toBe(prefix2)
     expect(prefix1.length).toBeGreaterThan(100)
-  })
-
-  it('warns about strategy_5 pinned main_exchange in the hard constraints', () => {
-    const program = path.join(dir, 'program.md')
-    const yamlPath = path.join(dir, 'strat.yaml')
-    fs.writeFileSync(program, 'program')
-    fs.writeFileSync(yamlPath, 'main_exchange: binance\nexclude_exchanges: []')
-    const prompt = buildPrompt({
-      repoRoot: dir,
-      worktreePath: dir,
-      spec: spec({ strategy: 'strategy_5', exchange: null, main_exchange: 'binance', exclude_exchanges: [] }),
-      programMdPath: program,
-      strategyYamlPath: yamlPath,
-      iter: 3,
-      iterations: 5,
-      bestPnl: 0.1,
-      baselinePnl: 0.05,
-      recentRows: [],
-      proposalPath: path.join(dir, 'p.json'),
-    })
-    expect(prompt).toMatch(/strategy_5 pins/)
-    expect(prompt).toMatch(/main_exchange=binance/)
   })
 })

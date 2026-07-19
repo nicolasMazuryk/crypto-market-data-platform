@@ -25,10 +25,7 @@ function readFileSafe(filePath: string): string {
 }
 
 function describeMatrixRow(spec: RunSpec): string {
-  if (spec.exchange !== null) {
-    return `strategy=${spec.strategy} exchange=${spec.exchange}`
-  }
-  return `strategy=${spec.strategy} main_exchange=${spec.main_exchange ?? '?'}`
+  return `strategy=${spec.strategy} exchange=${spec.exchange ?? '?'}`
 }
 
 function compactRow(row: ResultRow, rationale?: string): string {
@@ -92,9 +89,7 @@ export function buildPrompt(opts: BuildPromptOptions): string {
     '## Hard constraints',
     `- Edit ONLY: ${allowed.join(', ')}. Do not touch any other file.`,
     '- Do not create new files.',
-    opts.spec.strategy === 'strategy_5'
-      ? `- strategy_5 pins: main_exchange=${opts.spec.main_exchange ?? '?'} — this field must NOT change.`
-      : '- (No pinned fields for this strategy.)',
+    '- (No pinned fields for this strategy.)',
     `- Also write a proposal file at ${opts.proposalPath} containing JSON: {"rationale": string, "summary": string}.`,
     '- "summary" must be a single short line describing the diff; it goes into the results TSV as the iteration description.',
     '- You may run ONLY the read-only shell commands listed in program.md (cat, head, grep, ssh, npm run remote:clickhouse:query, etc.). Do not run git, rm, package installs, or any write-path command.',
