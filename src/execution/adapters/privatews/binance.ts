@@ -53,9 +53,9 @@ export function createBinancePrivateWsAdapter(opts: BinancePrivateWsAdapterOptio
     // Cache the funding rate for stamping on subsequent FUNDING_FEE ACCOUNT_UPDATE events.
     // These carry 'r' (funding rate) and 'T' (next funding time); cache them for stamping.
     if (raw.e === 'MARK_PRICE_UPDATE') {
-      const symbol = String(raw['s'] ?? '')
-      const rate = parseFloat(String(raw['r'] ?? '0'))
-      const nextFundingTime = typeof raw['T'] === 'number' ? raw['T'] : 0
+      const symbol = String(raw.s ?? '')
+      const rate = parseFloat(String(raw.r ?? '0'))
+      const nextFundingTime = typeof raw.T === 'number' ? raw.T : 0
       if (symbol && rate !== 0 && nextFundingTime > 0) {
         rateCache.set(symbol, rate, nextFundingTime)
       }

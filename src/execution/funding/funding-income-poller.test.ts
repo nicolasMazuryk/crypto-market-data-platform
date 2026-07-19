@@ -49,11 +49,11 @@ describe('createFundingIncomePoller', () => {
       asset: 'USDT',
     })
     const execManager = {
-      listOpenIntents: () => [
+      listRecentIntentsForAttribution: () => [
         { intentId: 'binance-intent', exchange: 'binance', symbol: 'BTCUSDT' },
         { intentId: 'okx-intent', exchange: 'okx', symbol: 'EDENUSDT' },
       ],
-    } as ExecutionManager
+    } as unknown as ExecutionManager
 
     const poller = createFundingIncomePoller({
       restAdapters: new Map([
@@ -68,8 +68,8 @@ describe('createFundingIncomePoller', () => {
 
     await poller.tick()
 
-    expect(binance.fetchFundingFeeIncome).toHaveBeenCalledWith('BTCUSDT', 1_699_977_600_000)
-    expect(okx.fetchFundingFeeIncome).toHaveBeenCalledWith('EDENUSDT', 1_699_977_600_000)
+    expect(binance.fetchFundingFeeIncome).toHaveBeenCalledWith('BTCUSDT', 1_699_999_200_000)
+    expect(okx.fetchFundingFeeIncome).toHaveBeenCalledWith('EDENUSDT', 1_699_999_200_000)
     expect(emitted).toHaveLength(2)
     expect(emitted).toContainEqual(expect.objectContaining({ exchange: 'okx', symbol: 'EDENUSDT', fundingAmount: 0.05 }))
   })
@@ -80,8 +80,8 @@ describe('createFundingIncomePoller', () => {
     bus.on('ws.funding_fee', event => emitted.push(event))
     const okx = makeAdapter('okx', null)
     const execManager = {
-      listOpenIntents: () => [{ intentId: 'okx-intent', exchange: 'okx', symbol: 'EDENUSDT' }],
-    } as ExecutionManager
+      listRecentIntentsForAttribution: () => [{ intentId: 'okx-intent', exchange: 'okx', symbol: 'EDENUSDT' }],
+    } as unknown as ExecutionManager
 
     const poller = createFundingIncomePoller({
       restAdapters: new Map([['okx', okx]]),

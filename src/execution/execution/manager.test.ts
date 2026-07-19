@@ -1148,7 +1148,7 @@ describe('Task 4 — FSM ordering, Binance routing, close partial fills', () => 
       params =>
         new Promise<OrderAck>(res => {
           resolveCreate = () =>
-            res({ clientOrderId: params.clientOrderId, exchangeOrderId: 'eid', status: 'accepted', submittedAt: Date.now(), ackedAt: Date.now() })
+            { res({ clientOrderId: params.clientOrderId, exchangeOrderId: 'eid', status: 'accepted', submittedAt: Date.now(), ackedAt: Date.now() }); }
         })
     )
     vi.mocked(rest.getOpenOrders).mockResolvedValue([])
@@ -1186,7 +1186,7 @@ describe('Task 4 — FSM ordering, Binance routing, close partial fills', () => 
       params =>
         new Promise<OrderAck>(res => {
           resolveCreate = () =>
-            res({ clientOrderId: params.clientOrderId, exchangeOrderId: 'eid', status: 'accepted', submittedAt: Date.now(), ackedAt: Date.now() })
+            { res({ clientOrderId: params.clientOrderId, exchangeOrderId: 'eid', status: 'accepted', submittedAt: Date.now(), ackedAt: Date.now() }); }
         })
     )
     vi.mocked(rest.getOpenOrders).mockResolvedValue([])

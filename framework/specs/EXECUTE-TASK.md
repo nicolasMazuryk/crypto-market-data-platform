@@ -21,7 +21,7 @@ You are implementing ONE task from an ordered gap-analysis plan that aligns this
 
 ## Verify (do the task's own Verification method — do not skip)
 1. Add/extend the unit test the task names, asserting the spec'd behavior. If the task gives a manual/replay check instead, run it and paste the observed output.
-2. Run: `npm test` (or the targeted test file), `npm run lint`, `npm run build` / typecheck. All must pass.
+2. Run: `npm test` (or the targeted test file), `npm run typecheck` — both must pass. For lint, scope to the files you changed: `npx eslint <changed files>` (the repo-wide `npm run lint` baseline has ~292 preexisting errors unrelated to your task; do not treat those as regressions). Introduce no NEW lint errors on files you touch.
 3. For runtime-behavior changes, exercise the affected flow end-to-end (invoke /verify if available), not just tests.
 4. Re-read the task's acceptance bullets and confirm each is met.
 

@@ -778,7 +778,7 @@ export function createPersistenceWriter(opts: PersistenceWriterOptions): Persist
           const fundingTime = new Date(event.fundingTime)
           const TOLERANCE_MS = 60_000 // allow attribution for intents that exited up to 1 min after fundingTime
 
-          let candidates: Array<{ id: string }> = []
+          let candidates: { id: string }[] = []
           try {
             candidates = await db
               .select({ id: tradeIntents.id })

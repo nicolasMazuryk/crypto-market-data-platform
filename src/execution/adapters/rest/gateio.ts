@@ -3,7 +3,7 @@ import type { CcxtOrder } from '../../../exchanges/types.js'
 import type { OrderRequest, OrderRef } from './types.js'
 import { createCcxtRestAdapter, type CcxtAdapterSpec, type BaseRestAdapterOptions } from './ccxt-base.js'
 
-type JsonParserHost = {
+interface JsonParserHost {
   parseJson?: (text: string) => unknown
   onJsonResponse?: (text: string) => string
 }

@@ -83,7 +83,7 @@ for (const entry of active) {
         try {
           const order = (await ex.createOrder(pos.symbol as string, 'market', side, qty, undefined, {
             reduceOnly: true,
-          })) as any
+          }))
           console.log(`[${label}] closed ${pos.symbol as string} orderId=${order.id as string}`)
         } catch (e: any) {
           console.error(`[${label}] error closing ${pos.symbol as string}: ${e.message as string}`)

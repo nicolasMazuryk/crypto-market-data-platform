@@ -5,7 +5,7 @@ import ccxt from 'ccxt'
 async function run() {
   const ex = new (ccxt as any).gateio({ defaultType: 'swap', enableRateLimit: true })
   const rates = await ex.fetchFundingRates()
-  const all = Object.values(rates as any)
+  const all = Object.values(rates)
   console.log('total:', all.length)
   const neg = (all as any[]).filter(t => t.fundingRate < 0)
     .sort((a: any, b: any) => a.fundingRate - b.fundingRate).slice(0, 10)

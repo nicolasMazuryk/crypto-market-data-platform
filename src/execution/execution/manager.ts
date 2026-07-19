@@ -1608,7 +1608,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             const now = clock.now()
             // Re-check status: WS fast_fill may have advanced the intent while REST was in-flight.
             // Emitting synthetic ws.order/ws.fill after WS already processed the fill causes duplicates.
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+             
             if (TERMINAL.has(s.status) || (s.status as string) !== 'working') return
             bus.emit('ws.order', {
               exchange: s.intent.exchange,

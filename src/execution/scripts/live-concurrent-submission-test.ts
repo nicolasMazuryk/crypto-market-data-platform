@@ -237,7 +237,7 @@ async function main(): Promise<void> {
     metrics: execMetrics,
   })
 
-  let cachedMarkPrice = markPrice
+  const cachedMarkPrice = markPrice
   const manager = createExecutionManager({
     bus,
     clock,

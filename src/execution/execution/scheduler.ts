@@ -98,7 +98,7 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
 
     let scheduledCount = 0
     const staleMaxAgeMs = opts.staleSnapshotMaxAgeMs ?? 30_000
-    const prewarmTasks: Array<[Exchange, string, number]> = []
+    const prewarmTasks: [Exchange, string, number][] = []
 
     for (const exchange of exchanges) {
       // Collect and sort by fundingRate (most negative first) so the best opportunities
@@ -169,7 +169,7 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
 
     if (prewarmTasks.length > 0 && opts.leveragePrewarmer) {
       const prewarmer = opts.leveragePrewarmer
-      void runWithConcurrency(prewarmTasks, ([ex, sym, lev]) => prewarmer(ex, sym, lev))
+      void runWithConcurrency(prewarmTasks, ([ex, sym, lev]) => { prewarmer(ex, sym, lev); })
     }
 
     const nextWake = nextWakeTime(now, config.wakeBeforeHourEndMs)

@@ -124,7 +124,7 @@ export function createGateioOrderWsAdapter(opts: GateioOrderWsAdapterOptions): E
                 status: 'finished',
                 text: wsText,
                 limit: 5,
-              }) as Array<{ id: number; text?: string }>
+              }) as { id: number; text?: string }[]
               const match = orders.find(o => o.text === wsText)
               if (match?.id !== undefined) {
                 return {
@@ -143,7 +143,7 @@ export function createGateioOrderWsAdapter(opts: GateioOrderWsAdapterOptions): E
                 status: 'open',
                 text: wsText,
                 limit: 5,
-              }) as Array<{ id: number; text?: string }>
+              }) as { id: number; text?: string }[]
               const openMatch = openOrders.find(o => o.text === wsText)
               if (openMatch?.id !== undefined) {
                 return {

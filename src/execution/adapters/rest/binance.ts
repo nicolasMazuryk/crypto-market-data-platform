@@ -21,7 +21,7 @@ const binanceSpec: CcxtAdapterSpec = {
       if (msg.includes('-4067') || msg.includes('Position side cannot be changed')) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
         const info = await (ccxtEx as any).fapiPrivateGetPositionSideDual?.() as { dualSidePosition: boolean } | undefined
-        if (info !== undefined && info.dualSidePosition === hedged) return
+        if (info?.dualSidePosition === hedged) return
       }
       throw err
     }
@@ -49,7 +49,7 @@ const binanceSpec: CcxtAdapterSpec = {
     return {
       async fetchFundingFeeIncome(symbol: string, fundingTs: number) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        const rows: Array<{ symbol: string; income: string; asset: string; time: number; incomeType: string }> = await (ccxtEx as any).fapiPrivateGetIncome({
+        const rows: { symbol: string; income: string; asset: string; time: number; incomeType: string }[] = await (ccxtEx as any).fapiPrivateGetIncome({
           symbol,
           incomeType: 'FUNDING_FEE',
           startTime: fundingTs - 10_000,

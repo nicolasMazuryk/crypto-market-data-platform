@@ -2,7 +2,7 @@ import { config } from 'dotenv'
 config()
 import ccxt from 'ccxt'
 
-const ex = new (ccxt as unknown as Record<string, new (c?: Record<string, unknown>) => any>)['gateio']!({
+const ex = new (ccxt as unknown as Record<string, new (c?: Record<string, unknown>) => any>).gateio!({
   defaultType: 'swap',
   apiKey: process.env.GATEIO_API_KEY,
   secret: process.env.GATEIO_API_SECRET,
@@ -18,7 +18,7 @@ for (const pos of open) {
   const qty = Math.abs(pos.contracts as number)
   console.log(`Closing ${pos.symbol as string}: ${side} ${qty}`)
   try {
-    const order = await ex.createOrder(pos.symbol as string, 'market', side, qty, undefined, { reduceOnly: true }) as any
+    const order = await ex.createOrder(pos.symbol as string, 'market', side, qty, undefined, { reduceOnly: true })
     console.log(`Closed ${pos.symbol as string}: orderId=${order.id as string}`)
   } catch (e: any) {
     console.log(`Error closing ${pos.symbol as string}: ${e.message as string}`)

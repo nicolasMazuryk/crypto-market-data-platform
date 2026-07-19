@@ -520,7 +520,7 @@ describe('PositionMonitor', () => {
         clearTimeoutFn: () => {},
         restFundingFeePoller: async () => makeFundingEvent(now, 'binance', 'BTCUSDT', fundingTs),
       })
-      const triggered: Array<{ reason: ExitReason; source: string }> = []
+      const triggered: { reason: ExitReason; source: string }[] = []
       bus.on('exit.triggered', event => {
         triggered.push({ reason: event.reason, source: event.source })
       })

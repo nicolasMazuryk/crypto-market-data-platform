@@ -230,6 +230,6 @@ describe('validateForLiveStart', () => {
       strategies: [],
     })
 
-    expect(() => validateForLiveStart(config)).toThrow(/1 exchange\(s\) enabled but 0 strategies enabled/)
+    expect(() => { validateForLiveStart(config); }).toThrow(/1 exchange\(s\) enabled but 0 strategies enabled/)
   })
 })

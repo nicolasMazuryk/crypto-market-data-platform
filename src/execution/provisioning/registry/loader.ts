@@ -8,7 +8,7 @@ import { RegistrySchema, type Registry, type RegistryEntry } from './schema.js'
 const EXCHANGE_ORDER = ['binance', 'bybit', 'okx', 'gateio', 'kucoin', 'bitget', 'mexc'] as const
 const STRATEGY_ORDER = ['strategy_1', 'strategy_1_ws', 'strategy_2', 'strategy_4_1a', 'strategy_6'] as const
 
-const FIELD_ORDER: Array<keyof RegistryEntry> = [
+const FIELD_ORDER: (keyof RegistryEntry)[] = [
   'exchange',
   'assigned_strategy',
   'allocated_capital_usdt',

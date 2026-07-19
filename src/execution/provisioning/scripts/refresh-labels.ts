@@ -4,7 +4,7 @@ import { buildAdapter } from '../exchanges/factory.js'
 import { loadRegistry, saveRegistry } from '../registry/loader.js'
 import type { RegistryEntry } from '../registry/schema.js'
 
-const EXCHANGES: Array<RegistryEntry['exchange']> = ['binance', 'bybit', 'okx', 'gateio', 'kucoin', 'bitget']
+const EXCHANGES: RegistryEntry['exchange'][] = ['binance', 'bybit', 'okx', 'gateio', 'kucoin', 'bitget']
 const registryPath = process.argv[2] ?? 'live-configs/registry.yaml'
 
 async function main() {

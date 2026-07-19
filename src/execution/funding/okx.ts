@@ -6,8 +6,8 @@ import { loadMarketsIfStale } from './ccxtMarkets.js'
 import { mapCcxtFundingRate } from './mapper.js'
 import type { ExchangeFundingPuller, FundingSnapshot } from './types.js'
 
-type OkxMarkEntry = { instId: string; markPx: string }
-type OkxMarkPriceResp = { data: OkxMarkEntry[] }
+interface OkxMarkEntry { instId: string; markPx: string }
+interface OkxMarkPriceResp { data: OkxMarkEntry[] }
 
 // OKX's fetchFundingRates response omits markPrice — fetch it from the dedicated mark-price endpoint.
 async function fetchOkxMarkPrices(ccxtExchange: CcxtExchange): Promise<Map<string, number>> {
@@ -42,7 +42,7 @@ export function createOkxPuller(ccxtFactory?: () => CcxtExchange): ExchangeFundi
       for (const raw of Object.values(rates)) {
         const snap = mapCcxtFundingRate('okx', raw, ccxtExchange.markets)
         if (snap) {
-          const instId = raw.info['instId'] as string | undefined
+          const instId = raw.info.instId as string | undefined
           if (instId) {
             const mp = markPrices.get(instId)
             if (mp !== undefined) snap.markPrice = mp

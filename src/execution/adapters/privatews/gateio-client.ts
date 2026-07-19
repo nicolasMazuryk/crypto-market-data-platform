@@ -35,7 +35,7 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
             settle: 'usdt',
             type: 'fund',
             limit: 100,
-          }) as Array<{ time: number; contract?: string; change?: string; change_type?: string; currency?: string }>
+          }) as { time: number; contract?: string; change?: string; change_type?: string; currency?: string }[]
 
           const newEntries = entries.filter(e => e.time > lastFundingTime)
           if (newEntries.length === 0) return
@@ -55,7 +55,7 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
                 settle: 'usdt',
                 contract,
                 limit: 5,
-              }) as Array<{ contract?: string; t?: number; r?: string }>
+              }) as { contract?: string; t?: number; r?: string }[]
               if (rates.length > 0) {
                 const r = parseFloat(rates[0]?.r ?? '0')
                 if (!isNaN(r)) rateByContract[contract] = r
@@ -72,8 +72,8 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
             event: 'update',
             result: newEntries.map((e: Record<string, unknown>) => ({
               ...e,
-              change_type: e['type'],
-              funding_rate: rateByContract[String(e['contract'] ?? '')] ?? 0,
+              change_type: e.type,
+              funding_rate: rateByContract[String(e.contract ?? '')] ?? 0,
             })),
           }
           if (process.env.GATEIO_ACCTBOOK_DEBUG === '1') {
@@ -139,7 +139,7 @@ export function createGateioWsClient(opts: GateioWsClientOptions): PrivateWsClie
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       sdkClient.on('update', (data: unknown) => {
         if (process.env.GATEIO_ACCTBOOK_DEBUG === '1') {
-          const ch = (data as Record<string, unknown>)['channel'] ?? 'unknown'
+          const ch = (data as Record<string, unknown>).channel ?? 'unknown'
           process.stdout.write(JSON.stringify({ _debug: 'gateio.raw_update', channel: ch }) + '\n')
         }
         emitter.emit('message', data)
