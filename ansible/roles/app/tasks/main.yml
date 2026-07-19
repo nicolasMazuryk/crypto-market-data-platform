@@ -64,6 +64,14 @@
     group: nicolas
     mode: "0644"
 
+- name: Deploy ClickHouse network bind config
+  ansible.builtin.template:
+    src: clickhouse-network.xml.j2
+    dest: /opt/arbinet/clickhouse-config/network.xml
+    owner: nicolas
+    group: nicolas
+    mode: "0644"
+
 - name: Template docker-compose.prod.yml
   ansible.builtin.template:
     src: docker-compose.prod.yml.j2

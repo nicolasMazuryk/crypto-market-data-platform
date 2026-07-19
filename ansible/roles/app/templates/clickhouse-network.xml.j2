@@ -1,0 +1,10 @@
+<clickhouse>
+    <!-- The host bind-mount at config.d shadows the image's built-in
+         docker_related_config.xml (which normally sets this for container
+         deployments), so it must be restored explicitly here. Without it,
+         ClickHouse only binds loopback inside its own network namespace and
+         is unreachable via the docker-published port (127.0.0.1:8123/9000
+         on the host), which is what SSH tunnels and network_mode: host
+         workers connect through. -->
+    <listen_host>0.0.0.0</listen_host>
+</clickhouse>
