@@ -70,8 +70,8 @@ export function getProposalIterPath(repoRoot: string, tag: string, iter: number)
 
 export function strategyDocFamily(strategyId: string): string {
   if (strategyId === 'strategy_3a' || strategyId === 'strategy_3b') return 'strategy_3'
-  if (strategyId === 'strategy_4_1a' || strategyId === 'strategy_4_1b') return 'strategy_4_1'
-  if (strategyId === 'strategy_4_2a' || strategyId === 'strategy_4_2b') return 'strategy_4_2'
-  if (strategyId === 'strategy_4_3a' || strategyId === 'strategy_4_3b') return 'strategy_4_3'
+  if (strategyId === 'strategy_4_1a') return 'strategy_4_1'
+  if (strategyId === 'strategy_4_2a') return 'strategy_4_2'
+  if (strategyId === 'strategy_4_3a') return 'strategy_4_3'
   return strategyId
 }

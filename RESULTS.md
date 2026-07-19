@@ -32,36 +32,18 @@
 | strategy_4_1a | bitget              |       |            |                 |
 | strategy_4_1a | gateio              |       |            |                 |
 | strategy_4_1a | kucoin              |       |            |                 |
-| strategy_4_1b | binance             |       |            |                 |
-| strategy_4_1b | bybit               |       |            |                 |
-| strategy_4_1b | okx                 |       |            |                 |
-| strategy_4_1b | bitget              |       |            |                 |
-| strategy_4_1b | gateio              |       |            |                 |
-| strategy_4_1b | kucoin              |       |            |                 |
 | strategy_4_2a | binance             |       |            |                 |
 | strategy_4_2a | bybit               |       |            |                 |
 | strategy_4_2a | okx                 |       |            |                 |
 | strategy_4_2a | bitget              |       |            |                 |
 | strategy_4_2a | gateio              |       |            |                 |
 | strategy_4_2a | kucoin              |       |            |                 |
-| strategy_4_2b | binance             |       |            |                 |
-| strategy_4_2b | bybit               |       |            |                 |
-| strategy_4_2b | okx                 |       |            |                 |
-| strategy_4_2b | bitget              |       |            |                 |
-| strategy_4_2b | gateio              |       |            |                 |
-| strategy_4_2b | kucoin              |       |            |                 |
 | strategy_4_3a | binance             |       |            |                 |
 | strategy_4_3a | bybit               |       |            |                 |
 | strategy_4_3a | okx                 |       |            |                 |
 | strategy_4_3a | bitget              |       |            |                 |
 | strategy_4_3a | gateio              |       |            |                 |
 | strategy_4_3a | kucoin              |       |            |                 |
-| strategy_4_3b | binance             |       |            |                 |
-| strategy_4_3b | bybit               |       |            |                 |
-| strategy_4_3b | okx                 |       |            |                 |
-| strategy_4_3b | bitget              |       |            |                 |
-| strategy_4_3b | gateio              |       |            |                 |
-| strategy_4_3b | kucoin              |       |            |                 |
 | strategy_5  | binance × bybit       |       |            |                 |
 | strategy_5  | binance × okx         |       |            |                 |
 | strategy_5  | binance × bitget      |       |            |                 |

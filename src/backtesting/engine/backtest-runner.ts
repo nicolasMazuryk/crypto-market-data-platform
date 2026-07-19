@@ -1,20 +1,13 @@
 import { logger } from '../../logger.js'
-import type { ResolvedConfig, WindowConfig } from '../config/schema.js'
-import {
-  queryFundingEvents,
-  queryMainExchangeCrossEvents,
-  queryPositiveFundingEvents,
-  queryAllFundingEventsByExchange,
-} from '../data/funding-events.js'
+import type { ResolvedConfig } from '../config/schema.js'
+import { queryFundingEvents, queryMainExchangeCrossEvents } from '../data/funding-events.js'
 import { fetchOrderbookWindow } from '../data/orderbook-window.js'
-import { fetchSpotOrderbookWindow } from '../data/spot-data.js'
 import { validateEventData } from '../data/validation.js'
 import type { FundingEvent, SkipReason } from '../data/types.js'
 
 import { createStrategy } from '../strategies/registry.js'
 import type { TradeResult } from '../strategies/types.js'
 import type { Strategy5 } from '../strategies/strategy-5.js'
-import { type SpotFuturesStrategy, SPOT_FUTURES_ENTRY_OFFSET_SECONDS } from '../strategies/strategy-spot-futures.js'
 import { buildReport } from '../reporting/report-builder.js'
 import type { BacktestReport } from '../reporting/types.js'
 import { getGitCommit } from './utils.js'
@@ -57,137 +50,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   let totalEventsScanned = 0
   let totalDataRows = 0
 
-  // Handle spot-futures separately (positive funding, two-leg, wide window)
-  if (strategyConfig.strategy_id === 'strategy_spot_futures') {
-    const sfConfig = strategyConfig
-    const sfStrategy = strategy as SpotFuturesStrategy
-
-    const perpFeeSchedule = base.fees[sfConfig.perp_exchange] ?? feeSchedule
-    const spotFee = base.spot_fees[sfConfig.spot_exchange]?.fee ?? 0.001
-
-    const events = await queryPositiveFundingEvents(
-      sfConfig.perp_exchange,
-      base.symbol,
-      base.start_date,
-      base.end_date,
-      sfConfig.F_threshold
-    )
-
-    totalEventsScanned = events.length
-    const sfStartMs = Date.now()
-    logger.info({ events: events.length, perp_exchange: sfConfig.perp_exchange }, 'Found positive funding events')
-
-    // Wide window: spans the full remaining backtest period from any entry point.
-    const widePostSeconds = Math.ceil((new Date(base.end_date).getTime() - new Date(base.start_date).getTime()) / 1000)
-    const wideWindow: WindowConfig = {
-      pre_funding_seconds: Math.max(base.window.pre_funding_seconds, SPOT_FUTURES_ENTRY_OFFSET_SECONDS + 10),
-      post_funding_seconds: widePostSeconds,
-    }
-
-    const isAlias = sfConfig.spot_exchange === sfConfig.perp_exchange
-    // In alias mode, carryAlias only needs the entry candle; skip the wide orderbook fetch.
-    const aliasEntryWindow: WindowConfig = {
-      pre_funding_seconds: SPOT_FUTURES_ENTRY_OFFSET_SECONDS + 30,
-      post_funding_seconds: 30,
-    }
-    const SYMBOL_CONCURRENCY = isAlias ? 30 : 5
-
-    // Pre-fetch funding events for all triggering symbols in one round-trip, eliminating
-    // per-event queryAllFundingEventsInRange calls (dominant cost on exchanges with many markets).
-    // Fetch funding events only up to the backtest end date
-    const maxFetchEndDate = base.end_date
-    const uniqueSymbols = [...new Set(events.map(e => e.symbol))]
-    const fundingEventsBySymbol =
-      events.length > 0
-        ? await queryAllFundingEventsByExchange(sfConfig.perp_exchange, base.start_date, maxFetchEndDate, uniqueSymbols)
-        : new Map<string, FundingEvent[]>()
-
-    // Group already-sorted events by symbol (queryPositiveFundingEvents returns funding_time ASC,
-    // so per-symbol arrays inherit ascending order).
-    const eventsBySymbolForRun = new Map<string, FundingEvent[]>()
-    for (const event of events) {
-      const arr = eventsBySymbolForRun.get(event.symbol) ?? []
-      arr.push(event)
-      eventsBySymbolForRun.set(event.symbol, arr)
-    }
-
-    const symbols = [...eventsBySymbolForRun.keys()]
-
-    for (let s = 0; s < symbols.length; s += SYMBOL_CONCURRENCY) {
-      const symBatch = symbols.slice(s, s + SYMBOL_CONCURRENCY)
-      const perSymbolResults = await Promise.all(
-        symBatch.map(async symbol => {
-          const symEvents = eventsBySymbolForRun.get(symbol) ?? []
-          const localTrades: TradeResult[] = []
-          let triggered = 0
-          let unfilled = 0
-          let dataRows = 0
-          let nextEntryAllowedMs = -Infinity
-
-          for (const event of symEvents) {
-            // Skip events whose entry would land inside an open position.
-            if (event.funding_time.getTime() < nextEntryAllowedMs) continue
-            if (!strategy.shouldTrigger(event)) continue
-
-            const symbolEvents = fundingEventsBySymbol.get(symbol) ?? []
-            const allFundingEvents = symbolEvents.filter(
-              e => e.funding_time >= event.funding_time && e.funding_time <= new Date(base.end_date)
-            )
-            const [perpWindow, maybeSpotWindow] = await Promise.all([
-              fetchOrderbookWindow(
-                sfConfig.perp_exchange,
-                event.symbol,
-                event.funding_time,
-                isAlias ? aliasEntryWindow : wideWindow
-              ),
-              isAlias
-                ? Promise.resolve(null)
-                : fetchSpotOrderbookWindow(sfConfig.spot_exchange, event.symbol, event.funding_time, wideWindow),
-            ])
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            const spotWindow = isAlias ? perpWindow : maybeSpotWindow!
-            dataRows += perpWindow.length + (isAlias ? 0 : spotWindow.length)
-
-            triggered++
-            const result = sfStrategy.executeSpotFutures(
-              event,
-              perpWindow,
-              spotWindow,
-              allFundingEvents,
-              perpFeeSchedule,
-              spotFee
-            )
-            if (result) {
-              localTrades.push(result)
-              const exitMs = result.exit_time
-                ? result.exit_time.getTime()
-                : event.funding_time.getTime() + result.hold_duration * 1000
-              nextEntryAllowedMs = exitMs
-            } else {
-              unfilled++
-            }
-          }
-          return { localTrades, triggered, unfilled, dataRows }
-        })
-      )
-
-      for (const r of perSymbolResults) {
-        trades.push(...r.localTrades)
-        triggeredCount += r.triggered
-        unfilledCount += r.unfilled
-        totalDataRows += r.dataRows
-      }
-
-      if (s > 0 && s % 100 === 0) {
-        logger.info({ processed: s, total: symbols.length }, 'Spot-futures backtest progress')
-      }
-    }
-
-    logger.info(
-      { perp_exchange: sfConfig.perp_exchange, durationMs: Date.now() - sfStartMs, trades: trades.length },
-      'Spot-futures backtest timing'
-    )
-  } else if (strategyConfig.strategy_id === 'strategy_5') {
+  if (strategyConfig.strategy_id === 'strategy_5') {
     // Handle S5 separately (main-exchange-driven, scans all target exchanges)
     const s5Config = strategyConfig
     const s5Strategy = strategy as Strategy5
@@ -320,8 +183,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     }
   }
 
-  const tradesOpenAtEnd =
-    strategyConfig.strategy_id === 'strategy_spot_futures' ? (strategy as SpotFuturesStrategy).openAtEndCount : 0
+  const tradesOpenAtEnd = 0
 
   logger.info(
     {

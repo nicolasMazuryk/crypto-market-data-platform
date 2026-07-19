@@ -257,20 +257,4 @@ function applyBaseConfigOverrides(worktreePath: string, spec: RunSpec): void {
   parsed.reporting = reporting
 
   fs.writeFileSync(baseConfigPath, stringifyYaml(parsed))
-
-  // strategy_spot_futures reads perp_exchange/spot_exchange from its own YAML,
-  // not from base_config. Patch those fields so each worktree queries the right exchange.
-  if (spec.strategy === 'strategy_spot_futures' && spec.exchange !== null) {
-    const stratYamlPath = path.join(worktreePath, 'config', 'strategies', 'strategy_spot_futures.yaml')
-    if (fs.existsSync(stratYamlPath)) {
-      const stratRaw = fs.readFileSync(stratYamlPath, 'utf-8')
-      const stratParsed = parseYaml(stratRaw) as Record<string, unknown> | null
-      if (stratParsed !== null) {
-        stratParsed.exchange = spec.exchange
-        stratParsed.perp_exchange = spec.exchange
-        stratParsed.spot_exchange = spec.exchange
-        fs.writeFileSync(stratYamlPath, stringifyYaml(stratParsed))
-      }
-    }
-  }
 }

@@ -21,11 +21,6 @@ export interface FeeSchedule {
   maker_fee: number
 }
 
-/** Spot exchange fee (single taker rate used for market orders) */
-export interface SpotFeeSchedule {
-  fee: number
-}
-
 /** Data validation thresholds */
 export interface ValidationConfig {
   /** Required seconds around T_funding: [T - required_seconds_before, T + required_seconds_after] */
@@ -92,11 +87,6 @@ export interface BaseConfig {
    * considered the same funding event (Strategy 5 cross-exchange join).
    */
   funding_time_tolerance_seconds: number
-  /**
-   * Spot exchange fee per order leg, keyed by exchange name.
-   * Used by strategy_spot_futures; defaults to 0.001 if exchange not found.
-   */
-  spot_fees: Record<string, SpotFeeSchedule>
   /** Funding settlement detection config */
   funding_settlement: FundingSettlementConfig
 }
@@ -155,7 +145,7 @@ export interface Strategy3Config {
 
 /** Strategy 4.1: Negative Funding Ladder LONG - Post-Funding Entry */
 export interface Strategy41Config {
-  strategy_id: 'strategy_4_1a' | 'strategy_4_1b'
+  strategy_id: 'strategy_4_1a'
   direction: 'long'
   funding_threshold: number
   /** Seconds before T_funding to enter (>= 2, market-order latency) */
@@ -178,7 +168,7 @@ export interface Strategy41Config {
 
 /** Strategy 4.2: Negative Funding Single LONG - Post-Funding Entry */
 export interface Strategy42Config {
-  strategy_id: 'strategy_4_2a' | 'strategy_4_2b'
+  strategy_id: 'strategy_4_2a'
   direction: 'long'
   funding_threshold: number
   /** Seconds before T_funding to enter (>= 2, market-order latency) */
@@ -196,7 +186,7 @@ export interface Strategy42Config {
 
 /** Strategy 4.3: Negative Funding LONG - Limit Entry with SL/TP */
 export interface Strategy43Config {
-  strategy_id: 'strategy_4_3a' | 'strategy_4_3b'
+  strategy_id: 'strategy_4_3a'
   direction: 'long'
   funding_threshold: number
   /** Seconds before T_funding to enter (>= 2, market-order latency) */
@@ -234,21 +224,6 @@ export interface Strategy5Config {
   funding_applied_on_same_second: boolean
 }
 
-/** Strategy: Delta-Neutral Spot-Futures Funding Capture */
-export interface SpotFuturesConfig {
-  strategy_id: 'strategy_spot_futures'
-  /** Spot exchange (same as perp_exchange until real spot data is ingested) */
-  spot_exchange: string
-  /** Perpetual exchange to short */
-  perp_exchange: string
-  /** Minimum positive funding rate to trigger entry (e.g., 0.0015 for 0.15%) */
-  F_threshold: number
-  /** Minimum expected net profit gate at entry; negative values loosen the gate (e.g., -0.005 to 0.005) */
-  minTotalProfit: number
-  /** Exit when the current funding rate falls to or below this level (e.g., 0.0002) */
-  fundingConvergenceThreshold: number
-}
-
 /** Union of all strategy configs */
 export type StrategyConfig =
   | Strategy1Config
@@ -258,7 +233,6 @@ export type StrategyConfig =
   | Strategy42Config
   | Strategy43Config
   | Strategy5Config
-  | SpotFuturesConfig
 
 /** Fully resolved config: base merged with strategy */
 export interface ResolvedConfig {
@@ -273,13 +247,9 @@ export const VALID_STRATEGY_IDS = [
   'strategy_3a',
   'strategy_3b',
   'strategy_4_1a',
-  'strategy_4_1b',
   'strategy_4_2a',
-  'strategy_4_2b',
   'strategy_4_3a',
-  'strategy_4_3b',
   'strategy_5',
-  'strategy_spot_futures',
 ] as const
 
 export type StrategyId = (typeof VALID_STRATEGY_IDS)[number]

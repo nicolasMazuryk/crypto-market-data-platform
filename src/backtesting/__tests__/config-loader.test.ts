@@ -46,15 +46,6 @@ describe('Config Loader', () => {
     }
   })
 
-  it('loads strategy_4_1b config with funding_applied_on_same_second=true', () => {
-    const stratPath = path.join(process.cwd(), 'config', 'strategies', 'strategy_4_1b.yaml')
-    const config = loadConfig(stratPath, BASE_CONFIG)
-
-    if (config.strategy.strategy_id === 'strategy_4_1b') {
-      expect(config.strategy.funding_applied_on_same_second).toBe(true)
-    }
-  })
-
   it('loads strategy_5 config', () => {
     const stratPath = path.join(process.cwd(), 'config', 'strategies', 'strategy_5.yaml')
     const config = loadConfig(stratPath, BASE_CONFIG)
@@ -204,18 +195,15 @@ describe('Config Loader', () => {
     })
   })
 
-  it('loads all 11 strategy configs without error', () => {
+  it('loads all 8 strategy configs without error', () => {
     const strategies = [
       'strategy_1',
       'strategy_2',
       'strategy_3a',
       'strategy_3b',
       'strategy_4_1a',
-      'strategy_4_1b',
       'strategy_4_2a',
-      'strategy_4_2b',
       'strategy_4_3a',
-      'strategy_4_3b',
       'strategy_5',
     ]
 

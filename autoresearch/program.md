@@ -29,12 +29,6 @@ For `strategy_5`, the field `main_exchange` is pinned by the matrix row. The
 harness will revert your edit if it detects a change. `exclude_exchanges` is
 also pinned (matrix-controlled); do not touch either.
 
-### strategy_spot_futures pins
-
-For `strategy_spot_futures`, both `perp_exchange` and `spot_exchange` are
-pinned by the matrix row. The harness will revert changes to either field.
-Do not touch `exchange`, `perp_exchange`, or `spot_exchange`.
-
 ## Working directory
 
 Your CWD is the per-row worktree, e.g. `.autoresearch/worktrees/<tag>/`.
@@ -86,7 +80,7 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 - `tp_addend_pct`:        >= 0.1     AND <= 4.0   ← TP_b = F + addend_pct/100; only active in mode B
 - `deadline_seconds`:     >= 3      AND <= 900       ← **integer only** (no decimals)
 
-### strategy_4_1a / strategy_4_1b (LONG — ladder limit)
+### strategy_4_1a (LONG — ladder limit)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
 - `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `ladder_count`:         >= 2       AND <= 8        ← **integer only** (2, 3, 4, 5, 6, 7, or 8 — no decimals)
@@ -96,7 +90,7 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 - `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
 - `sl_mult`:              >= 1.0     AND <= 5.0    ← SL at P_avg × (1 − F × mult)
 
-### strategy_4_2a / strategy_4_2b (LONG — single limit)
+### strategy_4_2a (LONG — single limit)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
 - `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `limit_offset_mult`:    >= 0.3     AND <= 3.0    ← entry at P × (1 − F × mult); default is 1.0
@@ -104,7 +98,7 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 - `deadline_seconds`:     >= 10      AND <= 900      ← **integer only** (no decimals)
 - `sl_mult`:              >= 0.6     AND <= 4.0    ← SL at entry × (1 − F × mult); MUST be > limit_offset_mult
 
-### strategy_4_3a / strategy_4_3b (LONG — limit with SL/TP)
+### strategy_4_3a (LONG — limit with SL/TP)
 - `funding_threshold`:    >= 0.001  AND <= 0.015
 - `entry_offset_seconds`: >= 1       AND <= 5        ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `entry_mult`:           >= 0.3     AND <= 3.0    ← entry at P × (1 − F × mult); default is 1.0
@@ -120,11 +114,6 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 - `entry_offset_seconds`:            >= 1     AND <= 5      ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
 - `deadline_seconds`:                >= 10    AND <= 900     ← **integer only** (no decimals)
 
-### strategy_spot_futures (delta-neutral: LONG spot + SHORT perp, positive-funding carry)
-- `F_threshold`:                >= 0.0002 AND <= 0.004
-- `minTotalProfit`:             >= -0.005 AND <= 0.005
-- `fundingConvergenceThreshold`:>= 0      AND <  F_threshold  ← must be strictly less than F_threshold
-
 ## Coupling rules
 
 **IMPORTANT:** Violating any of these produces a parameter set that can never make money or will never fire. Do not propose a YAML that breaks them.
@@ -136,7 +125,6 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 5. **`sl_mult + retracement_pct > 1`** (strategy_2): SL is anchored at `entry × (1 − F × sl_mult)`; the retracement TP sits roughly at `entry × (1 − F × (1 − retracement_pct))` assuming the post-funding drop scales with F. If `sl_mult ≤ 1 − retracement_pct`, SL sits above the retracement target → SL fires during the drop before TP can ever resolve.
 6. **`min_funding_spread <= main_exchange_funding_threshold`** (strategy_5): if `min_funding_spread > main_exchange_funding_threshold`, no trade can ever fire (a target with funding_rate = 0 would need spread > threshold, which is impossible when threshold < spread). Keep `min_funding_spread` at most equal to `main_exchange_funding_threshold`.
 7. **`tp_multiplier × funding_threshold <= stop_loss × 4`** (strategy_3a/3b, soft guideline): if `TP_a` is far larger than the SL budget, the TP almost never resolves before deadline; widening TP without also widening stop_loss (or tightening deadline) is wasteful.
-8. **`fundingConvergenceThreshold < F_threshold`** (strategy_spot_futures): the loader enforces this as a hard constraint. If `fundingConvergenceThreshold >= F_threshold`, the loader rejects the config.
 
 ## Direction-aware reasoning
 
