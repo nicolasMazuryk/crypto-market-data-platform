@@ -85,7 +85,7 @@ export class Strategy3 implements BaseStrategy {
         type: 'stop',
         price: slPrice,
         quantity: 1,
-        validFrom: firstOrderCandle.ts,
+        validFrom: entryTs,
         validUntil,
         reduceOnly: true,
         label: 'sl',
@@ -102,7 +102,7 @@ export class Strategy3 implements BaseStrategy {
       },
     ]
 
-    const { fills } = simulateOrders(orders, orderCandles, this.slippage, 'short')
+    const { fills } = simulateOrders(orders, postEntryRows, this.slippage, 'short')
 
     let exitPrice: number
     let exitReason: ExitReason

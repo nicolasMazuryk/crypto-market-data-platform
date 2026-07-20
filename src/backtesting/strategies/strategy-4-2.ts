@@ -2,6 +2,7 @@ import type { FeeSchedule, Strategy42Config } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
 import { checkLimitFill } from '../orders/limit-order.js'
+import { checkStopFill } from '../orders/stop-order.js'
 import { simulateOrders } from '../orders/simulator.js'
 import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
@@ -74,13 +75,19 @@ export class Strategy42 implements BaseStrategy {
     const slPrice = entryFill.price * (1 - absF * this.config.sl_multiplier)
     const tpPrice = entryFill.price * (1 + this.config.take_profit_pct / 100)
 
-    const postEntryRows = windowRows.slice(entryIdx + 1)
-
     let exit: { price: number; reason: ExitReason; feeType: 'maker' | 'taker'; ts: string } | null = null
 
-    if (postEntryRows.length > 0) {
-      const firstPostRow = postEntryRows[0]
-      if (!firstPostRow) return null
+    // Rule 4 (worst case): entry and SL can trigger on the same candle. If the entry candle
+    // itself breaches the stop, the trade exits there — checked before any post-entry window.
+    const entryCandle = windowRows[entryIdx]
+    const sameCandleSlFill = entryCandle ? checkStopFill('sell', slPrice, entryCandle, 1, this.slippage, 'sl') : null
+
+    if (sameCandleSlFill) {
+      exit = { price: sameCandleSlFill.price, reason: 'sl_hit', feeType: 'taker', ts: sameCandleSlFill.timestamp }
+    } else {
+      // Rule 1: SL is active from the entry candle onward; TP only from the first post-entry candle.
+      const postEntryRows = windowRows.slice(entryIdx)
+      const firstPostRow = windowRows[entryIdx + 1]
 
       const orders: Order[] = [
         {
@@ -88,7 +95,7 @@ export class Strategy42 implements BaseStrategy {
           type: 'stop',
           price: slPrice,
           quantity: 1,
-          validFrom: firstPostRow.ts,
+          validFrom: entryFill.timestamp,
           validUntil: deadlineTs,
           reduceOnly: true,
           label: 'sl',
@@ -98,7 +105,7 @@ export class Strategy42 implements BaseStrategy {
           type: 'limit',
           price: tpPrice,
           quantity: 1,
-          validFrom: firstPostRow.ts,
+          validFrom: firstPostRow ? firstPostRow.ts : deadlineTs,
           validUntil: deadlineTs,
           reduceOnly: true,
           label: 'tp',

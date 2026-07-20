@@ -186,4 +186,43 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
     expect(result.exit_price).toBeGreaterThan(0)
     expect(result.hold_duration).toBeCloseTo(65, 0) // 5s entry offset + 60s deadline
   })
+
+  it('Scenario Rule 1: SL triggers on the entry candle itself', () => {
+    const strategy = new Strategy3('strategy_3a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_3a',
+        direction: 'short',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        stop_loss_percent: 1.0,
+        tp_mode: 'A',
+        tp_multiplier: 1.5,
+        tp_addend_pct: 0.4,
+        deadline_seconds: 60,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      DEFAULT_SLIPPAGE,
+      0
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    // Entry SELL at bidOpen=50000 → slPrice = 50000 * 1.01 = 50500.
+    // The entry candle itself already has ask_high spanning slPrice (SL validFrom = entryTs).
+    const overrides = new Map<
+      number,
+      Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number; askHigh: number; askLow: number }>
+    >()
+    overrides.set(-5, { bidOpen: 50000, askOpen: 50000, askHigh: 50600 })
+
+    const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('sl_hit')
+    expect(result.hold_duration).toBe(0) // fired on the entry candle
+  })
 })

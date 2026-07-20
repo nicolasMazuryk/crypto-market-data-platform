@@ -263,6 +263,91 @@ describe('Order Simulator', () => {
     expect(result.fills).toHaveLength(1)
     expect(result.fills[0]?.quantity).toBe(5)
   })
+
+  it('SL fires on the entry candle when validFrom = entry ts, while TP stays gated to entry+1', () => {
+    const candles: OrderbookRow[] = [
+      makeCandle('2025-06-01 00:00:00', {
+        // SL condition for long: bid_low <= stop_price (SELL STOP)
+        bid_low: 49800,
+        // Would also satisfy TP if it were valid on this candle (SELL LIMIT)
+        bid_high: 50200,
+      }),
+    ]
+
+    const orders: Order[] = [
+      {
+        side: 'sell',
+        type: 'stop',
+        price: 49900,
+        quantity: 1,
+        validFrom: '2025-06-01 00:00:00', // entry candle
+        validUntil: '2025-06-01 00:01:00',
+        reduceOnly: true,
+        label: 'sl',
+      },
+      {
+        side: 'sell',
+        type: 'limit',
+        price: 50100,
+        quantity: 1,
+        validFrom: '2025-06-01 00:00:01', // entry + 1
+        validUntil: '2025-06-01 00:01:00',
+        reduceOnly: true,
+        label: 'tp',
+      },
+    ]
+
+    const result = simulateOrders(orders, candles, 0, 'long')
+    expect(result.fills).toHaveLength(1)
+    expect(result.fills[0]?.label).toBe('sl')
+    expect(result.fills[0]?.timestamp).toBe('2025-06-01 00:00:00')
+  })
+
+  it('credit-gated action never fires on the drop candle when validFrom is set to drop_candle + 1', () => {
+    const candles: OrderbookRow[] = [
+      makeCandle('2025-06-01 00:00:04', { bid_high: 50200 }), // drop candle itself — would satisfy TP
+      makeCandle('2025-06-01 00:00:05', { bid_high: 50200 }), // drop_candle + 1 — first valid candle
+    ]
+
+    const orders: Order[] = [
+      {
+        side: 'sell',
+        type: 'limit',
+        price: 50100,
+        quantity: 1,
+        validFrom: '2025-06-01 00:00:05', // drop_candle (00:00:04) + 1s structural floor
+        validUntil: '2025-06-01 00:01:00',
+        reduceOnly: true,
+        label: 'tp',
+      },
+    ]
+
+    const result = simulateOrders(orders, candles, 0, 'long')
+    expect(result.fills).toHaveLength(1)
+    expect(result.fills[0]?.timestamp).toBe('2025-06-01 00:00:05')
+  })
+
+  it('non-SL exit never fires on the entry candle even when priced favorably', () => {
+    const candles: OrderbookRow[] = [
+      makeCandle('2025-06-01 00:00:00', { bid_high: 50200, bid_low: 49950 }), // entry candle
+    ]
+
+    const orders: Order[] = [
+      {
+        side: 'sell',
+        type: 'limit',
+        price: 50100,
+        quantity: 1,
+        validFrom: '2025-06-01 00:00:01', // gated past entry candle
+        validUntil: '2025-06-01 00:01:00',
+        reduceOnly: true,
+        label: 'tp',
+      },
+    ]
+
+    const result = simulateOrders(orders, candles, 0, 'long')
+    expect(result.fills).toHaveLength(0)
+  })
 })
 
 describe('Ladder Order Simulator', () => {

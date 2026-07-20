@@ -109,9 +109,11 @@ export class Strategy41 implements BaseStrategy {
 
     let exit: { price: number; reason: ExitReason; feeType: 'maker' | 'taker'; ts: string } | null = null
 
-    if (postFillSliced.length > 0) {
+    if (postFillRows.length > 0) {
+      // TP stays gated to the first post-fill candle; SL is active from the fill candle itself
+      // (Rule 1: same-candle SL is not exempt from the fill it belongs to).
       const firstPostFillRow = postFillSliced[0]
-      if (!firstPostFillRow) return null
+      const tpValidFrom = firstPostFillRow ? firstPostFillRow.ts : deadlineTs
 
       const orders: Order[] = [
         {
@@ -119,7 +121,7 @@ export class Strategy41 implements BaseStrategy {
           type: 'stop',
           price: slPrice,
           quantity: totalQty,
-          validFrom: firstPostFillRow.ts,
+          validFrom: lastFillTs,
           validUntil: deadlineTs,
           reduceOnly: true,
           label: 'sl',
@@ -129,14 +131,14 @@ export class Strategy41 implements BaseStrategy {
           type: 'limit',
           price: tpPrice,
           quantity: totalQty,
-          validFrom: firstPostFillRow.ts,
+          validFrom: tpValidFrom,
           validUntil: deadlineTs,
           reduceOnly: true,
           label: 'tp',
         },
       ]
 
-      const { fills: exitFills } = simulateOrders(orders, postFillSliced, this.slippage, 'long')
+      const { fills: exitFills } = simulateOrders(orders, postFillRows, this.slippage, 'long')
 
       const slFill = exitFills.find(f => f.label === 'sl')
       const tpFill = exitFills.find(f => f.label === 'tp')

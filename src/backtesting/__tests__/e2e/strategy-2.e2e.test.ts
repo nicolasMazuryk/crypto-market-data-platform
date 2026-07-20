@@ -179,8 +179,8 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     expect(result.funding_received).toBe(true)
   })
 
-  it('Scenario Settlement (buffer=0): TP gated to T_drop, not T_low+1s', () => {
-    // Same design but buffer=0: tpValidFrom=max(T+2, T+4)=T+4, TP fires at T+4.
+  it('Scenario Settlement (buffer=0): TP gated to structural T_drop+1s floor, not T_low+1s', () => {
+    // Same design but buffer=0: tpValidFrom=max(T+2, T+4+1s structural floor)=T+5, TP fires at T+5.
     const strategy = new Strategy2()
     strategy.initialize(
       {
@@ -216,10 +216,10 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('tp_hit')
     expect(result.real_settlement_detected).toBe(true)
-    // exit at T+4 (not T+2): tpValidFrom=max(T+2, T+4)=T+4, bid_high at T+4=50100>pTarget
+    // exit at T+5 (not T+2 or T+4): tpValidFrom=max(T+2, T+4+1s floor)=T+5, bid_high at T+5=50005>pTarget
     const exitTimeMs = fundingTime.getTime() - 5000 + result.hold_duration * 1000
-    expect(exitTimeMs).toBe(fundingTime.getTime() + 4000)
-    // entryTs (T-5) < fundingTs (T) <= exitTs (T+4): position straddles the boundary
+    expect(exitTimeMs).toBe(fundingTime.getTime() + 5000)
+    // entryTs (T-5) < fundingTs (T) <= exitTs (T+5): position straddles the boundary
     expect(result.funding_received).toBe(true)
   })
 
@@ -261,5 +261,42 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('sl_hit')
     expect(result.pnl.net_pnl).toBeLessThan(0)
+  })
+
+  it('Scenario Rule 1: SL triggers on sec=0 (entry candle itself has a range spanning SL)', () => {
+    // Entry candle (offset -5) has a wide range that already dips through slPrice.
+    // With sec starting at 0, the SL check must run on the entry candle, not just entry+1.
+    const strategy = new Strategy2()
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_2',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        retracement_pct: 0.5,
+        deadline_seconds: 60,
+        sl_multiplier: 1.0,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      DEFAULT_SLIPPAGE,
+      0
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const overrides = new Map<number, Partial<{ bidOpen: number; bidLow: number; askOpen: number }>>()
+    // Entry candle: askOpen=50005 → entryFill≈50005, slPrice≈50005*(1-0.01)≈49505.
+    // bidLow on this same candle dips to 49400, well below slPrice.
+    overrides.set(-5, { askOpen: 50005, bidOpen: 50000, bidLow: 49400 })
+
+    const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window, ctx(window, event))
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('sl_hit')
+    // Exit ts equals entry ts: SL fired on the entry candle (sec=0).
+    expect(result.hold_duration).toBe(0)
   })
 })

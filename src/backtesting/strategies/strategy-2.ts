@@ -77,10 +77,12 @@ export class Strategy2 implements BaseStrategy {
     if (fundingCandle?.bid_open == null) return null
     const pFunding = fundingCandle.bid_open
 
-    // TP cannot become valid until max(T_low+1s, T_drop + buffer).
-    const settlementEpochMs =
-      new Date(tDropTs.replace(' ', 'T') + 'Z').getTime() +
-      this.fundingSettlement.tp_post_settlement_buffer_seconds * 1000
+    // TP cannot become valid until max(T_low+1s, T_drop + buffer), and never before
+    // T_drop + 1s (structural floor: credit-gated action never fires on the drop candle).
+    const tDropEpochMs = new Date(tDropTs.replace(' ', 'T') + 'Z').getTime()
+    const structuralFloorMs = tDropEpochMs + 1000
+    const bufferMs = this.fundingSettlement.tp_post_settlement_buffer_seconds * 1000
+    const settlementEpochMs = Math.max(structuralFloorMs, tDropEpochMs + bufferMs)
 
     // Simulate SL + dynamic TP online, advancing the gate one candle at a time. P_low is learned
     // only from candles already seen after funding; the repriced TP becomes active on the
@@ -95,7 +97,7 @@ export class Strategy2 implements BaseStrategy {
     let seenAny = false
     let lastRow: OrderbookRow | undefined
 
-    for (let sec = 1; entryMs + sec * 1000 <= deadlineMs; sec++) {
+    for (let sec = 0; entryMs + sec * 1000 <= deadlineMs; sec++) {
       const rowTs = toClickHouseDateTime(new Date(entryMs + sec * 1000))
       if (rowTs > gated.getCurrentTime()) gated.advanceTo(rowTs)
       const row = gated.getRowAt(rowTs)
@@ -103,9 +105,11 @@ export class Strategy2 implements BaseStrategy {
       seenAny = true
       lastRow = row
 
+      const isEntryCandle = sec === 0
+
       const slFill = checkStopFill('sell', slPrice, row, 1, this.slippage, 'sl')
       const tpFill =
-        activeTpPrice !== undefined && activeTpFrom !== undefined && row.ts >= activeTpFrom
+        !isEntryCandle && activeTpPrice !== undefined && activeTpFrom !== undefined && row.ts >= activeTpFrom
           ? checkLimitFill('sell', activeTpPrice, row, 1, 'tp')
           : null
 

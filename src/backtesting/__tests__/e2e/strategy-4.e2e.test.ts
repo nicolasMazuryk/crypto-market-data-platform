@@ -237,6 +237,45 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('deadline')
   })
+
+  it('Scenario Rule 1 (4.1): SL triggers on the fill candle itself', () => {
+    // Single-order ladder. The candle that fills the ladder also dips through slPrice
+    // (SL validFrom = lastFillTs, so it must be checked on that same candle).
+    const strategy = new Strategy41('strategy_4_1a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_4_1a',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        ladder_count: 1,
+        ladder_top_mult: 0.4,
+        ladder_bottom_mult: 0.4,
+        take_profit_pct: 0.2,
+        deadline_seconds: 60,
+        sl_multiplier: 0.05, // narrow gap so the fill candle can also breach SL
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      DEFAULT_SLIPPAGE,
+      0
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    // pCurrent (ask_open at T-5) ≈ 50005, ladderTop ≈ 50005 * (1 - 0.01*0.4) ≈ 49804.98 (fill price)
+    // slPrice ≈ 49804.98 * (1 - 0.01*0.05) ≈ 49780.08
+    const overrides = new Map<number, Partial<{ bidOpen: number; bidLow: number; askOpen: number; askLow: number }>>()
+    overrides.set(0, { askOpen: 49750, askLow: 49700, bidOpen: 49750, bidLow: 49700 })
+
+    const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.fill_count).toBe(1)
+    expect(result.exit_reason).toBe('sl_hit')
+  })
 })
 
 describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
@@ -452,5 +491,44 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
 
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('deadline')
+  })
+
+  it('Scenario Rule 4 (4.2): entry fill and SL both trigger on the same candle', () => {
+    // The candle that fills the entry limit also breaches slPrice within the same candle —
+    // worst-case path: entry fills, SL exits immediately on that same candle.
+    const strategy = new Strategy42('strategy_4_2a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_4_2a',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.6,
+        entry_offset_seconds: 5,
+        limit_offset_mult: 1.0,
+        take_profit_pct: 0.2,
+        deadline_seconds: 60,
+        sl_multiplier: 0.05, // narrow gap so the entry candle can also breach SL
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      DEFAULT_SLIPPAGE,
+      0
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    // limitPrice ≈ 50005 * 0.99 ≈ 49504.95 (entry fill price)
+    // slPrice ≈ 49504.95 * (1 - 0.01*0.05) ≈ 49480.28
+    // Candle at offset 0 has ask_low below limitPrice (fills entry) and bid_low below slPrice (fills SL).
+    const overrides = new Map<number, Partial<{ bidOpen: number; bidLow: number; askOpen: number; askLow: number }>>()
+    overrides.set(0, { askOpen: 49450, askLow: 49400, bidOpen: 49450, bidLow: 49400 })
+
+    const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('sl_hit')
+    // Entry and exit fired on the same candle — zero hold duration.
+    expect(result.hold_duration).toBe(0)
   })
 })
