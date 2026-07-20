@@ -94,11 +94,11 @@ export class Strategy2 implements BaseStrategy {
 
       // Same-candle ambiguity is intentionally conservative: SL wins.
       if (slFill) {
-        exit = { price: slFill.price, reason: 'SL_HIT', feeType: 'taker', ts: slFill.timestamp }
+        exit = { price: slFill.price, reason: 'sl_hit', feeType: 'taker', ts: slFill.timestamp }
         break
       }
       if (tpFill) {
-        exit = { price: tpFill.price, reason: 'TP_HIT', feeType: 'maker', ts: tpFill.timestamp }
+        exit = { price: tpFill.price, reason: 'tp_hit', feeType: 'maker', ts: tpFill.timestamp }
         break
       }
 
@@ -118,13 +118,13 @@ export class Strategy2 implements BaseStrategy {
       if (deadlineCandle) {
         const deadlineFill = fillMarketOrder('sell', deadlineCandle, 1, 'deadline')
         if (!deadlineFill) return null
-        exit = { price: deadlineFill.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
+        exit = { price: deadlineFill.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       } else {
         const lastRow = allPostEntryRows[allPostEntryRows.length - 1]
         if (!lastRow) return null
         const lastFill = fillMarketOrder('sell', lastRow, 1, 'deadline')
         if (!lastFill) return null
-        exit = { price: lastFill.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
+        exit = { price: lastFill.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       }
     }
 

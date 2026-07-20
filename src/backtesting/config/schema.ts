@@ -4,16 +4,17 @@ export type StrategyDirection = 'long' | 'short'
 /** Take-profit mode for Strategy 3 */
 export type TpMode = 'A' | 'B'
 
-/** Exit reason for a trade */
-export type ExitReason =
-  | 'TP_HIT'
-  | 'SL_HIT'
-  | 'DEADLINE'
-  | 'MARKET_EXIT'
-  | 'UNFILLED'
-  | 'FUNDING_FLOOR'
-  | 'SPREAD_TP'
-  | 'SPREAD_SL'
+/**
+ * Terminal-state enums for a trade. Canonical §12.1/§12.2 vocabulary lives in the shared
+ * enum module; re-exported here so existing `../config/schema.js` importers keep working.
+ */
+import type { ErrorCode } from '../../config/canonical/enums.js'
+export type { ExitReason, ErrorCode } from '../../config/canonical/enums.js'
+
+/** Result shape for a representable terminal reached via a failure/no-fill path (§12.2). */
+export interface BacktestError {
+  error_code: ErrorCode
+}
 
 /** Exchange fee schedule */
 export interface FeeSchedule {

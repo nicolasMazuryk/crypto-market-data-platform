@@ -94,7 +94,7 @@ export class Strategy1 implements BaseStrategy {
       entry_price: entryFill.price,
       exit_price: exitFill.price,
       pnl,
-      exit_reason: 'MARKET_EXIT',
+      exit_reason: 'timed',
       hold_duration: holdDuration,
       fill_count: 1,
       funding_received: applyFunding,

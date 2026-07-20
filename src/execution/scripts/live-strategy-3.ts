@@ -162,7 +162,7 @@ async function main(): Promise<void> {
                 stratCfg !== undefined && 'amountUsd' in stratCfg ? (stratCfg as { amountUsd: number }).amountUsd : 0
 
               // TP exits: taker+maker fees; SL/deadline exits: 2× taker fees
-              const isTpExit = exitReason === 'tp'
+              const isTpExit = exitReason === 'tp_hit'
               const makerFee = 0.0002
               const takerFee = 0.0004
               const feesUsd = isTpExit ? (takerFee + makerFee) * amountUsd : 2 * takerFee * amountUsd

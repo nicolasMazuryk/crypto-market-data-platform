@@ -64,7 +64,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('TP_HIT')
+    expect(result.exit_reason).toBe('tp_hit')
     expect(result.funding_received).toBe(true)
     // Exit at retracement target price — maker fee
     expect(result.pnl.fees).toBeCloseTo(0.0004 + 0.0002, TOLERANCE) // taker + maker
@@ -117,7 +117,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('DEADLINE')
+    expect(result.exit_reason).toBe('deadline')
     // Deadline exit: two taker fees
     expect(result.pnl.fees).toBeCloseTo(0.0004 * 2, TOLERANCE)
   })
@@ -165,7 +165,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('TP_HIT')
+    expect(result.exit_reason).toBe('tp_hit')
     expect(result.real_settlement_detected).toBe(true)
     expect(result.real_settlement_ts).toBe(
       new Date(fundingTime.getTime() + 4000).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19)
@@ -210,7 +210,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('TP_HIT')
+    expect(result.exit_reason).toBe('tp_hit')
     expect(result.real_settlement_detected).toBe(true)
     // exit at T+4 (not T+2): tpValidFrom=max(T+2, T+4)=T+4, bid_high at T+4=50100>49985
     const exitTimeMs = fundingTime.getTime() - 5000 + result.hold_duration * 1000
@@ -256,7 +256,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('SL_HIT')
+    expect(result.exit_reason).toBe('sl_hit')
     expect(result.pnl.net_pnl).toBeLessThan(0)
   })
 })

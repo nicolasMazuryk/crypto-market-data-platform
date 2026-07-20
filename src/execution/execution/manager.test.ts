@@ -763,7 +763,7 @@ describe('OCO cancel strategies', () => {
     expect(manager.get(intent.id)!.status).toBe('monitoring')
     const slRef = manager.get(intent.id)!.exitOrderRefs!.sl!
 
-    monitor.triggerExit(intent.id, 'tp')
+    monitor.triggerExit(intent.id, 'tp_hit')
     await new Promise(r => setTimeout(r, 10))
 
     expect(manager.get(intent.id)!.status).toBe('exited')
@@ -793,7 +793,7 @@ describe('OCO cancel strategies', () => {
       ])
       .mockResolvedValue([])
 
-    monitor.triggerExit(intent.id, 'tp')
+    monitor.triggerExit(intent.id, 'tp_hit')
     await new Promise(r => setTimeout(r, 10))
 
     expect(manager.get(intent.id)!.status).toBe('exited')
@@ -823,7 +823,7 @@ describe('OCO cancel strategies', () => {
       return Promise.resolve(getOpenOrdersCount <= 4 ? [residualOrder] : [])
     })
 
-    monitor.triggerExit(intent.id, 'tp')
+    monitor.triggerExit(intent.id, 'tp_hit')
     await new Promise(r => setTimeout(r, 10))
 
     expect(manager.get(intent.id)!.status).toBe('exited')
@@ -843,7 +843,7 @@ describe('OCO cancel strategies', () => {
       makeOrder(slRef.clientOrderId, { reduceOnly: true, exchangeOrderId: slRef.exchangeOrderId }),
     ])
 
-    monitor.triggerExit(intent.id, 'tp')
+    monitor.triggerExit(intent.id, 'tp_hit')
     await new Promise(r => setTimeout(r, 10))
 
     // Position was flat (TP filled), so intent must still reach exited
@@ -860,7 +860,7 @@ describe('OCO cancel strategies', () => {
 
     const tpRef = manager.get(intent.id)!.exitOrderRefs!.tp!
 
-    monitor.triggerExit(intent.id, 'sl')
+    monitor.triggerExit(intent.id, 'sl_hit')
     await new Promise(r => setTimeout(r, 10))
 
     expect(manager.get(intent.id)!.status).toBe('exited')
@@ -1034,7 +1034,7 @@ describe('Task 3 fixes', () => {
       }
     })
 
-    monitor.triggerExit(intent.id, 'sl')
+    monitor.triggerExit(intent.id, 'sl_hit')
     await new Promise(r => setTimeout(r, 10))
 
     expect(manager.get(intent.id)!.status).toBe('exited')
@@ -1078,7 +1078,7 @@ describe('Task 3 fixes', () => {
       // Advance past the poll interval (15_000ms) to trigger pollForSlTpFill
       await vi.advanceTimersByTimeAsync(16_000)
 
-      const found = exitTriggered.find(e => e.reason === 'sl')
+      const found = exitTriggered.find(e => e.reason === 'sl_hit')
       expect(found).toBeDefined()
       expect(found?.source).toBe('rest_poll')
       void manager

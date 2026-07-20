@@ -70,6 +70,15 @@ export function formatReport(report: BacktestReport, outputDir: string): string 
     }
   }
 
+  const errorCodeEntries = Object.entries(report.error_code_distribution).filter(([, d]) => d.count > 0)
+  if (errorCodeEntries.length > 0) {
+    lines.push('')
+    lines.push(`--- Error Codes ---`)
+    for (const [code, data] of errorCodeEntries) {
+      lines.push(`  ${code}: ${String(data.count)} (${(data.pct * 100).toFixed(1)}%)`)
+    }
+  }
+
   lines.push('')
   lines.push(`--- Equity Curve Metrics ---`)
   const ecm = report.equity_curve_metrics

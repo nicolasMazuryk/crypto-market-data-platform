@@ -266,9 +266,9 @@ async function main(): Promise<void> {
 
   function runPostRunAssertions(): void {
     const timeoutExits = settledReasons.filter(r => r.reason === 'funding_fee_timeout')
-    const wsExits = settledReasons.filter(r => r.reason === 'funding_fee' && r.source === 'ws')
-    const restPollExits = settledReasons.filter(r => r.reason === 'funding_fee' && r.source === 'rest_poll')
-    const allFundingFeeExits = settledReasons.filter(r => r.reason === 'funding_fee')
+    const wsExits = settledReasons.filter(r => r.reason === 'funding_fee_event' && r.source === 'ws')
+    const restPollExits = settledReasons.filter(r => r.reason === 'funding_fee_event' && r.source === 'rest_poll')
+    const allFundingFeeExits = settledReasons.filter(r => r.reason === 'funding_fee_event')
 
     log({
       event: 'post_run.summary',

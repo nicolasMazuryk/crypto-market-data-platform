@@ -7,6 +7,7 @@ import type { SkipReason } from '../data/types.js'
 
 import { createStrategy } from '../strategies/registry.js'
 import type { TradeResult } from '../strategies/types.js'
+import type { ErrorCode } from '../config/schema.js'
 import { buildReport } from '../reporting/report-builder.js'
 import type { BacktestReport } from '../reporting/types.js'
 import { getGitCommit } from './utils.js'
@@ -41,6 +42,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   strategy.initialize(strategyConfig, feeSchedule, base.market_slippage_pct / 100, base.funding_settlement)
 
   const trades: TradeResult[] = []
+  const errorCodes: ErrorCode[] = []
   const allSkipReasons: SkipReason[] = []
   let triggeredCount = 0
   let unfilledCount = 0
@@ -84,10 +86,12 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
       triggeredCount++
 
       const result = strategy.execute(event, window)
-      if (result) {
-        trades.push(result)
-      } else {
+      if (result === null) {
         unfilledCount++
+      } else if ('error_code' in result) {
+        errorCodes.push(result.error_code)
+      } else {
+        trades.push(result)
       }
     }
 
@@ -115,6 +119,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   const report = buildReport({
     config,
     trades,
+    errorCodes,
     totalEventsScanned,
     skipReasons: allSkipReasons,
     triggeredCount,

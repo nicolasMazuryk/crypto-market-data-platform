@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 
-import type { ResolvedConfig, ExitReason } from '../config/schema.js'
+import type { ResolvedConfig, ErrorCode } from '../config/schema.js'
+import { EXIT_REASONS, ERROR_CODES } from '../../config/canonical/enums.js'
 import type { SkipReason } from '../data/types.js'
 import type { TradeResult } from '../strategies/types.js'
 import type {
@@ -11,6 +12,7 @@ import type {
   PnlDecomposition,
   RiskMetrics,
   ExitReasonDistribution,
+  ErrorCodeDistribution,
   DataQualitySection,
   ReproducibilitySection,
   TradeLogEntry,
@@ -21,6 +23,8 @@ import { computeEquityCurveMetrics } from './equity-curve-metrics.js'
 interface BuildReportInput {
   config: ResolvedConfig
   trades: TradeResult[]
+  /** Representable terminals reached via failure/no-fill paths (§12.2), one per emitted code. */
+  errorCodes?: ErrorCode[]
   totalEventsScanned: number
   skipReasons: SkipReason[]
   triggeredCount: number
@@ -34,6 +38,7 @@ export function buildReport(input: BuildReportInput): BacktestReport {
   const {
     config,
     trades,
+    errorCodes = [],
     totalEventsScanned,
     skipReasons,
     triggeredCount,
@@ -118,23 +123,23 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     calmar_ratio: m.calmarRatio(pnls, ddResult.maxDrawdownPct),
   }
 
-  // Exit reason distribution (all reasons, zero-filled for unused ones)
-  const exitReasons: ExitReason[] = [
-    'TP_HIT',
-    'SL_HIT',
-    'DEADLINE',
-    'MARKET_EXIT',
-    'UNFILLED',
-    'FUNDING_FLOOR',
-    'SPREAD_TP',
-    'SPREAD_SL',
-  ]
+  // Exit reason distribution (all §12.1 reasons, zero-filled for unused ones)
   const exitReasonDist: ExitReasonDistribution = {} as ExitReasonDistribution
-  for (const reason of exitReasons) {
+  for (const reason of EXIT_REASONS) {
     const count = trades.filter(t => t.exit_reason === reason).length
     exitReasonDist[reason] = {
       count,
       pct: trades.length > 0 ? count / trades.length : 0,
+    }
+  }
+
+  // Error code distribution (all §12.2 codes, zero-filled for unused ones)
+  const errorCodeDist: ErrorCodeDistribution = {} as ErrorCodeDistribution
+  for (const code of ERROR_CODES) {
+    const count = errorCodes.filter(c => c === code).length
+    errorCodeDist[code] = {
+      count,
+      pct: errorCodes.length > 0 ? count / errorCodes.length : 0,
     }
   }
 
@@ -191,6 +196,7 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     pnl_decomposition: pnlDecomp,
     risk_metrics: riskMetrics,
     exit_reason_distribution: exitReasonDist,
+    error_code_distribution: errorCodeDist,
     data_quality: dataQuality,
     reproducibility: reproducibility,
     trade_log: tradeLog,

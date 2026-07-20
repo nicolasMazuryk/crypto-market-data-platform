@@ -52,7 +52,7 @@ describe('E2E: Strategy 1 — Instant Exit', () => {
     expect(Math.abs(result.pnl.fees - expectedFees)).toBeLessThan(TOLERANCE)
     expect(Math.abs(result.pnl.net_pnl - expectedNet)).toBeLessThan(TOLERANCE)
     expect(result.pnl.net_pnl).toBeGreaterThan(0) // Profitable!
-    expect(result.exit_reason).toBe('MARKET_EXIT')
+    expect(result.exit_reason).toBe('timed')
     expect(result.funding_received).toBe(true)
   })
 

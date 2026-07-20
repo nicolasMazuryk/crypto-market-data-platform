@@ -1,4 +1,4 @@
-import type { ExitReason } from '../config/schema.js'
+import type { ExitReason, ErrorCode } from '../config/schema.js'
 
 /** Trade statistics */
 export interface TradeStats {
@@ -52,6 +52,9 @@ export interface RiskMetrics {
 
 /** Exit reason distribution */
 export type ExitReasonDistribution = Record<ExitReason, { count: number; pct: number }>
+
+/** Error code distribution (representable terminals reached via failure/no-fill paths, §12.2) */
+export type ErrorCodeDistribution = Record<ErrorCode, { count: number; pct: number }>
 
 /** Data quality section */
 export interface DataQualitySection {
@@ -121,6 +124,7 @@ export interface BacktestReport {
   pnl_decomposition: PnlDecomposition
   risk_metrics: RiskMetrics
   exit_reason_distribution: ExitReasonDistribution
+  error_code_distribution: ErrorCodeDistribution
   data_quality: DataQualitySection
   reproducibility: ReproducibilitySection
   trade_log?: TradeLogEntry[] | undefined

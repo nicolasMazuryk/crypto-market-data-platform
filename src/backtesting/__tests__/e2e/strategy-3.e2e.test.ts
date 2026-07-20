@@ -43,7 +43,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
 
     const result = strategy.execute(event, window)
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('TP_HIT')
+    expect(result.exit_reason).toBe('tp_hit')
     expect(result.pnl.funding_pnl).toBeLessThan(0) // Shorts pay funding
     expect(result.funding_received).toBe(true) // Funding was applied (position straddles funding tick)
   })
@@ -87,7 +87,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('SL_HIT')
+    expect(result.exit_reason).toBe('sl_hit')
     expect(result.pnl.net_pnl).toBeLessThan(0)
   })
 
@@ -144,7 +144,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
 
     const result = strategy.execute(event, window)
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('SL_HIT') // Worst case
+    expect(result.exit_reason).toBe('sl_hit') // Worst case
   })
 
   it('Scenario 8: Deadline exit — flat price, neither SL nor TP fires', () => {
@@ -182,7 +182,7 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('DEADLINE')
+    expect(result.exit_reason).toBe('deadline')
     expect(result.exit_price).toBeGreaterThan(0)
     expect(result.hold_duration).toBeCloseTo(65, 0) // 5s entry offset + 60s deadline
   })

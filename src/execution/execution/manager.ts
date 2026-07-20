@@ -23,7 +23,7 @@ import type { TradeIntent } from '../strategies/types.js'
 import type {
   ExecutionManager,
   ExitOrderRef,
-  ExitReason,
+  TerminalMarker,
   IntentState,
   IntentStatus,
   LadderRung,
@@ -1138,7 +1138,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       cleanup()
       if (avgFillPrice !== undefined) s.avgExitPrice = avgFillPrice
       monitor.disarm(intent.id)
-      await handleMonitorExit(s, 'tp')
+      await handleMonitorExit(s, 'tp_hit')
     }
 
     const recordTpPlacementFailure = async (reason: string) => {
@@ -1292,7 +1292,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (emptyPosition) {
             settled = true
             monitor.disarm(intent.id)
-            await handleMonitorExit(s, 'sl')
+            await handleMonitorExit(s, 'sl_hit')
             return
           }
           await recordTpPlacementFailure(ack.rejectReason ?? 'TP rejected')
@@ -1897,14 +1897,14 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               intentId: intent.id,
               exchange: intent.exchange,
               symbol: intent.symbol,
-              reason: 'sl',
+              reason: 'sl_hit',
               triggerTs,
               source: 'rest_poll',
               exitOrderClientId: slRef.clientOrderId,
               ...(slOrder.avgFillPrice !== undefined ? { triggerPrice: slOrder.avgFillPrice } : {}),
               latencyMs: clock.now() - triggerTs,
             })
-            await handleMonitorExit(s, 'sl')
+            await handleMonitorExit(s, 'sl_hit')
             return
           }
         }
@@ -1924,14 +1924,14 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
               intentId: intent.id,
               exchange: intent.exchange,
               symbol: intent.symbol,
-              reason: 'tp',
+              reason: 'tp_hit',
               triggerTs,
               source: 'rest_poll',
               exitOrderClientId: tpRef.clientOrderId,
               ...(tpOrder.avgFillPrice !== undefined ? { triggerPrice: tpOrder.avgFillPrice } : {}),
               latencyMs: clock.now() - triggerTs,
             })
-            await handleMonitorExit(s, 'tp')
+            await handleMonitorExit(s, 'tp_hit')
             return
           }
         }
@@ -2094,7 +2094,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     return 'failed'
   }
 
-  async function handleMonitorExit(s: IntentState, reason: ExitReason): Promise<void> {
+  async function handleMonitorExit(s: IntentState, reason: TerminalMarker): Promise<void> {
     if (TERMINAL.has(s.status) || s.status === 'exiting') return
 
     const exitStartedAt = clock.now()
@@ -2121,9 +2121,9 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
     const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
 
-    if (reason === 'sl' || reason === 'tp') {
+    if (reason === 'sl_hit' || reason === 'tp_hit') {
       // One exit order already filled (detected by monitor). Cancel the residual.
-      const residualRef = reason === 'sl' ? s.exitOrderRefs?.tp : s.exitOrderRefs?.sl
+      const residualRef = reason === 'sl_hit' ? s.exitOrderRefs?.tp : s.exitOrderRefs?.sl
       if (residualRef) {
         // Snapshot open orders before cancelling to detect the dual-fill race:
         // if the residual order disappears from open orders AND is filled, both exits fired.
@@ -2182,7 +2182,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
                 payload: {
                   intentId: intent.id,
                   primaryReason: reason,
-                  secondaryReason: reason === 'sl' ? 'tp' : 'sl',
+                  secondaryReason: reason === 'sl_hit' ? 'tp_hit' : 'sl_hit',
                 },
               })
               logger.warn(
@@ -2190,7 +2190,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
                   event: 'oco.both_filled',
                   intentId: intent.id,
                   primaryReason: reason,
-                  secondaryReason: reason === 'sl' ? 'tp' : 'sl',
+                  secondaryReason: reason === 'sl_hit' ? 'tp_hit' : 'sl_hit',
                 },
                 'oco.both_filled: both SL and TP filled'
               )
@@ -2331,7 +2331,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         }
         // REST polling fallback for close fill (mirrors entry poll for WS-unreliable exchanges)
         const onCloseExhausted =
-          reason === 'funding_fee'
+          reason === 'funding_fee_event'
             ? () => {
                 void sweepReduceOnlyOrders(rest, intent.exchangeSymbol, intent.id)
                 void opts.state.reconcile(intent.exchange)
@@ -2347,7 +2347,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     }
   }
 
-  function recordExitMetrics(s: IntentState, reason: ExitReason): void {
+  function recordExitMetrics(s: IntentState, reason: TerminalMarker): void {
     const filledAt = entryFilledAt.get(s.intent.id) ?? s.intent.decidedAt
     metrics.intentExitLatencyMs.observe(clock.now() - filledAt, {
       exchange: s.intent.exchange,
@@ -2417,7 +2417,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             logger.warn({ intentId: s.intent.id, err }, 'preempt: cancel entry failed')
           })
       }
-      void handleMonitorExit(s, 'kill_switch')
+      void handleMonitorExit(s, 'kill_switch_flatten')
       return
     }
 
@@ -3818,7 +3818,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       if (s.status === 'monitoring' || s.status === 'filled') {
         // Position is open — route to monitor exit via kill_switch reason
         monitor.disarm(id)
-        await handleMonitorExit(s, 'kill_switch')
+        await handleMonitorExit(s, 'kill_switch_flatten')
         return
       }
 
@@ -3853,7 +3853,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
       // If the entry order had already partially filled, close the open position before going terminal
       if (s.filledQty > 0) {
-        await handleMonitorExit(s, 'kill_switch')
+        await handleMonitorExit(s, 'kill_switch_flatten')
         return
       }
 

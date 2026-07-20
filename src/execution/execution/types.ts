@@ -14,15 +14,16 @@ export type IntentStatus =
   | 'error'
   | 'cancelled'
 
-export type ExitReason =
-  | 'timed'
-  | 'tp'
-  | 'sl'
-  | 'deadline'
-  | 'kill_switch'
-  | 'error'
-  | 'funding_fee'
-  | 'funding_fee_timeout'
+export type { ExitReason } from '../../config/canonical/enums.js'
+import type { ExitReason } from '../../config/canonical/enums.js'
+
+/**
+ * `exitReason`/metric channel type: the §12.1 canonical reasons plus the non-canonical
+ * `'error'` sentinel emitted on the abnormal terminal path (e.g. retracement TP exhausted
+ * on an open position). `'error'` is intentionally NOT a member of the canonical `ExitReason`
+ * registry so §12.1 distributions stay clean. Matches `log-events.ts` `ExitReason | 'error'`.
+ */
+export type TerminalMarker = ExitReason | 'error'
 
 export interface ExitOrderRef {
   clientOrderId: string
@@ -54,7 +55,7 @@ export interface IntentState {
   filledQty: number
   avgEntryPrice?: number
   avgExitPrice?: number
-  exitReason?: ExitReason
+  exitReason?: TerminalMarker
   error?: { code: string; message: string; at: number }
   oco?: { bothFilled?: boolean }
   updatedAt: number

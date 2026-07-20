@@ -112,12 +112,12 @@ export class Strategy3 implements BaseStrategy {
 
     if (slFill) {
       exitPrice = slFill.price
-      exitReason = 'SL_HIT'
+      exitReason = 'sl_hit'
       exitFeeType = 'taker'
       exitTs = slFill.timestamp
     } else if (tpFill) {
       exitPrice = tpFill.price
-      exitReason = 'TP_HIT'
+      exitReason = 'tp_hit'
       exitFeeType = 'maker'
       exitTs = tpFill.timestamp
     } else {
@@ -127,14 +127,14 @@ export class Strategy3 implements BaseStrategy {
         const deadlineFillResult = fillMarketOrder('buy', deadlineCandle, 1, 'deadline')
         if (!deadlineFillResult) return null
         exitPrice = deadlineFillResult.price
-        exitReason = 'DEADLINE'
+        exitReason = 'deadline'
         exitFeeType = 'taker'
         exitTs = deadlineTs
       } else {
         const lastFillResult = fillMarketOrder('buy', lastOrderCandle, 1, 'deadline')
         if (!lastFillResult) return null
         exitPrice = lastFillResult.price
-        exitReason = 'DEADLINE'
+        exitReason = 'deadline'
         exitFeeType = 'taker'
         exitTs = deadlineTs
       }

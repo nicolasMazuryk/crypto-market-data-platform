@@ -55,7 +55,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     expect(result.funding_received).toBe(false) // Scenario a
     expect(result.pnl.funding_pnl).toBe(0)
     // Fees: fill_count * maker_fee + exit_fee
-    const expectedFees = result.fill_count * 0.0002 + (result.exit_reason === 'TP_HIT' ? 0.0002 : 0.0004)
+    const expectedFees = result.fill_count * 0.0002 + (result.exit_reason === 'tp_hit' ? 0.0002 : 0.0004)
     expect(Math.abs(result.pnl.fees - expectedFees)).toBeLessThan(TOLERANCE)
   })
 
@@ -91,11 +91,12 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
     const result = strategy.execute(event, window)
-    expect(result).toBeNull() // No trade
+    // Ladder placed but no rung filled → representable §12.2 terminal, not a data-absence null.
+    expect(result).toEqual({ error_code: 'ladder_no_fills' })
   })
 
   it('Scenario SL 4.1: SL triggered after ladder fills', () => {
-    // 2-order ladder: both fill, then price drops through slPrice → SL_HIT
+    // 2-order ladder: both fill, then price drops through slPrice → sl_hit
     // F = -0.01, pCurrent ≈ 50005
     // ladderTop = 50005 * 0.996 = 49804.98 (top_mult=0.4)
     // ladderBottom = 50005 * 0.99 = 49504.95 (bottom_mult=1.0)
@@ -137,7 +138,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('SL_HIT')
+    expect(result.exit_reason).toBe('sl_hit')
     expect(result.pnl.net_pnl).toBeLessThan(0)
     // Exit qty = totalQty (both orders filled)
     expect(result.fill_count).toBe(2)
@@ -190,7 +191,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('SL_HIT')
+    expect(result.exit_reason).toBe('sl_hit')
   })
 
   it('Scenario deadline 4.1: SL and TP both miss, deadline exit', () => {
@@ -234,7 +235,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('DEADLINE')
+    expect(result.exit_reason).toBe('deadline')
   })
 })
 
@@ -279,7 +280,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('TP_HIT')
+    expect(result.exit_reason).toBe('tp_hit')
     expect(result.pnl.funding_pnl).toBe(0) // Scenario a
   })
 
@@ -313,7 +314,8 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
     const result = strategy.execute(event, window)
-    expect(result).toBeNull()
+    // Entry limit never filled → representable §12.2 terminal, not a data-absence null.
+    expect(result).toEqual({ error_code: 'limit_expired' })
   })
 
   it('Scenario SL 4.2: SL triggered after limit fill', () => {
@@ -357,7 +359,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('SL_HIT')
+    expect(result.exit_reason).toBe('sl_hit')
     expect(result.pnl.net_pnl).toBeLessThan(0)
   })
 
@@ -407,7 +409,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('SL_HIT')
+    expect(result.exit_reason).toBe('sl_hit')
   })
 
   it('Scenario deadline 4.2: SL and TP both miss, deadline exit', () => {
@@ -449,6 +451,6 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
     const result = strategy.execute(event, window)
 
     if (!result) throw new Error('expected result')
-    expect(result.exit_reason).toBe('DEADLINE')
+    expect(result.exit_reason).toBe('deadline')
   })
 })

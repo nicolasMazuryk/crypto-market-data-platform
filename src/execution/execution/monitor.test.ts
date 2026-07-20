@@ -190,7 +190,7 @@ describe('PositionMonitor', () => {
     })
 
     expect(exits).toHaveLength(1)
-    expect(exits[0]).toEqual({ intentId: 'i1', reason: 'tp' })
+    expect(exits[0]).toEqual({ intentId: 'i1', reason: 'tp_hit' })
   })
 
   it('sl_tp_deadline: sl wins when sl order fills first', () => {
@@ -238,7 +238,7 @@ describe('PositionMonitor', () => {
     })
 
     expect(exits).toHaveLength(1)
-    expect(exits[0]).toEqual({ intentId: 'i1', reason: 'sl' })
+    expect(exits[0]).toEqual({ intentId: 'i1', reason: 'sl_hit' })
   })
 
   it('sl_tp_deadline: deadline fires when timer triggers', () => {
@@ -317,7 +317,7 @@ describe('PositionMonitor', () => {
     timers[0]!.cb()
 
     expect(exits).toHaveLength(1)
-    expect(exits[0]).toBe('sl')
+    expect(exits[0]).toBe('sl_hit')
   })
 
   it('disarm clears all timers and unsubscribes', () => {
@@ -446,7 +446,7 @@ describe('PositionMonitor', () => {
       bus.emit('ws.funding_fee', makeFundingEvent(now))
 
       expect(exits).toHaveLength(1)
-      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'funding_fee' })
+      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'funding_fee_event' })
     })
 
     it('falls back to funding_fee_timeout when timer fires', () => {
@@ -498,7 +498,7 @@ describe('PositionMonitor', () => {
       timers[0]!.cb()
 
       expect(exits).toHaveLength(1)
-      expect(exits[0]?.reason).toBe('funding_fee')
+      expect(exits[0]?.reason).toBe('funding_fee_event')
     })
 
     it('marks funding fee exits from the REST poller with rest_poll source', async () => {
@@ -529,7 +529,7 @@ describe('PositionMonitor', () => {
       timers[0]!.cb()
       await Promise.resolve()
 
-      expect(triggered).toEqual([{ reason: 'funding_fee', source: 'rest_poll' }])
+      expect(triggered).toEqual([{ reason: 'funding_fee_event', source: 'rest_poll' }])
     })
   })
 
@@ -587,7 +587,7 @@ describe('PositionMonitor', () => {
       })
 
       expect(exits).toHaveLength(1)
-      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'sl' })
+      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'sl_hit' })
     })
 
     it('TP fill with empty clientOrderId but matching exchangeOrderId triggers tp exit', () => {
@@ -623,7 +623,7 @@ describe('PositionMonitor', () => {
       })
 
       expect(exits).toHaveLength(1)
-      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'tp' })
+      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'tp_hit' })
     })
 
     it('SL fill by matching clientOrderId still works (regression guard)', () => {
@@ -654,7 +654,7 @@ describe('PositionMonitor', () => {
       })
 
       expect(exits).toHaveLength(1)
-      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'sl' })
+      expect(exits[0]).toEqual({ intentId: 'i1', reason: 'sl_hit' })
     })
   })
 })

@@ -1,4 +1,4 @@
-import type { ExitReason, StrategyConfig, FeeSchedule, FundingSettlementConfig } from '../config/schema.js'
+import type { ExitReason, BacktestError, StrategyConfig, FeeSchedule, FundingSettlementConfig } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import type { PnlBreakdown } from '../pnl/types.js'
 
@@ -62,6 +62,12 @@ export interface BaseStrategy {
   /** Check if this funding event meets selection criteria */
   shouldTrigger(event: FundingEvent): boolean
 
-  /** Execute the strategy and return trade result (or null if no trade) */
-  execute(event: FundingEvent, data: OHLCWindow): TradeResult | null
+  /**
+   * Execute the strategy.
+   * - `TradeResult` — a position was taken and reached a terminal state.
+   * - `BacktestError` — a representable terminal (§12.2 error_code) such as a ladder no-fill
+   *   or an expired entry limit; comparable to the live engine's error_code channel.
+   * - `null` — no trade / data absence (nothing to represent).
+   */
+  execute(event: FundingEvent, data: OHLCWindow): TradeResult | BacktestError | null
 }

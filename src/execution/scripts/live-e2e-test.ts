@@ -622,8 +622,8 @@ async function main(): Promise<void> {
           )
           assert(exitedState.status === 'exited', `expected exited, got ${exitedState.status}`)
           assert(
-            exitedState.exitReason === 'kill_switch',
-            `expected kill_switch exit, got ${exitedState.exitReason ?? 'none'}`
+            exitedState.exitReason === 'kill_switch_flatten',
+            `expected kill_switch_flatten exit, got ${exitedState.exitReason ?? 'none'}`
           )
         })
 

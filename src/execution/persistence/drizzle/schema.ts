@@ -285,7 +285,7 @@ export const intentLifecycleEvents = pgTable(
     fromStatus: text('from_status'),
     toStatus: text('to_status').notNull(),
     ts: timestamp('ts', { withTimezone: true }).notNull(),
-    latencyMs: integer('latency_ms'),
+    latencyMs: bigint('latency_ms', { mode: 'number' }),
     context: jsonb('context'),
   },
   table => [
@@ -304,7 +304,7 @@ export const exitTriggers = pgTable(
     triggerTs: timestamp('trigger_ts', { withTimezone: true }).notNull(),
     source: text('source').notNull(),
     exitOrderClientId: text('exit_order_client_id'),
-    latencyMs: integer('latency_ms'),
+    latencyMs: bigint('latency_ms', { mode: 'number' }),
     context: jsonb('context'),
   },
   table => [

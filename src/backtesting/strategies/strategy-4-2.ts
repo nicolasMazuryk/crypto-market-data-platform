@@ -7,7 +7,7 @@ import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import type { BaseStrategy, TradeResult } from './types.js'
-import type { ExitReason } from '../config/schema.js'
+import type { ExitReason, BacktestError } from '../config/schema.js'
 import type { Order } from '../orders/types.js'
 
 /**
@@ -36,7 +36,7 @@ export class Strategy42 implements BaseStrategy {
     return event.funding_rate * 100 <= -Math.abs(this.config.negative_funding_threshold_percent)
   }
 
-  execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
+  execute(event: FundingEvent, data: OHLCWindow): TradeResult | BacktestError | null {
     const absF = Math.abs(event.funding_rate)
     const setupTime = new Date(event.funding_time.getTime() - this.config.entry_offset_seconds * 1000)
     const deadlineTime = new Date(event.funding_time.getTime() + this.config.deadline_seconds * 1000)
@@ -67,7 +67,7 @@ export class Strategy42 implements BaseStrategy {
       }
     }
 
-    if (!entryFill || entryIdx === -1) return null
+    if (!entryFill || entryIdx === -1) return { error_code: 'limit_expired' }
 
     const slPrice = entryFill.price * (1 - absF * this.config.sl_multiplier)
     const tpPrice = entryFill.price * (1 + this.config.take_profit_pct / 100)
@@ -109,9 +109,9 @@ export class Strategy42 implements BaseStrategy {
       const tpFill = fills.find(f => f.label === 'tp')
 
       if (slFill) {
-        exit = { price: slFill.price, reason: 'SL_HIT', feeType: 'taker', ts: slFill.timestamp }
+        exit = { price: slFill.price, reason: 'sl_hit', feeType: 'taker', ts: slFill.timestamp }
       } else if (tpFill) {
-        exit = { price: tpFill.price, reason: 'TP_HIT', feeType: 'maker', ts: tpFill.timestamp }
+        exit = { price: tpFill.price, reason: 'tp_hit', feeType: 'maker', ts: tpFill.timestamp }
       }
     }
 
@@ -120,13 +120,13 @@ export class Strategy42 implements BaseStrategy {
       if (deadlineCandle) {
         const deadlineFillResult = fillMarketOrder('sell', deadlineCandle, 1, 'deadline')
         if (!deadlineFillResult) return null
-        exit = { price: deadlineFillResult.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
+        exit = { price: deadlineFillResult.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       } else {
         const lastRow = windowRows[windowRows.length - 1]
         if (!lastRow) return null
         const lastFillResult = fillMarketOrder('sell', lastRow, 1, 'deadline')
         if (!lastFillResult) return null
-        exit = { price: lastFillResult.price, reason: 'DEADLINE', feeType: 'taker', ts: deadlineTs }
+        exit = { price: lastFillResult.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       }
     }
 

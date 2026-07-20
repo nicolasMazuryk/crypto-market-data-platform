@@ -155,7 +155,7 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
               latencyMs: event.receivedAt - order.updatedAt,
             }
             if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice
-            settle('sl', ctx)
+            settle('sl_hit', ctx)
           } else if (matchesTp) {
             const ctx: ExitTriggerContext = {
               triggerTs: order.updatedAt,
@@ -164,7 +164,7 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
               latencyMs: event.receivedAt - order.updatedAt,
             }
             if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice
-            settle('tp', ctx)
+            settle('tp_hit', ctx)
           }
         })
         entry.unsubs.push(unsub)
@@ -205,7 +205,7 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
             latencyMs: event.receivedAt - order.updatedAt,
           }
           if (order.avgFillPrice !== undefined) ctx.triggerPrice = order.avgFillPrice
-          settle('sl', ctx)
+          settle('sl_hit', ctx)
         })
         entry.unsubs.push(unsub)
 
@@ -222,7 +222,7 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
           if (event.exchange !== intent.exchange) return
           if (event.symbol !== intent.symbol) return
           if (event.fundingTime < fundingTs - toleranceMs || event.fundingTime > fundingTs + toleranceMs) return
-          settle('funding_fee', {
+          settle('funding_fee_event', {
             triggerTs: event.receivedAt,
             source: 'ws',
             latencyMs: event.receivedAt - event.fundingTime,
@@ -253,7 +253,7 @@ export function createPositionMonitor(opts: PositionMonitorOptions): PositionMon
                     { intentId, symbol: intent.symbol, fundingTs, fundingAmount: fee.fundingAmount },
                     'monitor.rest_funding_fee_poll.found'
                   )
-                  settle('funding_fee', {
+                  settle('funding_fee_event', {
                     triggerTs: fee.receivedAt,
                     source: 'rest_poll',
                     latencyMs: fee.receivedAt - fee.fundingTime,
