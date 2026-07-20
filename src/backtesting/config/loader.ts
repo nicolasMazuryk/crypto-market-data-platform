@@ -83,21 +83,6 @@ function requirePositiveInt(obj: Record<string, unknown>, field: string, context
   return val
 }
 
-function requireIntInRange(
-  obj: Record<string, unknown>,
-  field: string,
-  min: number,
-  max: number,
-  context: string
-): number {
-  const val = requireNumber(obj, field, context)
-  if (!Number.isInteger(val) || val < min || val > max) {
-    const rangeDesc = max === Number.MAX_SAFE_INTEGER ? `>= ${String(min)}` : `${String(min)}..${String(max)}`
-    throw new Error(`${context}: '${field}' must be an integer ${rangeDesc}, got ${String(val)}`)
-  }
-  return val
-}
-
 function requireBoolean(obj: Record<string, unknown>, field: string, context: string): boolean {
   const val = obj[field]
   if (typeof val !== 'boolean') {
@@ -198,15 +183,14 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
   const fsRaw = merged.funding_settlement
   let funding_settlement: FundingSettlementConfig
   if (fsRaw === null || fsRaw === undefined) {
-    funding_settlement = { detection_window_seconds: 10, tp_post_settlement_buffer_seconds: 1 }
+    funding_settlement = { tp_post_settlement_buffer_seconds: 1 }
   } else {
     if (typeof fsRaw !== 'object' || Array.isArray(fsRaw)) {
       throw new Error(`${ctx}: 'funding_settlement' must be an object`)
     }
     const fsObj = fsRaw as Record<string, unknown>
-    const dws = requireIntInRange(fsObj, 'detection_window_seconds', 1, 60, `${ctx}.funding_settlement`)
     const tpBuf = requireNonNegativeNumber(fsObj, 'tp_post_settlement_buffer_seconds', `${ctx}.funding_settlement`)
-    funding_settlement = { detection_window_seconds: dws, tp_post_settlement_buffer_seconds: tpBuf }
+    funding_settlement = { tp_post_settlement_buffer_seconds: tpBuf }
   }
 
   return {

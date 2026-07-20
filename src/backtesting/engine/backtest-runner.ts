@@ -11,6 +11,7 @@ import type { ErrorCode } from '../config/schema.js'
 import { buildReport } from '../reporting/report-builder.js'
 import type { BacktestReport } from '../reporting/types.js'
 import { getGitCommit } from './utils.js'
+import { buildLookaheadContext } from './localization.js'
 
 export interface BacktestRunResult {
   report: BacktestReport
@@ -85,7 +86,15 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
 
       triggeredCount++
 
-      const result = strategy.execute(event, window)
+      // Engine performs the one sanctioned lookahead (§3.2): localize T_drop and hand the
+      // strategy a time-gated window. Strategies that key off T_settle ignore the context.
+      const context = buildLookaheadContext(window, event.funding_time, event.funding_rate, {
+        dropSearchWindowSeconds: base.drop_search_window_seconds,
+        dropQualifierFundingMult: base.drop_qualifier_funding_mult,
+        dropQualifierRangeMult: base.drop_qualifier_range_mult,
+      })
+
+      const result = strategy.execute(event, window, context)
       if (result === null) {
         unfilledCount++
       } else if ('error_code' in result) {

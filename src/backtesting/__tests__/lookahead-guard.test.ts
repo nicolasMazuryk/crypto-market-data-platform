@@ -91,6 +91,28 @@ describe('Lookahead Guard', () => {
     }).toThrow('Cannot move time backwards')
   })
 
+  it('localization may read to the window edge; a post-decision future read then throws', () => {
+    const rows = [
+      makeCandle('2025-06-01 00:00:00'),
+      makeCandle('2025-06-01 00:00:01'),
+      makeCandle('2025-06-01 00:00:02'),
+      makeCandle('2025-06-01 00:00:03'),
+    ]
+    const window = new OHLCWindow(rows)
+    // Engine grants the one sanctioned lookahead: gate opened to the window edge for localization.
+    const gated = new TimeGatedWindow(window, '2025-06-01 00:00:03')
+
+    // Localization scan to the edge is allowed.
+    expect(gated.getRowsInRange('2025-06-01 00:00:00', '2025-06-01 00:00:03')).toHaveLength(4)
+
+    // Strategy then decides at an earlier time and advances the gate causally...
+    // (the gate cannot move backwards, so a fresh gated window models per-decision reads).
+    const decisionGate = new TimeGatedWindow(window, '2025-06-01 00:00:01')
+    expect(decisionGate.getRowAt('2025-06-01 00:00:01')).toBeDefined()
+    // A post-decision, non-localization read of a future candle throws.
+    expect(() => decisionGate.getRowAt('2025-06-01 00:00:02')).toThrow(LookaheadViolationError)
+  })
+
   it('getRowsUpToCurrent returns only past data', () => {
     const rows = [
       makeCandle('2025-06-01 00:00:00'),

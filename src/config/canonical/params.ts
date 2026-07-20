@@ -352,6 +352,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: 10,
     backtestOnly: true,
+    bounds: { min: 5, max: 30 },
   },
   {
     name: 'drop_qualifier_funding_mult',
@@ -359,6 +360,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: 0.5,
     backtestOnly: true,
+    bounds: { min: 0.1, max: 2.0 },
   },
   {
     name: 'drop_qualifier_range_mult',
@@ -366,6 +368,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: 3.0,
     backtestOnly: true,
+    bounds: { min: 1.5, max: 10 },
   },
 ]
 

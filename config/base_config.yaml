@@ -52,5 +52,4 @@ reporting:
   output_dir: 'reports'
 
 funding_settlement:
-  detection_window_seconds: 10
   tp_post_settlement_buffer_seconds: 1

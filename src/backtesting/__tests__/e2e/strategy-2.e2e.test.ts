@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import { Strategy2 } from '../../strategies/strategy-2.js'
 import { buildWindow, makeFundingEvent, BINANCE_FEES, DEFAULT_SLIPPAGE } from './fixtures.js'
+import { buildLookaheadContext } from '../../engine/localization.js'
+import type { OHLCWindow, FundingEvent } from '../../data/types.js'
 
 const TOLERANCE = 1e-10
+
+const DROP_PARAMS = { dropSearchWindowSeconds: 10, dropQualifierFundingMult: 0.5, dropQualifierRangeMult: 3.0 }
+
+/** Build the engine-supplied lookahead context (drop localization + gated window). */
+function ctx(window: OHLCWindow, event: FundingEvent) {
+  return buildLookaheadContext(window, event.funding_time, event.funding_rate, DROP_PARAMS)
+}
 
 describe('E2E: Strategy 2 — Retracement Exit', () => {
   it('Scenario 3: Retracement hit before deadline', () => {
@@ -28,11 +37,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     const basePrice = 50000
 
     // Price drops to 49800 at T+5, then retraces
-    // P_funding (bid_open at T) = 50000
-    // P_low = 49800 at T+5
-    // P_target = 49800 + (50000 - 49800) * 0.50 = 49900
-    // Retracement should hit at T+10 where bid_high > 49900
-
+    // P_funding (bid_open at T) = 50000, P_low = 49800, P_target = 49900
     const overrides = new Map<
       number,
       Partial<{
@@ -61,7 +66,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
+    const result = strategy.execute(event, window, ctx(window, event))
 
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('tp_hit')
@@ -91,12 +96,8 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
 
-    // Price drops steadily and keeps dropping — P_low keeps updating so
-    // the retracement target keeps moving down, never reached.
-    // P_funding (bid_open at T) = 50000
-    // Price keeps declining throughout the window: each second lower than the last.
-    // Retracement target = P_low + (50000 - P_low) * 0.5
-    // But P_low moves down each second, so target also drops and is never hit.
+    // Price declines throughout: P_low keeps updating so the retracement target keeps moving
+    // down and is never reached.
     const overrides = new Map<number, Partial<{ bidHigh: number; bidLow: number }>>()
     for (let offset = 0; offset <= 60; offset++) {
       const price = 50000 - offset * 5
@@ -108,13 +109,12 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       overrides,
       priceFn: offset => {
         if (offset < 0) return 50000
-        // Continuous decline: 50000 - offset * 5 per second
         return 50000 - offset * 5
       },
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
+    const result = strategy.execute(event, window, ctx(window, event))
 
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('deadline')
@@ -122,18 +122,18 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     expect(result.pnl.fees).toBeCloseTo(0.0004 * 2, TOLERANCE)
   })
 
-  it('Scenario Settlement (buffer=1): TP gated to settlement+1s, not T_low+1s', () => {
-    // Design:
-    //   entry T-5s, askOpen=50005, f=-0.01, sl_multiplier=1.0 → slPrice=50005*0.99≈49505
-    //   T+0: bidOpen=50000, bidLow=49990 (drop=10)
-    //   T+1: bidOpen=49990, bidLow=49970 (drop=20) ← T_low, T_low+1=T+2
-    //   T+4: bidOpen=50000, bidLow=49972 (drop=28, biggest → settlement detected)
-    //         bidLow=49972 > T+1 bidLow=49970 → T_low stays at T+1
+  it('Scenario Settlement (buffer=1): TP gated to T_drop+1s, not T_low+1s', () => {
+    // Design (F=-0.01 → Q≈0.5%, prev_close = prev bid_open in fixtures):
+    //   entry T-5s, askOpen=50005, sl_multiplier=1.0 → slPrice≈49505
+    //   T+0: bidOpen=49800, bidLow=49760  (drop_move 0.48% < Q → not localized)
+    //   T+1: bidOpen=49700, bidLow=49690  ← global P_low (T_low+1 = T+2)
+    //   T+2: bidOpen=49750, bidLow=49700
+    //   T+3: bidOpen=50000, bidLow=49745
+    //   T+4: bidOpen=50000, bidLow=49700  (drop_move 0.6% ≥ Q → T_drop localized here)
     //
-    //   pFunding=50000, P_low=49970, pTarget=49985
-    //   Without fix: tpValidFrom=T+2, TP fires T+2 (default bid_high≈50005 > 49985)
-    //   With buffer=1: tpValidFrom=max(T+2, T+4+1)=T+5, TP fires T+5
-    //   All bid_lows > slPrice=49505, so SL never fires.
+    //   pFunding=49800, P_low=49690, pTarget=49745
+    //   With buffer=1: tpValidFrom=max(T+2, T+4+1)=T+5, TP fires T+5.
+    //   All bid_lows > slPrice → SL never fires.
     const strategy = new Strategy2()
     strategy.initialize(
       {
@@ -150,19 +150,21 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       },
       BINANCE_FEES,
       0,
-      { detection_window_seconds: 10, tp_post_settlement_buffer_seconds: 1 }
+      { tp_post_settlement_buffer_seconds: 1 }
     )
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
     const overrides = new Map<number, Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number }>>()
     overrides.set(-5, { askOpen: 50005 })
-    overrides.set(0, { bidOpen: 50000, bidHigh: 50010, bidLow: 49990 })
-    overrides.set(1, { bidOpen: 49990, bidHigh: 49990, bidLow: 49970 })
-    overrides.set(4, { bidOpen: 50000, bidHigh: 50100, bidLow: 49972 })
+    overrides.set(0, { bidOpen: 49800, bidLow: 49760 })
+    overrides.set(1, { bidOpen: 49700, bidLow: 49690 })
+    overrides.set(2, { bidOpen: 49750, bidLow: 49700 })
+    overrides.set(3, { bidOpen: 50000, bidLow: 49745 })
+    overrides.set(4, { bidOpen: 50000, bidHigh: 50100, bidLow: 49700 })
 
     const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
+    const result = strategy.execute(event, window, ctx(window, event))
 
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('tp_hit')
@@ -173,12 +175,12 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     // exit at T+5 (not T+2)
     const exitTimeMs = fundingTime.getTime() - 5000 + result.hold_duration * 1000
     expect(exitTimeMs).toBe(fundingTime.getTime() + 5000)
-    // funding credited: exit(T+5) >= settlement(T+4)
+    // funding credited: exit(T+5) >= T_drop(T+4)
     expect(result.funding_received).toBe(true)
   })
 
-  it('Scenario Settlement (buffer=0): TP gated to settlement, not T_low+1s', () => {
-    // Same design but buffer=0: tpValidFrom=max(T+2, T+4+0)=T+4, TP fires at T+4.
+  it('Scenario Settlement (buffer=0): TP gated to T_drop, not T_low+1s', () => {
+    // Same design but buffer=0: tpValidFrom=max(T+2, T+4)=T+4, TP fires at T+4.
     const strategy = new Strategy2()
     strategy.initialize(
       {
@@ -195,34 +197,35 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       },
       BINANCE_FEES,
       0,
-      { detection_window_seconds: 10, tp_post_settlement_buffer_seconds: 0 }
+      { tp_post_settlement_buffer_seconds: 0 }
     )
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
     const overrides = new Map<number, Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number }>>()
     overrides.set(-5, { askOpen: 50005 })
-    overrides.set(0, { bidOpen: 50000, bidHigh: 50010, bidLow: 49990 })
-    overrides.set(1, { bidOpen: 49990, bidHigh: 49990, bidLow: 49970 })
-    overrides.set(4, { bidOpen: 50000, bidHigh: 50100, bidLow: 49972 })
+    overrides.set(0, { bidOpen: 49800, bidLow: 49760 })
+    overrides.set(1, { bidOpen: 49700, bidLow: 49690 })
+    overrides.set(2, { bidOpen: 49750, bidLow: 49700 })
+    overrides.set(3, { bidOpen: 50000, bidLow: 49745 })
+    overrides.set(4, { bidOpen: 50000, bidHigh: 50100, bidLow: 49700 })
 
     const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
+    const result = strategy.execute(event, window, ctx(window, event))
 
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('tp_hit')
     expect(result.real_settlement_detected).toBe(true)
-    // exit at T+4 (not T+2): tpValidFrom=max(T+2, T+4)=T+4, bid_high at T+4=50100>49985
+    // exit at T+4 (not T+2): tpValidFrom=max(T+2, T+4)=T+4, bid_high at T+4=50100>pTarget
     const exitTimeMs = fundingTime.getTime() - 5000 + result.hold_duration * 1000
     expect(exitTimeMs).toBe(fundingTime.getTime() + 4000)
-    // exitTs == settlementTs and fundingAppliedOnSameSecond=false → no funding
+    // exitTs == T_drop and fundingAppliedOnSameSecond=false → no funding
     expect(result.funding_received).toBe(false)
   })
 
   it('Scenario SL: Sharp drop triggers SL before T_low', () => {
     // Entry at T-5s. Price immediately drops below SL right after entry.
     // SL fires at entry+1s (pre-funding), before T_low can be identified.
-    // F = -0.01, entry fill ≈ 50005, slPrice = 50005 * (1 - 0.01 * 1.5) ≈ 49254.9
     const strategy = new Strategy2()
     strategy.initialize(
       {
@@ -253,7 +256,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
+    const result = strategy.execute(event, window, ctx(window, event))
 
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('sl_hit')

@@ -1,6 +1,21 @@
 import type { ExitReason, BacktestError, StrategyConfig, FeeSchedule, FundingSettlementConfig } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import type { PnlBreakdown } from '../pnl/types.js'
+import type { TimeGatedWindow } from '../engine/lookahead-guard.js'
+
+/**
+ * Engine-supplied localization context (§3.1/§3.2). The runner performs the one sanctioned
+ * lookahead (drop localization to W's edge) and hands strategies the resulting T_drop plus a
+ * time-gated window for causal, guard-enforced reads.
+ */
+export interface LookaheadContext {
+  /** Localized T_drop, or the window edge on fallback. */
+  tDropTs: string
+  /** True when no qualifying drop candle was localized (fallback edge used). */
+  noDropLocalized: boolean
+  /** Time-gated view of the data window; strategies advance the gate as they read forward. */
+  gated: TimeGatedWindow
+}
 
 /** Result of a single trade execution */
 export interface TradeResult {
@@ -38,12 +53,10 @@ export interface TradeResult {
   exit_spread?: number
   /** Actual exit time of the trade; used by the runner to prevent re-entry while a position is open */
   exit_time?: Date
-  /** Detected real funding settlement timestamp (strategy_1, strategy_2 only) */
+  /** Localized T_drop timestamp (strategy_1, strategy_2 only) */
   real_settlement_ts?: string
-  /** Whether the settlement was detected from a price drop (false = fallback to T_funding) */
+  /** Whether a qualifying drop candle was localized (false = fallback to the window edge) */
   real_settlement_detected?: boolean
-  /** bid_open - bid_low of the winning candle, null on fallback */
-  real_settlement_drop?: number | null
 }
 
 /** Base strategy interface that all strategies implement */
@@ -68,6 +81,9 @@ export interface BaseStrategy {
    * - `BacktestError` — a representable terminal (§12.2 error_code) such as a ladder no-fill
    *   or an expired entry limit; comparable to the live engine's error_code channel.
    * - `null` — no trade / data absence (nothing to represent).
+   *
+   * `context` carries the engine-localized T_drop and a time-gated window (§3.2). Drop-consuming
+   * strategies (S1, S2) require it; strategies that key off T_settle ignore it and read `data`.
    */
-  execute(event: FundingEvent, data: OHLCWindow): TradeResult | BacktestError | null
+  execute(event: FundingEvent, data: OHLCWindow, context?: LookaheadContext): TradeResult | BacktestError | null
 }

@@ -1,13 +1,13 @@
 import type { FeeSchedule, Strategy2Config, FundingSettlementConfig } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
+import type { OrderbookRow } from '../../db/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
 import { checkLimitFill } from '../orders/limit-order.js'
 import { checkStopFill } from '../orders/stop-order.js'
 import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
-import { detectRealFundingSettlement } from '../data/funding-settlement.js'
 import { toClickHouseDateTime } from '../../db/types.js'
-import type { BaseStrategy, TradeResult } from './types.js'
+import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 import type { ExitReason } from '../config/schema.js'
 
 /**
@@ -15,7 +15,11 @@ import type { ExitReason } from '../config/schema.js'
  *
  * Enter LONG at T_funding - entry_offset. After the drop, wait for a partial
  * retracement. Exit at retracement target, stop-loss, or deadline.
- * SL is active from entry+1s; TP only valid after max(T_low+1s, real_settlement_ts+buffer).
+ * SL is active from entry+1s; TP only valid after max(T_low+1s, T_drop+buffer).
+ *
+ * T_drop is localized by the engine (§3.1) and passed via the lookahead context. The forward
+ * loop advances the time gate per candle, so any post-decision non-localization read of future
+ * data throws a LookaheadViolationError.
  */
 export class Strategy2 implements BaseStrategy {
   readonly id = 'strategy_2'
@@ -23,7 +27,6 @@ export class Strategy2 implements BaseStrategy {
   private feeSchedule!: FeeSchedule
   private slippage = 0
   private fundingSettlement: FundingSettlementConfig = {
-    detection_window_seconds: 10,
     tp_post_settlement_buffer_seconds: 1,
   }
 
@@ -43,7 +46,11 @@ export class Strategy2 implements BaseStrategy {
     return event.funding_rate * 100 <= -Math.abs(this.config.negative_funding_threshold_percent)
   }
 
-  execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
+  execute(event: FundingEvent, _data: OHLCWindow, context?: LookaheadContext): TradeResult | null {
+    void _data
+    if (!context) throw new Error('strategy_2 requires a LookaheadContext')
+    const { gated, tDropTs, noDropLocalized } = context
+
     const absF = Math.abs(event.funding_rate)
     const entryTime = new Date(event.funding_time.getTime() - this.config.entry_offset_seconds * 1000)
     const deadlineTime = new Date(event.funding_time.getTime() + this.config.deadline_seconds * 1000)
@@ -52,7 +59,8 @@ export class Strategy2 implements BaseStrategy {
     const fundingTs = toClickHouseDateTime(event.funding_time)
     const deadlineTs = toClickHouseDateTime(deadlineTime)
 
-    const entryCandle = data.getRowAt(entryTs)
+    gated.advanceTo(entryTs)
+    const entryCandle = gated.getRowAt(entryTs)
     if (!entryCandle) return null
 
     const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry')
@@ -60,32 +68,38 @@ export class Strategy2 implements BaseStrategy {
 
     const slPrice = entryFill.price * (1 - absF * this.config.sl_multiplier)
 
-    const fundingCandle = data.getRowAt(fundingTs)
+    // P_funding is the reference price at T_settle; the engine anchors the drop search here.
+    gated.advanceTo(fundingTs)
+    const fundingCandle = gated.getRowAt(fundingTs)
     if (fundingCandle?.bid_open == null) return null
     const pFunding = fundingCandle.bid_open
 
-    // Detect settlement before the loop so activeTpFrom can be gated to max(T_low+1s, settlementTs+buffer).
-    const settlement = detectRealFundingSettlement(
-      data,
-      event.funding_time,
-      this.fundingSettlement.detection_window_seconds
-    )
+    // TP cannot become valid until max(T_low+1s, T_drop + buffer).
     const settlementEpochMs =
-      new Date(settlement.settlementTs.replace(' ', 'T') + 'Z').getTime() +
+      new Date(tDropTs.replace(' ', 'T') + 'Z').getTime() +
       this.fundingSettlement.tp_post_settlement_buffer_seconds * 1000
 
-    // Simulate SL + dynamic TP online. P_low is learned only from candles already seen
-    // after funding; the repriced TP becomes active on the following timestamp.
-    const entryPlus1Ts = toClickHouseDateTime(new Date(entryTime.getTime() + 1000))
-    const allPostEntryRows = data.getRowsInRange(entryPlus1Ts, deadlineTs)
-    if (allPostEntryRows.length === 0) return null
+    // Simulate SL + dynamic TP online, advancing the gate one candle at a time. P_low is learned
+    // only from candles already seen after funding; the repriced TP becomes active on the
+    // following timestamp.
+    const entryMs = entryTime.getTime()
+    const deadlineMs = deadlineTime.getTime()
 
     let exit: { price: number; reason: ExitReason; feeType: 'maker' | 'taker'; ts: string } | undefined
     let pLow = Infinity
     let activeTpPrice: number | undefined
     let activeTpFrom: string | undefined
+    let seenAny = false
+    let lastRow: OrderbookRow | undefined
 
-    for (const row of allPostEntryRows) {
+    for (let sec = 1; entryMs + sec * 1000 <= deadlineMs; sec++) {
+      const rowTs = toClickHouseDateTime(new Date(entryMs + sec * 1000))
+      if (rowTs > gated.getCurrentTime()) gated.advanceTo(rowTs)
+      const row = gated.getRowAt(rowTs)
+      if (!row) continue
+      seenAny = true
+      lastRow = row
+
       const slFill = checkStopFill('sell', slPrice, row, 1, this.slippage, 'sl')
       const tpFill =
         activeTpPrice !== undefined && activeTpFrom !== undefined && row.ts >= activeTpFrom
@@ -113,14 +127,15 @@ export class Strategy2 implements BaseStrategy {
       }
     }
 
+    if (!seenAny) return null
+
     if (exit === undefined) {
-      const deadlineCandle = data.getRowAt(deadlineTs)
+      const deadlineCandle = gated.getRowAt(deadlineTs)
       if (deadlineCandle) {
         const deadlineFill = fillMarketOrder('sell', deadlineCandle, 1, 'deadline')
         if (!deadlineFill) return null
         exit = { price: deadlineFill.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       } else {
-        const lastRow = allPostEntryRows[allPostEntryRows.length - 1]
         if (!lastRow) return null
         const lastFill = fillMarketOrder('sell', lastRow, 1, 'deadline')
         if (!lastFill) return null
@@ -131,7 +146,7 @@ export class Strategy2 implements BaseStrategy {
     const applyFunding = shouldApplyFunding({
       entryTs,
       exitTs: exit.ts,
-      fundingTs: settlement.settlementTs,
+      fundingTs: tDropTs,
       fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
     })
 
@@ -162,9 +177,8 @@ export class Strategy2 implements BaseStrategy {
       hold_duration: holdDuration,
       fill_count: 1,
       funding_received: applyFunding,
-      real_settlement_ts: settlement.settlementTs,
-      real_settlement_detected: settlement.detected,
-      real_settlement_drop: settlement.dropMagnitude,
+      real_settlement_ts: tDropTs,
+      real_settlement_detected: !noDropLocalized,
     }
   }
 }

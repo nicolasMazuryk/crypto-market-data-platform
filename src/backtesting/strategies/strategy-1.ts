@@ -3,25 +3,20 @@ import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import { fillMarketOrder } from '../orders/market-order.js'
 import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
-import { detectRealFundingSettlement } from '../data/funding-settlement.js'
 import { toClickHouseDateTime } from '../../db/types.js'
-import type { BaseStrategy, TradeResult } from './types.js'
+import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 
 /**
  * Strategy 1: Negative Funding LONG - Instant Exit
  *
- * Enter LONG at T_funding - entry_offset, exit at real_settlement_ts + exit_offset.
- * Uses price-drop detection to approximate the real funding accrual time, avoiding
- * false-positive funding credits when live settlement is delayed past the exit.
+ * Enter LONG at T_funding - entry_offset, exit at T_drop + exit_offset. The engine localizes
+ * T_drop (§3.1) and hands it in via the lookahead context; the strategy reads its entry/exit
+ * candles through the gated window, advancing the gate forward as it goes.
  */
 export class Strategy1 implements BaseStrategy {
   readonly id = 'strategy_1'
   private config!: Strategy1Config
   private feeSchedule!: FeeSchedule
-  private fundingSettlement: FundingSettlementConfig = {
-    detection_window_seconds: 10,
-    tp_post_settlement_buffer_seconds: 1,
-  }
 
   initialize(
     config: Strategy1Config,
@@ -30,36 +25,36 @@ export class Strategy1 implements BaseStrategy {
     fundingSettlement?: FundingSettlementConfig
   ): void {
     void slippage
+    void fundingSettlement
     this.config = config
     this.feeSchedule = feeSchedule
-    if (fundingSettlement) this.fundingSettlement = fundingSettlement
   }
 
   shouldTrigger(event: FundingEvent): boolean {
     return event.funding_rate * 100 <= -Math.abs(this.config.negative_funding_threshold_percent)
   }
 
-  execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
+  execute(event: FundingEvent, _data: OHLCWindow, context?: LookaheadContext): TradeResult | null {
+    void _data
+    if (!context) throw new Error('strategy_1 requires a LookaheadContext')
+    const { gated, tDropTs, noDropLocalized } = context
+
     const entryTime = new Date(event.funding_time.getTime() - this.config.entry_offset_seconds * 1000)
     const entryTs = toClickHouseDateTime(entryTime)
 
-    const entryCandle = data.getRowAt(entryTs)
+    gated.advanceTo(entryTs)
+    const entryCandle = gated.getRowAt(entryTs)
     if (!entryCandle) return null
 
     const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry')
     if (!entryFill) return null
 
-    const settlement = detectRealFundingSettlement(
-      data,
-      event.funding_time,
-      this.fundingSettlement.detection_window_seconds
-    )
-    const settlementTime = new Date(settlement.settlementTs.replace(' ', 'T') + 'Z')
+    const settlementTime = new Date(tDropTs.replace(' ', 'T') + 'Z')
     const exitTime = new Date(settlementTime.getTime() + this.config.exit_offset_seconds * 1000)
-
     const exitTs = toClickHouseDateTime(exitTime)
 
-    const exitCandle = data.getRowAt(exitTs)
+    gated.advanceTo(exitTs)
+    const exitCandle = gated.getRowAt(exitTs)
     if (!exitCandle) return null
 
     const exitFill = fillMarketOrder('sell', exitCandle, 1, 'exit')
@@ -68,7 +63,7 @@ export class Strategy1 implements BaseStrategy {
     const applyFunding = shouldApplyFunding({
       entryTs,
       exitTs,
-      fundingTs: settlement.settlementTs,
+      fundingTs: tDropTs,
       fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
     })
 
@@ -98,9 +93,8 @@ export class Strategy1 implements BaseStrategy {
       hold_duration: holdDuration,
       fill_count: 1,
       funding_received: applyFunding,
-      real_settlement_ts: settlement.settlementTs,
-      real_settlement_detected: settlement.detected,
-      real_settlement_drop: settlement.dropMagnitude,
+      real_settlement_ts: tDropTs,
+      real_settlement_detected: !noDropLocalized,
     }
   }
 }
