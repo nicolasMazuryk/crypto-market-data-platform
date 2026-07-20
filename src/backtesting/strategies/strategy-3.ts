@@ -146,7 +146,6 @@ export class Strategy3 implements BaseStrategy {
       entryTs,
       exitTs,
       fundingTs,
-      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
     })
 
     const pnl = calculatePnl({

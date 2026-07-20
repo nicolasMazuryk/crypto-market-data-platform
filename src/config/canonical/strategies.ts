@@ -58,8 +58,6 @@ export function applyCrossFieldBounds<T extends z.ZodType>(schema: T, strategyId
   return result as T
 }
 
-const FUNDING_APPLIED_ON_SAME_SECOND = { funding_applied_on_same_second: z.boolean() }
-
 export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
   strategy_1: {
     hasBacktest: true,
@@ -70,7 +68,7 @@ export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
       'amount_usd',
       'leverage',
     ],
-    btExtra: { direction: z.literal('long').default('long'), ...FUNDING_APPLIED_ON_SAME_SECOND },
+    btExtra: { direction: z.literal('long').default('long') },
   },
   strategy_1_ws: {
     hasBacktest: false,
@@ -94,7 +92,7 @@ export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
       'amount_usd',
       'leverage',
     ],
-    btExtra: { direction: z.literal('long').default('long'), ...FUNDING_APPLIED_ON_SAME_SECOND },
+    btExtra: { direction: z.literal('long').default('long') },
   },
   strategy_3a: {
     hasBacktest: true,
@@ -111,7 +109,6 @@ export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
     btExtra: {
       direction: z.literal('short').default('short'),
       tp_mode: z.enum(['A', 'B']),
-      ...FUNDING_APPLIED_ON_SAME_SECOND,
     },
   },
   strategy_4_1a: {
@@ -128,7 +125,7 @@ export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
       'amount_usd',
       'leverage',
     ],
-    btExtra: { direction: z.literal('long').default('long'), ...FUNDING_APPLIED_ON_SAME_SECOND },
+    btExtra: { direction: z.literal('long').default('long') },
     crossFieldBounds: [{ greater: 'ladder_bottom_mult', lesser: 'ladder_top_mult' }],
   },
   strategy_4_2a: {
@@ -143,7 +140,7 @@ export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
       'amount_usd',
       'leverage',
     ],
-    btExtra: { direction: z.literal('long').default('long'), ...FUNDING_APPLIED_ON_SAME_SECOND },
+    btExtra: { direction: z.literal('long').default('long') },
     crossFieldBounds: [{ greater: 'sl_multiplier', lesser: 'limit_offset_mult' }],
   },
   strategy_6: {

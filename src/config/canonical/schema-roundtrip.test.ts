@@ -10,11 +10,7 @@ import { STRATEGY_DEFS, ALL_STRATEGY_IDS } from './strategies.js'
 // Structural fields the registry doesn't model (no canonical param row): required-with-no-
 // default extras on specific strategies' btExtra/liveExtra shapes.
 const STRUCTURAL_EXTRAS: Partial<Record<StrategyId, { bt?: Record<string, unknown>; live?: Record<string, unknown> }>> = {
-  strategy_1: { bt: { funding_applied_on_same_second: false } },
-  strategy_2: { bt: { funding_applied_on_same_second: false } },
-  strategy_3a: { bt: { tp_mode: 'A', funding_applied_on_same_second: true } },
-  strategy_4_1a: { bt: { funding_applied_on_same_second: false } },
-  strategy_4_2a: { bt: { funding_applied_on_same_second: false } },
+  strategy_3a: { bt: { tp_mode: 'A' } },
   strategy_6: { live: { mainSide: 'long' } },
 }
 

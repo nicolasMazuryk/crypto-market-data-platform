@@ -109,8 +109,6 @@ export interface Strategy1Config {
   entry_offset_seconds: number
   /** Seconds after T_funding to exit (>= 2, market-order latency) */
   exit_offset_seconds: number
-  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
-  funding_applied_on_same_second: boolean
   /** Notional size in USD */
   amount_usd: number
   /** Leverage multiplier */
@@ -130,8 +128,6 @@ export interface Strategy2Config {
   deadline_seconds: number
   /** Stop-loss multiplier: SL at entry_price × (1 − |F| × sl_multiplier) */
   sl_multiplier: number
-  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
-  funding_applied_on_same_second: boolean
   /** Notional size in USD */
   amount_usd: number
   /** Leverage multiplier */
@@ -155,8 +151,6 @@ export interface Strategy3Config {
   tp_addend_pct: number
   /** Max seconds after T_funding before forced exit (>= 2) */
   deadline_seconds: number
-  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
-  funding_applied_on_same_second: boolean
   /** Notional size in USD */
   amount_usd: number
   /** Leverage multiplier */
@@ -180,8 +174,6 @@ export interface Strategy41Config {
   take_profit_pct: number
   /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
-  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
-  funding_applied_on_same_second: boolean
   /** Stop-loss multiplier: SL at P_avg × (1 − |F| × sl_multiplier) */
   sl_multiplier: number
   /** Notional size in USD */
@@ -203,8 +195,6 @@ export interface Strategy42Config {
   take_profit_pct: number
   /** Max seconds after T_funding before forced exit (2..180) */
   deadline_seconds: number
-  /** Whether to apply funding when entry or exit timestamp equals funding timestamp */
-  funding_applied_on_same_second: boolean
   /** Stop-loss multiplier: SL at entry_price × (1 − |F| × sl_multiplier); must be > limit_offset_mult */
   sl_multiplier: number
   /** Notional size in USD */

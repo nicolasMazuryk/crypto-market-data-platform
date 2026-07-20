@@ -149,8 +149,7 @@ export class Strategy2 implements BaseStrategy {
     const applyFunding = shouldApplyFunding({
       entryTs,
       exitTs: exit.ts,
-      fundingTs: tDropTs,
-      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
+      fundingTs,
     })
 
     const pnl = calculatePnl({

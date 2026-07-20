@@ -5,12 +5,10 @@ export function shouldApplyFunding(params: {
   entryTs: ClickHouseDateTime
   exitTs: ClickHouseDateTime
   fundingTs: ClickHouseDateTime
-  fundingAppliedOnSameSecond: boolean
 }): boolean {
-  const { entryTs, exitTs, fundingTs, fundingAppliedOnSameSecond } = params
-  if (entryTs > fundingTs) return false
+  const { entryTs, exitTs, fundingTs } = params
+  if (entryTs >= fundingTs) return false
   if (exitTs < fundingTs) return false
-  if (entryTs === fundingTs || exitTs === fundingTs) return fundingAppliedOnSameSecond
   return true
 }
 
@@ -30,9 +28,8 @@ export function fundingFractionForLadder(params: {
   fills: readonly Pick<Fill, 'timestamp' | 'quantity'>[]
   exitTs: ClickHouseDateTime
   fundingTs: ClickHouseDateTime
-  fundingAppliedOnSameSecond: boolean
 }): number {
-  const { fills, exitTs, fundingTs, fundingAppliedOnSameSecond } = params
+  const { fills, exitTs, fundingTs } = params
   let totalQty = 0
   let appliedQty = 0
   for (const fill of fills) {
@@ -42,7 +39,6 @@ export function fundingFractionForLadder(params: {
         entryTs: fill.timestamp,
         exitTs,
         fundingTs,
-        fundingAppliedOnSameSecond,
       })
     ) {
       appliedQty += fill.quantity

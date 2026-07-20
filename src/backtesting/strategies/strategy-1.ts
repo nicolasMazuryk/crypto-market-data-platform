@@ -67,11 +67,11 @@ export class Strategy1 implements BaseStrategy {
     const exitFill = fillMarketOrder('sell', exitCandle, 1, 'exit', this.slippage)
     if (!exitFill) return null
 
+    const fundingTs = toClickHouseDateTime(event.funding_time)
     const applyFunding = shouldApplyFunding({
       entryTs: entryFill.timestamp,
       exitTs: exitFill.timestamp,
-      fundingTs: tDropTs,
-      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
+      fundingTs,
     })
 
     const pnl = calculatePnl({

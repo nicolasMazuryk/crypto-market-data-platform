@@ -136,7 +136,6 @@ export class Strategy42 implements BaseStrategy {
       entryTs: entryFill.timestamp,
       exitTs: exit.ts,
       fundingTs,
-      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
     })
 
     const pnl = calculatePnl({

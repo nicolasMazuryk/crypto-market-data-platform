@@ -25,7 +25,6 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_multiplier: 1.5, // SL at ~50005 * 0.985 = ~49254 — far below test drop of 49800
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },
@@ -87,7 +86,6 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_multiplier: 1.5, // SL at ~50005 * 0.985 = ~49255 — max drop is 50000 - 60*5 = 49700 > 49255
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },
@@ -146,7 +144,6 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_multiplier: 1.0,
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },
@@ -194,7 +191,6 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_multiplier: 1.0,
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },
@@ -223,8 +219,8 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     // exit at T+4 (not T+2): tpValidFrom=max(T+2, T+4)=T+4, bid_high at T+4=50100>pTarget
     const exitTimeMs = fundingTime.getTime() - 5000 + result.hold_duration * 1000
     expect(exitTimeMs).toBe(fundingTime.getTime() + 4000)
-    // exitTs == T_drop and fundingAppliedOnSameSecond=false → no funding
-    expect(result.funding_received).toBe(false)
+    // entryTs (T-5) < fundingTs (T) <= exitTs (T+4): position straddles the boundary
+    expect(result.funding_received).toBe(true)
   })
 
   it('Scenario SL: Sharp drop triggers SL before T_low', () => {
@@ -240,7 +236,6 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_multiplier: 1.5,
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },

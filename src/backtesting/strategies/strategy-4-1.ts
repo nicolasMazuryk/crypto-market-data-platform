@@ -167,7 +167,6 @@ export class Strategy41 implements BaseStrategy {
       fills,
       exitTs: exit.ts,
       fundingTs,
-      fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
     })
 
     const pnl = calculateLadderPnl({

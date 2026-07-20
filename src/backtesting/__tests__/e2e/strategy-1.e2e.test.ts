@@ -22,7 +22,6 @@ describe('E2E: Strategy 1 — Instant Exit', () => {
       negative_funding_threshold_percent: -0.4,
       entry_offset_seconds: 5,
       exit_offset_seconds: 2,
-      funding_applied_on_same_second: false,
       amount_usd: 20,
       leverage: 4,
     },
@@ -108,7 +107,6 @@ describe('E2E: Strategy 1 — Order Latency', () => {
         negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         exit_offset_seconds: 2,
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },
@@ -152,7 +150,6 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
         negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         exit_offset_seconds: 2,
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },
@@ -190,6 +187,52 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
     expect(result.funding_received).toBe(true)
   })
 
+  it('Scenario Settlement-Boundary: accrual is tested against T_settle, not the localized T_drop', () => {
+    // Regression for C1: entry lands exactly at T_settle (entry_offset_seconds=0), while the
+    // qualifying drop localizes a few seconds *after* T_settle (T_drop = T+3 > T_settle = T).
+    // Per §5.5 an entry filled AT-OR-AFTER T_settle earns nothing, so funding_received must be
+    // false. The old code tested entryTs against tDropTs (T+3) instead of T_settle (T): since
+    // entryTs (T) < tDropTs (T+3), it wrongly credited funding.
+    const strat = new Strategy1()
+    strat.initialize(
+      {
+        strategy_id: 'strategy_1',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 0,
+        exit_offset_seconds: 2,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      0,
+      0,
+      { tp_post_settlement_buffer_seconds: 1 }
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const basePrice = 50000
+
+    const overrides = new Map<number, Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number }>>()
+    overrides.set(0, { askOpen: basePrice + 5 }) // entry candle at T_settle
+    // T+3: qualifying drop → localizes T_drop here, after T_settle
+    overrides.set(3, { bidOpen: basePrice, bidHigh: basePrice + 10, bidLow: basePrice - 400 })
+    overrides.set(5, { bidOpen: basePrice - 50 }) // exit candle at T_drop(T+3) + exit_offset(2) = T+5
+
+    const window = buildWindow({ fundingTime, basePrice, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.015 })
+
+    const result = strat.execute(event, window, ctx(window, event))
+    if (!result) throw new Error('expected result')
+
+    expect(result.real_settlement_detected).toBe(true)
+    expect(result.real_settlement_ts).toBe(
+      new Date(fundingTime.getTime() + 3000).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19)
+    )
+    // entryTs (T_settle) >= fundingTs (T_settle) → pessimistic rule: no funding, regardless of T_drop
+    expect(result.funding_received).toBe(false)
+  })
+
   it('Scenario Settlement-Fallback: no drop localized → exit at latest edge + offset', () => {
     // All candles flat (no qualifying drop) → fallback to the latest edge (T + dropSearchWindow).
     const strat = new Strategy1()
@@ -200,7 +243,6 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
         negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         exit_offset_seconds: 2,
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },

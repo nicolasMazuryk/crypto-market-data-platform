@@ -13,7 +13,6 @@ describe('canonical registry — backtest/live round-trip', () => {
       retracement_pct: 0.5,
       deadline_seconds: 60,
       sl_multiplier: 1.0,
-      funding_applied_on_same_second: false,
       amount_usd: 20,
       leverage: 4,
     }) as Record<string, unknown>
@@ -46,7 +45,6 @@ describe('canonical registry — backtest/live round-trip', () => {
       direction: 'long',
       entry_offset_seconds: 5,
       exit_offset_seconds: 6,
-      funding_applied_on_same_second: false,
     }) as Record<string, unknown>
     const live = GeneratedLiveStrategySchema.parse({ id: 'strategy_1' }) as Record<string, unknown>
 
@@ -72,7 +70,6 @@ describe('canonical registry — backtest/live round-trip', () => {
         negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
         exit_offset_seconds: 6,
-        funding_applied_on_same_second: false,
         amount_usd: 20,
         leverage: 4,
       },
@@ -84,7 +81,6 @@ describe('canonical registry — backtest/live round-trip', () => {
         limit_offset_mult: 0.75,
         take_profit_pct: 0.2,
         deadline_seconds: 60,
-        funding_applied_on_same_second: false,
         sl_multiplier: 1.5,
         amount_usd: 20,
         leverage: 4,

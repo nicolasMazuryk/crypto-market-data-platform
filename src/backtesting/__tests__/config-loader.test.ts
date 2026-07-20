@@ -38,12 +38,11 @@ describe('Config Loader', () => {
     }
   })
 
-  it('loads strategy_4_1a config with funding_applied_on_same_second=false', () => {
+  it('loads strategy_4_1a config with ladder_count=5', () => {
     const stratPath = path.join(process.cwd(), 'config', 'strategies', 'strategy_4_1a.yaml')
     const config = loadConfig(stratPath, BASE_CONFIG)
 
     if (config.strategy.strategy_id === 'strategy_4_1a') {
-      expect(config.strategy.funding_applied_on_same_second).toBe(false)
       expect(config.strategy.ladder_count).toBe(5)
     }
   })
@@ -79,77 +78,77 @@ describe('Config Loader', () => {
 
     it('rejects entry_offset_seconds=1 (below the new >=2 bound)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 1\nexit_offset_seconds: 6\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 1\nexit_offset_seconds: 6\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('entry_offset_seconds')
     })
 
     it('accepts entry_offset_seconds=2 (minimum)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 2\nexit_offset_seconds: 6\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 2\nexit_offset_seconds: 6\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
     it('rejects entry_offset_seconds=0 (must be positive)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 0\nexit_offset_seconds: 6\nfunding_applied_on_same_second: false\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 0\nexit_offset_seconds: 6\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('entry_offset_seconds')
     })
 
     it('accepts ladder_count=2 (minimum ladder size)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nsl_multiplier: 1.5\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
     it('rejects ladder_count=1 (below minimum ladder size of 2)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 1\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 1\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nsl_multiplier: 1.5\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('ladder_count')
     })
 
     it('accepts ladder_count=20 (maximum ladder size)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 20\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 20\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nsl_multiplier: 1.5\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
     it('rejects ladder_count=21 (above maximum ladder size of 20)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 21\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 21\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 60\nsl_multiplier: 1.5\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('ladder_count')
     })
 
     it('accepts deadline_seconds=1800 (real live value)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 1800\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 1800\nsl_multiplier: 1.5\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
     it('rejects deadline_seconds=5 (below the new >=10 bound)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 5\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.2\ndeadline_seconds: 5\nsl_multiplier: 1.5\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
     })
 
     it('rejects take_profit_pct=0.003 (unit-suspect fraction) end-to-end through the loader', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.003\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.003\ndeadline_seconds: 60\nsl_multiplier: 1.5\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('unit_suspect_fraction')
     })
 
     it("rejects an unrecognized/typo'd key end-to-end through the loader", () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 5\nexit_offset_seconds: 6\nfunding_applied_on_same_second: false\ntake_profit_percent: 0.3\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 5\nexit_offset_seconds: 6\ntake_profit_percent: 0.3\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow()
     })
