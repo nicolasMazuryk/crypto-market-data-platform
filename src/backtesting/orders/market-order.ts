@@ -4,21 +4,29 @@ import type { Fill, OrderSide } from './types.js'
 /**
  * Simulate a market order fill.
  *
- * BUY MARKET fills at ask_open of the candle.
- * SELL MARKET fills at bid_open of the candle.
+ * BUY MARKET fills at ask_open of the candle, adjusted adversely for slippage.
+ * SELL MARKET fills at bid_open of the candle, adjusted adversely for slippage.
  */
-export function fillMarketOrder(side: OrderSide, candle: OrderbookRow, quantity: number, label: string): Fill | null {
-  let price: number | null
+export function fillMarketOrder(
+  side: OrderSide,
+  candle: OrderbookRow,
+  quantity: number,
+  label: string,
+  slippage = 0
+): Fill | null {
+  let rawPrice: number | null
 
   if (side === 'buy') {
-    price = candle.ask_open
+    rawPrice = candle.ask_open
   } else {
-    price = candle.bid_open
+    rawPrice = candle.bid_open
   }
 
-  if (price === null || price <= 0) {
+  if (rawPrice === null || rawPrice <= 0) {
     return null
   }
+
+  const price = side === 'buy' ? rawPrice * (1 + slippage) : rawPrice * (1 - slippage)
 
   return {
     timestamp: candle.ts,

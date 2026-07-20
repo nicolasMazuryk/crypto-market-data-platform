@@ -186,6 +186,83 @@ describe('Order Simulator', () => {
     const result = simulateOrders(orders, candles, 0, 'long')
     expect(result.fills).toHaveLength(0)
   })
+
+  it('caps a reduce-only fill quantity at the remaining positionSize', () => {
+    const candles: OrderbookRow[] = [makeCandle('2025-06-01 00:00:01', { bid_high: 50200 })]
+
+    const orders: Order[] = [
+      {
+        side: 'sell',
+        type: 'limit',
+        price: 50100,
+        quantity: 2,
+        validFrom: '2025-06-01 00:00:01',
+        validUntil: '2025-06-01 00:01:00',
+        reduceOnly: true,
+        label: 'tp',
+      },
+    ]
+
+    const result = simulateOrders(orders, candles, 0, 'long', 0.5)
+    expect(result.fills).toHaveLength(1)
+    expect(result.fills[0]?.quantity).toBe(0.5)
+  })
+
+  it('drops a reduce-only fill with a warning once positionSize is already exhausted', () => {
+    const candles: OrderbookRow[] = [
+      makeCandle('2025-06-01 00:00:01', { bid_high: 50200 }),
+      makeCandle('2025-06-01 00:00:02', { bid_high: 50200 }),
+    ]
+
+    const orders: Order[] = [
+      {
+        side: 'sell',
+        type: 'limit',
+        price: 50100,
+        quantity: 1,
+        validFrom: '2025-06-01 00:00:01',
+        validUntil: '2025-06-01 00:01:00',
+        reduceOnly: true,
+        label: 'tp1',
+      },
+      {
+        side: 'sell',
+        type: 'limit',
+        price: 50100,
+        quantity: 1,
+        validFrom: '2025-06-01 00:00:01',
+        validUntil: '2025-06-01 00:01:00',
+        reduceOnly: true,
+        label: 'tp2',
+      },
+    ]
+
+    const result = simulateOrders(orders, candles, 0, 'long', 1)
+    expect(result.fills).toHaveLength(1)
+    expect(result.fills[0]?.label).toBe('tp1')
+    expect(result.warnings.some(w => w.message.includes('tp2'))).toBe(true)
+  })
+
+  it('is unaffected when positionSize is omitted (existing behavior)', () => {
+    const candles: OrderbookRow[] = [makeCandle('2025-06-01 00:00:01', { bid_high: 50200 })]
+
+    const orders: Order[] = [
+      {
+        side: 'sell',
+        type: 'limit',
+        price: 50100,
+        quantity: 5,
+        validFrom: '2025-06-01 00:00:01',
+        validUntil: '2025-06-01 00:01:00',
+        reduceOnly: true,
+        label: 'tp',
+      },
+    ]
+
+    const result = simulateOrders(orders, candles, 0, 'long')
+    expect(result.fills).toHaveLength(1)
+    expect(result.fills[0]?.quantity).toBe(5)
+  })
 })
 
 describe('Ladder Order Simulator', () => {

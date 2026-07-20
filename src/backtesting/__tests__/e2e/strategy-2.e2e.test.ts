@@ -30,6 +30,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0
     )
 
@@ -91,6 +92,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0
     )
 
@@ -150,6 +152,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       },
       BINANCE_FEES,
       0,
+      0,
       { tp_post_settlement_buffer_seconds: 1 }
     )
 
@@ -197,6 +200,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
       },
       BINANCE_FEES,
       0,
+      0,
       { tp_post_settlement_buffer_seconds: 0 }
     )
 
@@ -241,7 +245,8 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
         leverage: 4,
       },
       BINANCE_FEES,
-      DEFAULT_SLIPPAGE
+      DEFAULT_SLIPPAGE,
+      0
     )
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')

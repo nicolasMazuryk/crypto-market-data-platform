@@ -26,7 +26,9 @@ export class Strategy42 implements BaseStrategy {
     this.id = variant
   }
 
-  initialize(config: Strategy42Config, feeSchedule: FeeSchedule, slippage: number): void {
+  initialize(config: Strategy42Config, feeSchedule: FeeSchedule, slippage: number, orderLatencyMs: number): void {
+    // TODO(task-1N): wire latency shift
+    void orderLatencyMs
     this.config = config
     this.feeSchedule = feeSchedule
     this.slippage = slippage
@@ -118,13 +120,13 @@ export class Strategy42 implements BaseStrategy {
     if (!exit) {
       const deadlineCandle = data.getRowAt(deadlineTs)
       if (deadlineCandle) {
-        const deadlineFillResult = fillMarketOrder('sell', deadlineCandle, 1, 'deadline')
+        const deadlineFillResult = fillMarketOrder('sell', deadlineCandle, 1, 'deadline', this.slippage)
         if (!deadlineFillResult) return null
         exit = { price: deadlineFillResult.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       } else {
         const lastRow = windowRows[windowRows.length - 1]
         if (!lastRow) return null
-        const lastFillResult = fillMarketOrder('sell', lastRow, 1, 'deadline')
+        const lastFillResult = fillMarketOrder('sell', lastRow, 1, 'deadline', this.slippage)
         if (!lastFillResult) return null
         exit = { price: lastFillResult.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       }

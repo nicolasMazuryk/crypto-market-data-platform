@@ -27,6 +27,7 @@ describe('E2E: Strategy 1 — Instant Exit', () => {
       leverage: 4,
     },
     BINANCE_FEES,
+    0,
     0
   )
 
@@ -97,6 +98,49 @@ describe('E2E: Strategy 1 — Instant Exit', () => {
   })
 })
 
+describe('E2E: Strategy 1 — Order Latency', () => {
+  it('entry decision at candle t fills at candle t+1 (1000ms latency), not t', () => {
+    const latencyStrategy = new Strategy1()
+    latencyStrategy.initialize(
+      {
+        strategy_id: 'strategy_1',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        exit_offset_seconds: 2,
+        funding_applied_on_same_second: false,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      0,
+      1000 // orderLatencyMs: fill 1 candle after the decision
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const decisionAskOpen = 51000 // at decision candle T-5 — must NOT be used for the fill
+    const fillAskOpen = 50005 // at fill candle T-4 (decision + 1000ms) — must be used
+
+    const overrides = new Map<number, Partial<{ bidOpen: number; bidLow: number; askOpen: number }>>()
+    overrides.set(-5, { askOpen: decisionAskOpen })
+    overrides.set(-4, { askOpen: fillAskOpen })
+    overrides.set(0, { bidLow: 49600 }) // localizes T_drop = T+0
+    overrides.set(2, { bidOpen: 49900 }) // exit decision candle — must NOT be used for the fill
+    overrides.set(3, { bidOpen: 49800 }) // exit fill candle (T_drop+2+1000ms) — must be used
+
+    const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.015 })
+
+    const result = latencyStrategy.execute(event, window, ctx(window, event))
+    if (!result) throw new Error('expected result')
+
+    expect(result.entry_price).toBe(fillAskOpen)
+    expect(result.entry_price).not.toBe(decisionAskOpen)
+    expect(result.exit_price).toBe(49800)
+    expect(result.exit_price).not.toBe(49900)
+  })
+})
+
 describe('E2E: Strategy 1 — Settlement Localization', () => {
   it('Scenario Settlement: exit anchored to localized T_drop + exit_offset', () => {
     // Qualifying drop at T+3. exit_offset=2 → exitTs = T+3+2 = T+5. Funding received since exitTs >= T_drop.
@@ -113,6 +157,7 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0,
       { tp_post_settlement_buffer_seconds: 1 }
     )
@@ -160,6 +205,7 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0,
       { tp_post_settlement_buffer_seconds: 1 }
     )

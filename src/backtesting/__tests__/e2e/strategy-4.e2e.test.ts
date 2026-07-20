@@ -25,6 +25,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0
     )
 
@@ -78,6 +79,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0
     )
 
@@ -119,7 +121,8 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
-      DEFAULT_SLIPPAGE
+      DEFAULT_SLIPPAGE,
+      0
     )
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
@@ -165,7 +168,8 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
-      DEFAULT_SLIPPAGE
+      DEFAULT_SLIPPAGE,
+      0
     )
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
@@ -214,6 +218,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0
     )
 
@@ -257,6 +262,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0
     )
 
@@ -301,6 +307,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0
     )
 
@@ -340,7 +347,8 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
-      DEFAULT_SLIPPAGE
+      DEFAULT_SLIPPAGE,
+      0
     )
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
@@ -383,7 +391,8 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
-      DEFAULT_SLIPPAGE
+      DEFAULT_SLIPPAGE,
+      0
     )
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
@@ -432,6 +441,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
         leverage: 4,
       },
       BINANCE_FEES,
+      0,
       0
     )
 

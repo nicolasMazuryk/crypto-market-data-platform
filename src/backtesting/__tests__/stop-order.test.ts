@@ -59,4 +59,44 @@ describe('Stop Order', () => {
     const fill = checkStopFill('sell', 49960, makeCandle({ bid_low: null }), 1, 0.0001, 'sl')
     expect(fill).toBeNull()
   })
+
+  it('BUY STOP gap-through: candle opens past the stop, fills at ask_open not stopPrice', () => {
+    // ask_open=50010, stop=50050 doesn't trigger gap path (existing fixture check)
+    const noGap = checkStopFill('buy', 50050, makeCandle(), 1, 0.0001, 'sl')
+    if (!noGap) throw new Error('expected fill')
+    expect(noGap.price).toBeCloseTo(50050 * 1.0001, 2)
+    expect(noGap.price).not.toBeCloseTo(50010 * 1.0001, 2)
+
+    // ask_open=50055 >= stop=50050 → gapped through, fill at ask_open
+    const gapped = checkStopFill('buy', 50050, makeCandle({ ask_open: 50055, ask_high: 50060 }), 1, 0.0001, 'sl')
+    if (!gapped) throw new Error('expected fill')
+    expect(gapped.price).toBeCloseTo(50055 * 1.0001, 2)
+    expect(gapped.price).not.toBeCloseTo(50050 * 1.0001, 2)
+  })
+
+  it('SELL STOP gap-through: candle opens past the stop, fills at bid_open not stopPrice', () => {
+    // bid_open=50000 > stop=49960 doesn't gap (existing fixture)
+    const noGap = checkStopFill('sell', 49960, makeCandle(), 1, 0.0001, 'sl')
+    if (!noGap) throw new Error('expected fill')
+    expect(noGap.price).toBeCloseTo(49960 * 0.9999, 2)
+    expect(noGap.price).not.toBeCloseTo(50000 * 0.9999, 2)
+
+    // bid_open=49945 <= stop=49960 → gapped through, fill at bid_open
+    const gapped = checkStopFill('sell', 49960, makeCandle({ bid_open: 49945, bid_low: 49940 }), 1, 0.0001, 'sl')
+    if (!gapped) throw new Error('expected fill')
+    expect(gapped.price).toBeCloseTo(49945 * 0.9999, 2)
+    expect(gapped.price).not.toBeCloseTo(49960 * 0.9999, 2)
+  })
+
+  it('BUY STOP gap-through falls back to trigger-level fill when ask_open is null', () => {
+    const fill = checkStopFill('buy', 50050, makeCandle({ ask_open: null, ask_high: 50060 }), 1, 0.0001, 'sl')
+    if (!fill) throw new Error('expected fill')
+    expect(fill.price).toBeCloseTo(50050 * 1.0001, 2)
+  })
+
+  it('SELL STOP gap-through falls back to trigger-level fill when bid_open is null', () => {
+    const fill = checkStopFill('sell', 49960, makeCandle({ bid_open: null, bid_low: 49940 }), 1, 0.0001, 'sl')
+    if (!fill) throw new Error('expected fill')
+    expect(fill.price).toBeCloseTo(49960 * 0.9999, 2)
+  })
 })

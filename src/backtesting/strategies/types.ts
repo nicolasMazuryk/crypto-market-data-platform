@@ -1,4 +1,10 @@
-import type { ExitReason, BacktestError, StrategyConfig, FeeSchedule, FundingSettlementConfig } from '../config/schema.js'
+import type {
+  ExitReason,
+  BacktestError,
+  StrategyConfig,
+  FeeSchedule,
+  FundingSettlementConfig,
+} from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
 import type { PnlBreakdown } from '../pnl/types.js'
 import type { TimeGatedWindow } from '../engine/lookahead-guard.js'
@@ -69,6 +75,7 @@ export interface BaseStrategy {
     config: StrategyConfig,
     feeSchedule: FeeSchedule,
     slippage: number,
+    orderLatencyMs: number,
     fundingSettlement?: FundingSettlementConfig
   ): void
 

@@ -34,8 +34,11 @@ export class Strategy2 implements BaseStrategy {
     config: Strategy2Config,
     feeSchedule: FeeSchedule,
     slippage: number,
+    orderLatencyMs: number,
     fundingSettlement?: FundingSettlementConfig
   ): void {
+    // TODO(task-1N): wire latency shift
+    void orderLatencyMs
     this.config = config
     this.feeSchedule = feeSchedule
     this.slippage = slippage
@@ -63,7 +66,7 @@ export class Strategy2 implements BaseStrategy {
     const entryCandle = gated.getRowAt(entryTs)
     if (!entryCandle) return null
 
-    const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry')
+    const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry', this.slippage)
     if (!entryFill) return null
 
     const slPrice = entryFill.price * (1 - absF * this.config.sl_multiplier)
@@ -132,12 +135,12 @@ export class Strategy2 implements BaseStrategy {
     if (exit === undefined) {
       const deadlineCandle = gated.getRowAt(deadlineTs)
       if (deadlineCandle) {
-        const deadlineFill = fillMarketOrder('sell', deadlineCandle, 1, 'deadline')
+        const deadlineFill = fillMarketOrder('sell', deadlineCandle, 1, 'deadline', this.slippage)
         if (!deadlineFill) return null
         exit = { price: deadlineFill.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       } else {
         if (!lastRow) return null
-        const lastFill = fillMarketOrder('sell', lastRow, 1, 'deadline')
+        const lastFill = fillMarketOrder('sell', lastRow, 1, 'deadline', this.slippage)
         if (!lastFill) return null
         exit = { price: lastFill.price, reason: 'deadline', feeType: 'taker', ts: deadlineTs }
       }

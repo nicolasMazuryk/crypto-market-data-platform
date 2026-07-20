@@ -50,4 +50,24 @@ describe('Market Order', () => {
     const fill = fillMarketOrder('sell', candle, 1, 'exit')
     expect(fill).toBeNull()
   })
+
+  it('BUY MARKET with slippage fills at ask_open * (1 + slippage)', () => {
+    const candle = makeCandle(50010, 50000)
+    const fill = fillMarketOrder('buy', candle, 1, 'entry', 0.0005)
+    if (!fill) throw new Error('expected fill')
+    expect(fill.price).toBeCloseTo(50010 * 1.0005, 6)
+  })
+
+  it('SELL MARKET with slippage fills at bid_open * (1 - slippage)', () => {
+    const candle = makeCandle(50010, 50000)
+    const fill = fillMarketOrder('sell', candle, 1, 'exit', 0.0005)
+    if (!fill) throw new Error('expected fill')
+    expect(fill.price).toBeCloseTo(50000 * 0.9995, 6)
+  })
+
+  it('null ask_open with slippage still returns null (no NaN)', () => {
+    const candle = makeCandle(null, 50000)
+    const fill = fillMarketOrder('buy', candle, 1, 'entry', 0.0005)
+    expect(fill).toBeNull()
+  })
 })

@@ -23,17 +23,20 @@ export interface SimulationResult {
  * @param candles - 1-second candle data sorted by timestamp
  * @param slippage - Stop order slippage fraction
  * @param positionDirection - 'long' or 'short' (affects worst-case resolution)
+ * @param positionSize - When provided, caps cumulative reduce-only fill quantity at this size
  * @returns Fills and warnings
  */
 export function simulateOrders(
   orders: Order[],
   candles: OrderbookRow[],
   slippage: number,
-  positionDirection: 'long' | 'short'
+  positionDirection: 'long' | 'short',
+  positionSize?: number
 ): SimulationResult {
   const fills: Fill[] = []
   const warnings: SimulationWarning[] = []
   const filledLabels = new Set<string>()
+  let remaining = positionSize
 
   for (const candle of candles) {
     const ts = candle.ts
@@ -51,6 +54,20 @@ export function simulateOrders(
         fill = checkLimitFill(order.side, order.price, candle, order.quantity, order.label)
       } else if (order.type === 'stop' && order.price !== undefined) {
         fill = checkStopFill(order.side, order.price, candle, order.quantity, slippage, order.label)
+      }
+
+      if (fill && order.reduceOnly && remaining !== undefined) {
+        if (remaining <= 0) {
+          warnings.push({
+            timestamp: ts,
+            message: `Reduce-only order "${order.label}" skipped: position already fully closed.`,
+          })
+          continue
+        }
+        if (fill.quantity > remaining) {
+          fill = { ...fill, quantity: remaining }
+        }
+        remaining -= fill.quantity
       }
 
       if (fill) {

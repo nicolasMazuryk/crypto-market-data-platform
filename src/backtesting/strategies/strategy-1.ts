@@ -4,6 +4,7 @@ import { fillMarketOrder } from '../orders/market-order.js'
 import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
+import { applyOrderLatency } from '../engine/latency.js'
 import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 
 /**
@@ -17,17 +18,21 @@ export class Strategy1 implements BaseStrategy {
   readonly id = 'strategy_1'
   private config!: Strategy1Config
   private feeSchedule!: FeeSchedule
+  private slippage = 0
+  private orderLatencyMs!: number
 
   initialize(
     config: Strategy1Config,
     feeSchedule: FeeSchedule,
-    slippage?: number,
+    slippage: number,
+    orderLatencyMs: number,
     fundingSettlement?: FundingSettlementConfig
   ): void {
-    void slippage
     void fundingSettlement
     this.config = config
     this.feeSchedule = feeSchedule
+    this.slippage = slippage
+    this.orderLatencyMs = orderLatencyMs
   }
 
   shouldTrigger(event: FundingEvent): boolean {
@@ -40,29 +45,31 @@ export class Strategy1 implements BaseStrategy {
     const { gated, tDropTs, noDropLocalized } = context
 
     const entryTime = new Date(event.funding_time.getTime() - this.config.entry_offset_seconds * 1000)
-    const entryTs = toClickHouseDateTime(entryTime)
+    const entryDecisionTs = toClickHouseDateTime(entryTime)
+    const entryTs = applyOrderLatency(entryDecisionTs, this.orderLatencyMs)
 
     gated.advanceTo(entryTs)
     const entryCandle = gated.getRowAt(entryTs)
     if (!entryCandle) return null
 
-    const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry')
+    const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry', this.slippage)
     if (!entryFill) return null
 
     const settlementTime = new Date(tDropTs.replace(' ', 'T') + 'Z')
     const exitTime = new Date(settlementTime.getTime() + this.config.exit_offset_seconds * 1000)
-    const exitTs = toClickHouseDateTime(exitTime)
+    const exitDecisionTs = toClickHouseDateTime(exitTime)
+    const exitTs = applyOrderLatency(exitDecisionTs, this.orderLatencyMs)
 
     gated.advanceTo(exitTs)
     const exitCandle = gated.getRowAt(exitTs)
     if (!exitCandle) return null
 
-    const exitFill = fillMarketOrder('sell', exitCandle, 1, 'exit')
+    const exitFill = fillMarketOrder('sell', exitCandle, 1, 'exit', this.slippage)
     if (!exitFill) return null
 
     const applyFunding = shouldApplyFunding({
-      entryTs,
-      exitTs,
+      entryTs: entryFill.timestamp,
+      exitTs: exitFill.timestamp,
       fundingTs: tDropTs,
       fundingAppliedOnSameSecond: this.config.funding_applied_on_same_second,
     })

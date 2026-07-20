@@ -26,7 +26,9 @@ export class Strategy3 implements BaseStrategy {
     this.id = variant
   }
 
-  initialize(config: Strategy3Config, feeSchedule: FeeSchedule, slippage: number): void {
+  initialize(config: Strategy3Config, feeSchedule: FeeSchedule, slippage: number, orderLatencyMs: number): void {
+    // TODO(task-1N): wire latency shift
+    void orderLatencyMs
     this.config = config
     this.feeSchedule = feeSchedule
     this.slippage = slippage
@@ -46,7 +48,7 @@ export class Strategy3 implements BaseStrategy {
     if (!entryCandle) return null
 
     // SELL MARKET at entry (fills at bid_open)
-    const entryFill = fillMarketOrder('sell', entryCandle, 1, 'entry')
+    const entryFill = fillMarketOrder('sell', entryCandle, 1, 'entry', this.slippage)
     if (!entryFill) return null
 
     const entryPrice = entryFill.price
@@ -124,14 +126,14 @@ export class Strategy3 implements BaseStrategy {
       // Deadline exit — market buy to close short
       const deadlineCandle = data.getRowAt(deadlineTs)
       if (deadlineCandle) {
-        const deadlineFillResult = fillMarketOrder('buy', deadlineCandle, 1, 'deadline')
+        const deadlineFillResult = fillMarketOrder('buy', deadlineCandle, 1, 'deadline', this.slippage)
         if (!deadlineFillResult) return null
         exitPrice = deadlineFillResult.price
         exitReason = 'deadline'
         exitFeeType = 'taker'
         exitTs = deadlineTs
       } else {
-        const lastFillResult = fillMarketOrder('buy', lastOrderCandle, 1, 'deadline')
+        const lastFillResult = fillMarketOrder('buy', lastOrderCandle, 1, 'deadline', this.slippage)
         if (!lastFillResult) return null
         exitPrice = lastFillResult.price
         exitReason = 'deadline'
