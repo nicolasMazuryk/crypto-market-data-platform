@@ -26,7 +26,7 @@ export function createStrategy6Rule(opts: {
       const snap = ctx.snapshots.get(ctx.fundingEvent.symbol)
       if (!snap) return []
 
-      const t = config.funding_threshold
+      const t = config.fundingThresholdPercent
       if (t > 0 && snap.fundingRatePercent < t) return []
       if (t < 0 && snap.fundingRatePercent > t) return []
 

@@ -374,7 +374,7 @@ describe('FundingEventScheduler (hourly wake)', () => {
           id: 'strategy_6',
           enabled: true,
           mainSide: 'long',
-          funding_threshold: 0.5,
+          fundingThresholdPercent: 0.5,
           entryOffsetSeconds: 10,
           fundingFeeTimeoutSeconds: 10,
           tpMultiplier: 1,
@@ -414,7 +414,7 @@ describe('FundingEventScheduler (hourly wake)', () => {
     vi.setSystemTime(0)
     configs.set('strategy_6', {
       ...(configs.get('strategy_6') as Extract<StrategyConfig, { id: 'strategy_6' }>),
-      funding_threshold: 0,
+      fundingThresholdPercent: 0,
     })
     scheduler = createFundingEventScheduler({
       clock: makeClock(),

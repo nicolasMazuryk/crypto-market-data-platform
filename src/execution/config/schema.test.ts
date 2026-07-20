@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ConfigError, parseEngineConfig } from './schema.js'
 
@@ -11,6 +11,46 @@ function baseRaw(overrides: Record<string, unknown> = {}): Record<string, unknow
     ...overrides,
   }
 }
+
+function strategy6Raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: 'strategy_6',
+    mainSide: 'long',
+    mainAmountUsd: 10,
+    leverage: 5,
+    ...overrides,
+  }
+}
+
+describe('migrateLegacyStrategyKeys (via parseEngineConfig)', () => {
+  it('legacy funding_threshold on strategy_6 loads, warns once, and resolves to fundingThresholdPercent', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const cfg = parseEngineConfig(baseRaw({ strategies: [strategy6Raw({ funding_threshold: -0.4 })] }))
+    const s6 = cfg.strategies.find(s => s.id === 'strategy_6')
+    expect(s6 && 'fundingThresholdPercent' in s6 ? s6.fundingThresholdPercent : undefined).toBe(-0.4)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+    warnSpy.mockRestore()
+  })
+
+  it('canonical fundingThresholdPercent on strategy_6 loads clean, no warning', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const cfg = parseEngineConfig(baseRaw({ strategies: [strategy6Raw({ fundingThresholdPercent: 0.1 })] }))
+    const s6 = cfg.strategies.find(s => s.id === 'strategy_6')
+    expect(s6 && 'fundingThresholdPercent' in s6 ? s6.fundingThresholdPercent : undefined).toBe(0.1)
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('throws ConfigError when both legacy and canonical keys are present', () => {
+    expect(() =>
+      parseEngineConfig(
+        baseRaw({
+          strategies: [strategy6Raw({ funding_threshold: -0.4, fundingThresholdPercent: 0.1 })],
+        })
+      )
+    ).toThrow(ConfigError)
+  })
+})
 
 describe('parseTestingConfig (via parseEngineConfig)', () => {
   it('returns no testing config when testing key is absent', () => {

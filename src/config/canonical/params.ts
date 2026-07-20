@@ -21,6 +21,12 @@ export interface CanonicalParam {
   btKey?: string
   /** camelCase live key. Absent only for the 7 backtest-only BaseConfig rows. */
   liveKey?: string
+  /**
+   * Legacy snake_case live key accepted for one migration cycle behind a deprecation
+   * warning (mapped by the live loader's registry-driven migration; no backtest
+   * equivalent). Remove once the migration cycle ends.
+   */
+  legacyLiveKey?: string
   unit: CanonicalUnit
   sign: CanonicalSign
   /**
@@ -248,6 +254,15 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
       { exchange: 'okx', strategyId: 'strategy_2', value: 45 },
       { exchange: 'okx', strategyId: 'strategy_6', value: 45 },
     ],
+  },
+  {
+    name: 'funding_threshold_percent',
+    liveKey: 'fundingThresholdPercent',
+    legacyLiveKey: 'funding_threshold',
+    unit: 'percent',
+    sign: 'signed',
+    default: { strategy_6: 0 },
+    bounds: { min: -5.0, max: 5.0 }, // inclusive both ends — §11.1 line 271
   },
   {
     name: 'post_funding_tp_multiplier',

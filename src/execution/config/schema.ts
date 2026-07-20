@@ -12,7 +12,7 @@ import type {
   TestingConfig,
 } from './types.js'
 import type { StrategyConfig, Strategy3aConfig } from '../strategies/types.js'
-import { GeneratedLiveStrategySchema } from '../../config/canonical/generate-live.js'
+import { GeneratedLiveStrategySchema, LEGACY_LIVE_KEY_MIGRATIONS } from '../../config/canonical/generate-live.js'
 
 export class ConfigError extends Error {
   constructor(
@@ -204,14 +204,55 @@ function parseTestingConfig(
   }
 }
 
+// Registry-driven legacy-key migration (LEGACY_LIVE_KEY_MIGRATIONS) — currently just
+// strategy_6's funding_threshold -> fundingThresholdPercent. Exported so the config:validate
+// CLIs (src/execution/scripts + cli/validate-config.ts) can apply it before their own
+// EngineConfigRawSchema.safeParse — otherwise the generated schema's .strict() rejects a
+// legacy key as "Unrecognized key" before parseEngineConfig ever gets to migrate it.
+// TODO: drop funding_threshold legacy alias — one migration cycle per §13-R6
+export function migrateLegacyStrategyKeys(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw
+  const obj = raw as Record<string, unknown>
+  if (!Array.isArray(obj.strategies)) return raw
+
+  const strategies = obj.strategies.map((entry: unknown, i: number) => {
+    if (typeof entry !== 'object' || entry === null) return entry
+    const migrations = LEGACY_LIVE_KEY_MIGRATIONS.filter(m => m.strategyId === (entry as Record<string, unknown>).id)
+    if (migrations.length === 0) return entry
+
+    let result = entry as Record<string, unknown>
+    for (const { legacyKey, canonicalKey, strategyId } of migrations) {
+      const hasLegacy = legacyKey in result
+      const hasCanonical = canonicalKey in result
+      if (hasLegacy && hasCanonical) {
+        throw new ConfigError(
+          `strategies[${String(i)}].${canonicalKey}`,
+          `ambiguous: both "${legacyKey}" (legacy) and "${canonicalKey}" (canonical) present — remove "${legacyKey}"`
+        )
+      }
+      if (hasLegacy) {
+        console.warn(
+          `config: strategy "${strategyId}" uses deprecated key "${legacyKey}" — rename to "${canonicalKey}"; remove before next cycle`
+        )
+        const { [legacyKey]: value, ...rest } = result
+        result = { ...rest, [canonicalKey]: value }
+      }
+    }
+    return result
+  })
+
+  return { ...obj, strategies }
+}
+
 // ============================================================
 //  Public API
 // ============================================================
 
 export function parseEngineConfig(raw: unknown, now = Date.now()): EngineConfig {
+  const migratedRaw = migrateLegacyStrategyKeys(raw)
   let parsed: z.infer<typeof EngineConfigRawSchema>
   try {
-    parsed = EngineConfigRawSchema.parse(raw)
+    parsed = EngineConfigRawSchema.parse(migratedRaw)
   } catch (err) {
     if (err instanceof z.ZodError) {
       const first = err.issues[0]

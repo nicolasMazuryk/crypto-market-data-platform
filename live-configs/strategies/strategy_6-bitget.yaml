@@ -3,7 +3,7 @@ strategies:
   - id: strategy_6
     enabled: true
     mainSide: long
-    funding_threshold: 0.1
+    fundingThresholdPercent: 0.1
     entryOffsetSeconds: 3
     fundingFeeTimeoutSeconds: 10
     tpMultiplier: 1.5

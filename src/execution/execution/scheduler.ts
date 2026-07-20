@@ -62,7 +62,7 @@ function nextWakeTime(now: number, wakeBeforeHourEndMs: number): number {
 }
 
 function strategyThreshold(config: StrategyConfig): number {
-  if (config.id === 'strategy_6') return config.funding_threshold
+  if (config.id === 'strategy_6') return config.fundingThresholdPercent
   return -Math.abs(config.negativeFundingThresholdPercent)
 }
 

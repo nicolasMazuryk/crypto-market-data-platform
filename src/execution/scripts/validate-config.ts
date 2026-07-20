@@ -16,7 +16,7 @@ import { parseArgs } from 'node:util'
 
 import YAML from 'yaml'
 
-import { ConfigError, EngineConfigRawSchema, parseEngineConfig } from '../config/schema.js'
+import { ConfigError, EngineConfigRawSchema, migrateLegacyStrategyKeys, parseEngineConfig } from '../config/schema.js'
 import { deepMerge, validateForLiveStart } from '../config/loader.js'
 
 const { values } = parseArgs({
@@ -54,8 +54,11 @@ if (basePath) {
   merged = deepMerge(baseRaw, modeRaw)
 }
 
+// Apply registry-driven legacy-key migration before both stages (mirrors parseEngineConfig).
+const migrated = migrateLegacyStrategyKeys(merged)
+
 // Stage 1: structural validation — collect ALL Zod errors at once
-const structuralResult = EngineConfigRawSchema.safeParse(merged)
+const structuralResult = EngineConfigRawSchema.safeParse(migrated)
 if (!structuralResult.success) {
   console.error(`Config validation failed: ${values.config}\n`)
   for (const issue of structuralResult.error.issues) {
@@ -67,7 +70,7 @@ if (!structuralResult.success) {
 
 // Stage 2: semantic validation — custom cross-field logic
 try {
-  validateForLiveStart(parseEngineConfig(merged))
+  validateForLiveStart(parseEngineConfig(migrated))
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err)
   console.error(`Config validation failed: ${values.config}\n`)

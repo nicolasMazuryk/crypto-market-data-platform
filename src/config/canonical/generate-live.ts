@@ -9,6 +9,7 @@ import type {
   Strategy4_2aConfig,
   Strategy6Config,
 } from '../../execution/strategies/types.js'
+import type { CanonicalParam } from './params.js'
 import { CANONICAL_PARAMS, defaultFor } from './params.js'
 import { STRATEGY_DEFS, ALL_STRATEGY_IDS, applyCrossFieldBounds } from './strategies.js'
 import { zodNumberFor } from './zod-field.js'
@@ -64,3 +65,21 @@ export const GeneratedLiveStrategySchema = z.discriminatedUnion(
   'id',
   liveObjects as unknown as [(typeof liveObjects)[number], ...(typeof liveObjects)[number][]]
 ) as unknown as z.ZodType<RawLiveStrategyConfig>
+
+export interface LegacyLiveKeyMigration {
+  strategyId: (typeof ALL_STRATEGY_IDS)[number]
+  legacyKey: string
+  canonicalKey: string
+  paramName: string
+}
+
+/**
+ * Registry-derived legacy-key migrations: any `legacyLiveKey` entry in CANONICAL_PARAMS
+ * used by a strategy is picked up automatically — no per-strategy hardcoding needed.
+ */
+export const LEGACY_LIVE_KEY_MIGRATIONS: LegacyLiveKeyMigration[] = ALL_STRATEGY_IDS.flatMap(strategyId =>
+  STRATEGY_DEFS[strategyId].params
+    .map(name => paramsByName.get(name))
+    .filter((p): p is CanonicalParam & { legacyLiveKey: string; liveKey: string } => !!p?.legacyLiveKey && !!p.liveKey)
+    .map(p => ({ strategyId, legacyKey: p.legacyLiveKey, canonicalKey: p.liveKey, paramName: p.name }))
+)

@@ -13,7 +13,7 @@ import { parseArgs } from 'node:util'
 import YAML from 'yaml'
 
 import { deepMerge, validateForLiveStart } from '../config/loader.js'
-import { ConfigError, EngineConfigRawSchema, parseEngineConfig } from '../config/schema.js'
+import { ConfigError, EngineConfigRawSchema, migrateLegacyStrategyKeys, parseEngineConfig } from '../config/schema.js'
 
 const { positionals, values } = parseArgs({
   args: process.argv.slice(2),
@@ -50,7 +50,10 @@ if (basePath) {
   merged = deepMerge(baseRaw, modeRaw)
 }
 
-const structuralResult = EngineConfigRawSchema.safeParse(merged)
+// Apply registry-driven legacy-key migration before both stages (mirrors parseEngineConfig).
+const migrated = migrateLegacyStrategyKeys(merged)
+
+const structuralResult = EngineConfigRawSchema.safeParse(migrated)
 if (!structuralResult.success) {
   console.error(`Config validation failed: ${requestedConfig}\n`)
   for (const issue of structuralResult.error.issues) {
@@ -61,7 +64,7 @@ if (!structuralResult.success) {
 }
 
 try {
-  validateForLiveStart(parseEngineConfig(merged))
+  validateForLiveStart(parseEngineConfig(migrated))
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err)
   console.error(`Config validation failed: ${requestedConfig}\n`)

@@ -156,15 +156,12 @@ export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
       'deadline_seconds',
       'main_amount_usd',
       'leverage',
+      'funding_threshold_percent',
     ],
-    // mainSide and funding_threshold are strategy_6-specific: mainSide has no canonical
-    // shared meaning, and funding_threshold here is a bidirectional (not
-    // negative-only-signed) threshold — a different concept from
-    // negative_funding_threshold_percent, so it's kept as-is rather than folded into the
-    // shared bridge-table row.
+    // mainSide is strategy_6-specific: it has no canonical shared meaning, so it's kept
+    // as-is rather than folded into the shared bridge-table row.
     liveExtra: {
       mainSide: z.enum(['long', 'short']),
-      funding_threshold: z.number().min(-5.0).max(5.0).default(0),
     },
   },
 }

@@ -42,7 +42,7 @@ const BASE_CONFIG: Strategy6Config = {
   id: 'strategy_6',
   enabled: true,
   mainSide: 'long',
-  funding_threshold: 0,
+  fundingThresholdPercent: 0,
   entryOffsetSeconds: 10,
   fundingFeeTimeoutSeconds: 8,
   tpMultiplier: 0.5,
@@ -98,62 +98,62 @@ describe('createStrategy6Rule', () => {
   })
 
   it('negative threshold: fires when rate <= threshold (−0.6 ≤ −0.5)', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, funding_threshold: -0.5 }
+    const config: Strategy6Config = { ...BASE_CONFIG, fundingThresholdPercent: -0.5 }
     const snap = makeSnapshot({ fundingRatePercent: -0.6 })
     expect(rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))).toHaveLength(1)
   })
 
   it('negative threshold: filtered when rate > threshold (−0.4 > −0.5)', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, funding_threshold: -0.5 }
+    const config: Strategy6Config = { ...BASE_CONFIG, fundingThresholdPercent: -0.5 }
     const snap = makeSnapshot({ fundingRatePercent: -0.4 })
     expect(rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))).toHaveLength(0)
   })
 
   it('negative threshold: fires at boundary (−0.5 ≤ −0.5)', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, funding_threshold: -0.5 }
+    const config: Strategy6Config = { ...BASE_CONFIG, fundingThresholdPercent: -0.5 }
     const snap = makeSnapshot({ fundingRatePercent: -0.5 })
     expect(rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))).toHaveLength(1)
   })
 
   it('negative threshold: filtered for positive rate (+0.6 > −0.5)', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, funding_threshold: -0.5 }
+    const config: Strategy6Config = { ...BASE_CONFIG, fundingThresholdPercent: -0.5 }
     const snap = makeSnapshot({ fundingRatePercent: 0.6 })
     expect(rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))).toHaveLength(0)
   })
 
   it('positive threshold: fires when rate >= threshold (+0.6 ≥ +0.5)', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, funding_threshold: 0.5 }
+    const config: Strategy6Config = { ...BASE_CONFIG, fundingThresholdPercent: 0.5 }
     const snap = makeSnapshot({ fundingRatePercent: 0.6 })
     expect(rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))).toHaveLength(1)
   })
 
   it('positive threshold: filtered when rate < threshold (+0.4 < +0.5)', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, funding_threshold: 0.5 }
+    const config: Strategy6Config = { ...BASE_CONFIG, fundingThresholdPercent: 0.5 }
     const snap = makeSnapshot({ fundingRatePercent: 0.4 })
     expect(rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))).toHaveLength(0)
   })
 
   it('positive threshold: fires at boundary (+0.5 ≥ +0.5)', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, funding_threshold: 0.5 }
+    const config: Strategy6Config = { ...BASE_CONFIG, fundingThresholdPercent: 0.5 }
     const snap = makeSnapshot({ fundingRatePercent: 0.5 })
     expect(rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))).toHaveLength(1)
   })
 
   it('positive threshold: filtered for negative rate (−0.6 < +0.5)', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, funding_threshold: 0.5 }
+    const config: Strategy6Config = { ...BASE_CONFIG, fundingThresholdPercent: 0.5 }
     const snap = makeSnapshot({ fundingRatePercent: -0.6 })
     expect(rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))).toHaveLength(0)
   })
 
-  it('mainSide and funding_threshold are independent: short+negative fires with side=short', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, mainSide: 'short', funding_threshold: -0.5 }
+  it('mainSide and fundingThresholdPercent are independent: short+negative fires with side=short', () => {
+    const config: Strategy6Config = { ...BASE_CONFIG, mainSide: 'short', fundingThresholdPercent: -0.5 }
     const snap = makeSnapshot({ fundingRatePercent: -0.6 })
     const [intent] = rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))
     expect(intent?.side).toBe('short')
   })
 
-  it('mainSide and funding_threshold are independent: long+positive fires with side=long', () => {
-    const config: Strategy6Config = { ...BASE_CONFIG, mainSide: 'long', funding_threshold: 0.5 }
+  it('mainSide and fundingThresholdPercent are independent: long+positive fires with side=long', () => {
+    const config: Strategy6Config = { ...BASE_CONFIG, mainSide: 'long', fundingThresholdPercent: 0.5 }
     const snap = makeSnapshot({ fundingRatePercent: 0.6 })
     const [intent] = rule.evaluate(makeCtx({ config, snapshots: new Map([['BTCUSDT', snap]]) }))
     expect(intent?.side).toBe('long')

@@ -59,7 +59,7 @@ export interface Strategy6Config {
   /** Trade direction — required, no default. */
   mainSide: Side
   /** Signed funding-rate threshold. Positive ⇒ fire when rate ≥ threshold. Negative ⇒ fire when rate ≤ threshold. 0 ⇒ always-on. Independent of `mainSide`. */
-  funding_threshold: number
+  fundingThresholdPercent: number
   /** Seconds before T_funding to place the PRE_FUNDING order. */
   entryOffsetSeconds: number
   /** Hard fallback: close PRE_FUNDING and abort this many seconds after fundingTs if no fee event. */
