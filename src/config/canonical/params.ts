@@ -33,7 +33,17 @@ export interface CanonicalParam {
   default?: number | Partial<Record<StrategyId, number>>
   hardConstraint?: CanonicalHardConstraint
   /** §11.1 hard bounds, enforced on both generated schemas via zodNumberFor/boundsFor. */
-  bounds?: { min?: number; max?: number; exclusiveMin?: boolean; exclusiveMax?: boolean; note?: string }
+  bounds?: {
+    min?: number
+    max?: number
+    exclusiveMin?: boolean
+    exclusiveMax?: boolean
+    note?: string
+    /** Unit-specific error message for the min bound (§11.2), overriding zod's generic message. */
+    minMessage?: string
+    /** Unit-specific error message for the max bound (§11.2), overriding zod's generic message. */
+    maxMessage?: string
+  }
   /** Per-strategy override of `bounds` above (e.g. sl_multiplier differs for S4.2a). */
   perStrategyBounds?: Partial<
     Record<StrategyId, { min?: number; max?: number; exclusiveMin?: boolean; exclusiveMax?: boolean }>
@@ -108,7 +118,13 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: { strategy_2: 0.5 },
     hardConstraint: { min: 0, max: 1 },
-    bounds: { min: 0, exclusiveMin: true, max: 1 },
+    bounds: {
+      min: 0,
+      exclusiveMin: true,
+      max: 1,
+      maxMessage:
+        'retracement_pct must be a fraction (0 < v ≤ 1.0); a value above 1.0 looks like a percent, not a fraction',
+    },
   },
   {
     name: 'deadline_seconds',
@@ -173,7 +189,11 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'percent',
     sign: 'absolute',
     default: { strategy_4_1a: 0.2, strategy_4_2a: 0.2 },
-    bounds: { min: 0.05, max: 5.0 },
+    bounds: {
+      min: 0.05,
+      max: 5.0,
+      minMessage: 'unit_suspect_fraction: value looks like a fraction; percent expected',
+    },
   },
   {
     name: 'ladder_count',

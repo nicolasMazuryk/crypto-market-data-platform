@@ -7,6 +7,25 @@ import { zodNumberFor } from './zod-field.js'
 
 const paramsByName = new Map(CANONICAL_PARAMS.map(p => [p.name, p]))
 
+/**
+ * Top-level keys belonging to `BaseConfig` (structural fields + §10.2 backtest-only
+ * tunables), not to any strategy. `loader.ts` strips these from the merged base+strategy
+ * object before validating against the (now-strict) strategy schema, so the strategy
+ * schema only ever sees its own scoped fields plus any genuinely-unknown key.
+ */
+export const BASE_CONFIG_KEYS = new Set<string>([
+  'exchange',
+  'symbol',
+  'start_date',
+  'end_date',
+  'fees',
+  'validation',
+  'window',
+  'reporting',
+  'funding_settlement',
+  ...BACKTEST_ONLY_PARAMS.map(p => p.name),
+])
+
 function btShapeFor(strategyId: (typeof BACKTEST_STRATEGY_IDS)[number]): Record<string, z.ZodType> {
   const def = STRATEGY_DEFS[strategyId]
   const shape: Record<string, z.ZodType> = { strategy_id: z.literal(strategyId) }
@@ -22,7 +41,9 @@ function btShapeFor(strategyId: (typeof BACKTEST_STRATEGY_IDS)[number]): Record<
   return shape
 }
 
-const backtestObjects = BACKTEST_STRATEGY_IDS.map(id => applyCrossFieldBounds(z.object(btShapeFor(id)), id, 'bt'))
+const backtestObjects = BACKTEST_STRATEGY_IDS.map(id =>
+  applyCrossFieldBounds(z.object(btShapeFor(id)).strict(), id, 'bt')
+)
 
 /**
  * Generated backtest strategy schema: discriminated union over the 5 backtest strategy

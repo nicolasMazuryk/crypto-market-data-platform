@@ -50,7 +50,7 @@ function liveShapeFor(strategyId: (typeof ALL_STRATEGY_IDS)[number]): Record<str
 // zod v4's .refine() returns `this` (same concrete object type), so every entry stays a
 // plain ZodObject — no separate "refined" wrapper type to union over.
 function objectFor(strategyId: (typeof ALL_STRATEGY_IDS)[number]) {
-  return applyCrossFieldBounds(z.object(liveShapeFor(strategyId)), strategyId, 'live')
+  return applyCrossFieldBounds(z.object(liveShapeFor(strategyId)).strict(), strategyId, 'live')
 }
 
 const liveObjects = ALL_STRATEGY_IDS.map(id => objectFor(id))

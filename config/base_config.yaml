@@ -51,8 +51,6 @@ reporting:
   include_trade_log: true
   output_dir: 'reports'
 
-funding_time_tolerance_seconds: 60 # Max seconds between exchanges' funding timestamps to be treated as the same event
-
 funding_settlement:
   detection_window_seconds: 10
   tp_post_settlement_buffer_seconds: 1

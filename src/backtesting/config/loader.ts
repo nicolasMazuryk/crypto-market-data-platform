@@ -7,6 +7,7 @@ import type { BaseConfig, ResolvedConfig, StrategyConfig, FeeSchedule, FundingSe
 import {
   GeneratedBacktestStrategySchema,
   GeneratedBacktestOnlyBaseSchema,
+  BASE_CONFIG_KEYS,
 } from '../../config/canonical/generate-backtest.js'
 
 /** Deep-merge source into target. Source values take precedence. */
@@ -224,13 +225,14 @@ function validateBaseConfig(merged: Record<string, unknown>): BaseConfig {
 
 /**
  * Validate the strategy portion of a merged config against the canonical-registry-
- * generated backtest schema (see src/config/canonical/). Per-field hard bounds
- * (entry_offset_seconds ranges, ladder_count minimums, etc.) are intentionally NOT
- * enforced here — Task 06 layers those on top of the generated shapes using the
- * `bounds` data on CANONICAL_PARAMS. Until Task 06 lands, only shape/type is validated.
+ * generated backtest schema (see src/config/canonical/). The generated schema is
+ * `.strict()`, so `BaseConfig`'s own top-level keys (fees, validation, window, etc.) must
+ * be stripped from `merged` first — otherwise every load would fail as "unrecognized
+ * keys" on the strategy schema.
  */
 function validateStrategyConfig(merged: Record<string, unknown>): StrategyConfig {
-  const result = GeneratedBacktestStrategySchema.safeParse(merged)
+  const strategyOnly = Object.fromEntries(Object.entries(merged).filter(([key]) => !BASE_CONFIG_KEYS.has(key)))
+  const result = GeneratedBacktestStrategySchema.safeParse(strategyOnly)
   if (!result.success) {
     const first = result.error.issues[0]
     const strategyId = typeof merged.strategy_id === 'string' ? merged.strategy_id : 'unknown'

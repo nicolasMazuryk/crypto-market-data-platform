@@ -139,6 +139,20 @@ describe('Config Loader', () => {
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('deadline_seconds')
     })
+
+    it('rejects take_profit_pct=0.003 (unit-suspect fraction) end-to-end through the loader', () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_4_1a\nnegative_funding_threshold_percent: -0.6\nentry_offset_seconds: 5\nladder_count: 2\nladder_top_mult: 0.4\nladder_bottom_mult: 1.5\ntake_profit_pct: 0.003\ndeadline_seconds: 60\nfunding_applied_on_same_second: false\nsl_multiplier: 1.5\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('unit_suspect_fraction')
+    })
+
+    it("rejects an unrecognized/typo'd key end-to-end through the loader", () => {
+      const tmpPath = writeTempYaml(
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 5\nexit_offset_seconds: 6\nfunding_applied_on_same_second: false\ntake_profit_percent: 0.3\n'
+      )
+      expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow()
+    })
   })
 
   it('loads all 5 strategy configs without error', () => {

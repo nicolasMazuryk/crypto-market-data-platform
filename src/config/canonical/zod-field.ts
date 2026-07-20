@@ -18,8 +18,14 @@ export function zodNumberFor(
   if (hc?.max !== undefined) schema = schema.max(hc.max)
 
   const bounds = boundsFor(param, strategyId)
-  if (bounds?.min !== undefined) schema = bounds.exclusiveMin ? schema.gt(bounds.min) : schema.min(bounds.min)
-  if (bounds?.max !== undefined) schema = bounds.exclusiveMax ? schema.lt(bounds.max) : schema.max(bounds.max)
+  if (bounds?.min !== undefined) {
+    const message = bounds.minMessage
+    schema = bounds.exclusiveMin ? schema.gt(bounds.min, { message }) : schema.min(bounds.min, { message })
+  }
+  if (bounds?.max !== undefined) {
+    const message = bounds.maxMessage
+    schema = bounds.exclusiveMax ? schema.lt(bounds.max, { message }) : schema.max(bounds.max, { message })
+  }
 
   return resolvedDefault === undefined ? schema : schema.default(resolvedDefault)
 }

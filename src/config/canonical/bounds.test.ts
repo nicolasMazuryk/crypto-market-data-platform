@@ -354,6 +354,32 @@ describe('§11.1 hard parameter bounds', () => {
     })
   })
 
+  describe('§11.2 unit-mismatch protection', () => {
+    it('rejects take_profit_pct=0.003 (fraction mistaken for percent) with unit_suspect_fraction on both loaders', () => {
+      const btResult = GeneratedBacktestStrategySchema.safeParse(bt41a({ take_profit_pct: 0.003 }))
+      const liveResult = GeneratedLiveStrategySchema.safeParse(live41a({ takeProfitPct: 0.003 }))
+      expect(btResult.success).toBe(false)
+      expect(liveResult.success).toBe(false)
+      if (!btResult.success) expect(btResult.error.issues[0]?.message).toContain('unit_suspect_fraction')
+      if (!liveResult.success) expect(liveResult.error.issues[0]?.message).toContain('unit_suspect_fraction')
+    })
+
+    it('rejects retracement_pct=1.5 (percent mistaken for fraction) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt2({ retracement_pct: 1.5 }))
+      rejects(GeneratedLiveStrategySchema, live2({ retracementPct: 1.5 }))
+    })
+
+    it('rejects an unrecognized key (typo) on both loaders', () => {
+      rejects(GeneratedLiveStrategySchema, live1({ entryOffsetSecond: 5 }))
+      rejects(GeneratedBacktestStrategySchema, bt1({ entryOffsetSecond: 5 }))
+    })
+
+    it('rejects a stray unknown key on both loaders', () => {
+      rejects(GeneratedLiveStrategySchema, live1({ foo: 1 }))
+      rejects(GeneratedBacktestStrategySchema, bt1({ foo: 1 }))
+    })
+  })
+
   describe('per-strategy sl_multiplier override: strategy_4_2a is 1.0..4.0, base is 0.5..4.0', () => {
     it('accepts 0.7 for strategy_2 (within the base 0.5..4.0 range)', () => {
       accepts(GeneratedBacktestStrategySchema, bt2({ sl_multiplier: 0.7 }))
