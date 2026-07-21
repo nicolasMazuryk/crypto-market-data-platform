@@ -8,6 +8,7 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ../src/db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./clickhouse/disable-internal-logs.xml:/etc/clickhouse-server/config.d/disable-internal-logs.xml:ro
     environment:
       - CLICKHOUSE_DB=${CLICKHOUSE_DATABASE}
       - CLICKHOUSE_USER=${CLICKHOUSE_USER}

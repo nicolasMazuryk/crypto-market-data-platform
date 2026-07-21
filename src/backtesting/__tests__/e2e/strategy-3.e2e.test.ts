@@ -226,3 +226,96 @@ describe('E2E: Strategy 3 — Ride the Drop', () => {
     expect(result.hold_duration).toBe(0) // fired on the entry candle
   })
 })
+
+describe('E2E: Strategy 3a — Order Latency', () => {
+  it('entry fills at decision candle +1 (1000ms latency), not the decision candle', () => {
+    const strategy = new Strategy3('strategy_3a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_3a',
+        direction: 'short',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        stop_loss_percent: 1.0,
+        tp_mode: 'A',
+        tp_multiplier: 1.5,
+        tp_addend_pct: 0.4,
+        deadline_seconds: 60,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      0,
+      1000 // orderLatencyMs: fill 1 candle after the decision
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const decisionBidOpen = 50100 // at decision candle T-5 — must NOT be used for the entry fill
+    const fillBidOpen = 50000 // at fill candle T-4 (decision + 1000ms) — must be used
+
+    const overrides = new Map<
+      number,
+      Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number; askHigh: number; askLow: number }>
+    >()
+    overrides.set(-5, { bidOpen: decisionBidOpen })
+    overrides.set(-4, { bidOpen: fillBidOpen })
+
+    const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+
+    const result = strategy.execute(event, window)
+    if (!result) throw new Error('expected result')
+
+    expect(result.entry_price).toBe(fillBidOpen)
+    expect(result.entry_price).not.toBe(decisionBidOpen)
+  })
+
+  it('deadline fills at decision-deadline candle +1 (1000ms latency), not the decision candle', () => {
+    const strategy = new Strategy3('strategy_3a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_3a',
+        direction: 'short',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        stop_loss_percent: 1.0,
+        tp_mode: 'A',
+        tp_multiplier: 1.5,
+        tp_addend_pct: 0.4,
+        deadline_seconds: 60,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      0,
+      1000 // orderLatencyMs: fill 1 candle after the decision
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    // Flat price everywhere except at the deadline candles, so neither SL nor TP fires.
+    const decisionAskOpen = 50100 // at deadline decision candle T+60 — must NOT be used for the exit fill
+    const fillAskOpen = 50000 // at deadline fill candle T+61 (decision + 1000ms) — must be used
+
+    const overrides = new Map<
+      number,
+      Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number; askHigh: number; askLow: number }>
+    >()
+    overrides.set(60, { askOpen: decisionAskOpen })
+    overrides.set(61, { askOpen: fillAskOpen })
+
+    const window = buildWindow({
+      fundingTime,
+      basePrice: 50000,
+      priceFn: () => 50000,
+      overrides,
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = strategy.execute(event, window)
+
+    if (!result) throw new Error('expected result')
+    expect(result.exit_reason).toBe('deadline')
+    expect(result.exit_price).toBe(fillAskOpen)
+    expect(result.exit_price).not.toBe(decisionAskOpen)
+  })
+})

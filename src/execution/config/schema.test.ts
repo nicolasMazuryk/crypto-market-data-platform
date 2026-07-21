@@ -184,3 +184,57 @@ describe('parseTestingConfig (via parseEngineConfig)', () => {
     ).not.toThrow()
   })
 })
+
+describe('LONG/SHORT co-run guard (§11.1)', () => {
+  function strategy1Raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: 'strategy_1',
+      enabled: true,
+      negativeFundingThresholdPercent: -0.1,
+      entryOffsetSeconds: 3,
+      exitOffsetSeconds: 6,
+      amountUsd: 10,
+      leverage: 5,
+      ...overrides,
+    }
+  }
+
+  function strategy3aRaw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: 'strategy_3a',
+      enabled: true,
+      negativeFundingThresholdPercent: -0.1,
+      entryOffsetSeconds: 3,
+      stopLossPercent: 1.0,
+      tpVariantAMultiplier: 1.5,
+      tpVariantBOffsetPercent: 0.3,
+      deadlineSeconds: 900,
+      amountUsd: 10,
+      leverage: 5,
+      ...overrides,
+    }
+  }
+
+  function strategy6Raw(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: 'strategy_6',
+      enabled: true,
+      mainSide: 'long',
+      mainAmountUsd: 10,
+      leverage: 5,
+      ...overrides,
+    }
+  }
+
+  it('rejects strategy_3a + strategy_1 both enabled (SHORT vs LONG)', () => {
+    expect(() =>
+      parseEngineConfig(baseRaw({ strategies: [strategy1Raw(), strategy3aRaw()] }))
+    ).toThrow(ConfigError)
+  })
+
+  it('allows strategy_3a + strategy_6 both enabled (strategy_6 exempt from the guard)', () => {
+    expect(() =>
+      parseEngineConfig(baseRaw({ strategies: [strategy6Raw(), strategy3aRaw()] }))
+    ).not.toThrow()
+  })
+})

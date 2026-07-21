@@ -1,5 +1,6 @@
 import type { FeeSchedule, Strategy3Config } from '../config/schema.js'
 import type { FundingEvent, OHLCWindow } from '../data/types.js'
+import { applyOrderLatency } from '../engine/latency.js'
 import { fillMarketOrder } from '../orders/market-order.js'
 import { simulateOrders } from '../orders/simulator.js'
 import { calculatePnl } from '../pnl/calculator.js'
@@ -21,17 +22,17 @@ export class Strategy3 implements BaseStrategy {
   private config!: Strategy3Config
   private feeSchedule!: FeeSchedule
   private slippage = 0
+  private orderLatencyMs!: number
 
   constructor(variant: 'strategy_3a') {
     this.id = variant
   }
 
   initialize(config: Strategy3Config, feeSchedule: FeeSchedule, slippage: number, orderLatencyMs: number): void {
-    // TODO(task-1N): wire latency shift
-    void orderLatencyMs
     this.config = config
     this.feeSchedule = feeSchedule
     this.slippage = slippage
+    this.orderLatencyMs = orderLatencyMs
   }
 
   shouldTrigger(event: FundingEvent): boolean {
@@ -41,7 +42,8 @@ export class Strategy3 implements BaseStrategy {
   execute(event: FundingEvent, data: OHLCWindow): TradeResult | null {
     const absF = Math.abs(event.funding_rate)
     const entryTime = new Date(event.funding_time.getTime() - this.config.entry_offset_seconds * 1000)
-    const entryTs = toClickHouseDateTime(entryTime)
+    const entryDecisionTs = toClickHouseDateTime(entryTime)
+    const entryTs = applyOrderLatency(entryDecisionTs, this.orderLatencyMs)
     const fundingTs = toClickHouseDateTime(event.funding_time)
 
     const entryCandle = data.getRowAt(entryTs)
@@ -66,7 +68,8 @@ export class Strategy3 implements BaseStrategy {
 
     // Get candles after entry up to deadline
     const deadlineTime = new Date(event.funding_time.getTime() + this.config.deadline_seconds * 1000)
-    const deadlineTs = toClickHouseDateTime(deadlineTime)
+    const deadlineDecisionTs = toClickHouseDateTime(deadlineTime)
+    const deadlineTs = applyOrderLatency(deadlineDecisionTs, this.orderLatencyMs)
     const postEntryRows = data.getRowsInRange(entryTs, deadlineTs)
     // Remove entry candle (orders placed IMMEDIATELY after entry)
     const orderCandles = postEntryRows.slice(1)
