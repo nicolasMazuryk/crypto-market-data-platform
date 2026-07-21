@@ -11,9 +11,11 @@ import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 /**
  * Strategy 1: Negative Funding LONG - Instant Exit
  *
- * Enter LONG at T_funding - entry_offset, exit at T_drop + exit_offset. The engine localizes
- * T_drop (§3.1) and hands it in via the lookahead context; the strategy reads its entry/exit
- * candles through the gated window, advancing the gate forward as it goes.
+ * Enter LONG at T_funding - entry_offset, exit at T_settle + exit_offset (fixed clock,
+ * identical to live). The engine localizes T_drop (§3.1) and hands it in via the lookahead
+ * context purely for reporting/bucketing (`t_drop_offset_s`); the exit clock never re-keys
+ * to it. The strategy reads its entry/exit candles through the gated window, advancing the
+ * gate forward as it goes.
  */
 export class Strategy1 implements BaseStrategy {
   readonly id = 'strategy_1'
@@ -56,8 +58,7 @@ export class Strategy1 implements BaseStrategy {
     const entryFill = fillMarketOrder('buy', entryCandle, 1, 'entry', this.slippage)
     if (!entryFill) return null
 
-    const settlementTime = new Date(tDropTs.replace(' ', 'T') + 'Z')
-    const exitTime = new Date(settlementTime.getTime() + this.config.exit_offset_seconds * 1000)
+    const exitTime = new Date(event.funding_time.getTime() + this.config.exit_offset_seconds * 1000)
     const exitDecisionTs = toClickHouseDateTime(exitTime)
     const exitTs = applyOrderLatency(exitDecisionTs, this.orderLatencyMs)
 

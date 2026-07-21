@@ -1,6 +1,15 @@
 import type { OrderbookRow } from '../../../db/types.js'
 import type { FundingEvent } from '../../data/types.js'
 import { OHLCWindow } from '../../data/types.js'
+import type { BacktestError } from '../../config/schema.js'
+import type { TradeResult } from '../../strategies/types.js'
+
+/** Narrow a strategy execute() result to a TradeResult, throwing on null/error results */
+export function expectTrade(result: TradeResult | BacktestError | null): TradeResult {
+  if (!result) throw new Error('expected result')
+  if ('error_code' in result) throw new Error(`expected trade, got error: ${result.error_code}`)
+  return result
+}
 
 /** Create a candle with specified bid/ask prices */
 export function makeCandle(params: {

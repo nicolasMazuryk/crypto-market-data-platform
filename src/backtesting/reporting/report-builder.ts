@@ -17,6 +17,8 @@ import type {
   ReproducibilitySection,
   TradeLogEntry,
   ErrorLogEntry,
+  DropOffsetBucketing,
+  DropOffsetBucket,
 } from './types.js'
 import * as m from './metrics.js'
 import { computeEquityCurveMetrics } from './equity-curve-metrics.js'
@@ -220,6 +222,38 @@ export function buildReport(input: BuildReportInput): BacktestReport {
 
   const conservatism = buildConservatismReport(config, trades, errorEvents)
 
+  // Drop-offset bucketing (§16) — strategy_1 only, the sole strategy with a fixed
+  // exit_offset_seconds against which t_drop_offset_s can be compared.
+  let dropOffsetBucketing: DropOffsetBucketing | undefined
+  if (config.strategy.strategy_id === 'strategy_1') {
+    const exitOffset = config.strategy.exit_offset_seconds
+    const beforeDrop: TradeResult[] = []
+    const afterOrInsideDrop: TradeResult[] = []
+    const noDropLocalized: TradeResult[] = []
+    for (const t of trades) {
+      if (t.t_drop_offset_s == null) {
+        noDropLocalized.push(t)
+      } else if (t.t_drop_offset_s > exitOffset) {
+        beforeDrop.push(t)
+      } else {
+        afterOrInsideDrop.push(t)
+      }
+    }
+    const bucket = (bucketTrades: TradeResult[]): DropOffsetBucket => {
+      const bucketPnls = bucketTrades.map(t => t.pnl.net_pnl)
+      return {
+        count: bucketTrades.length,
+        total_net_pnl: bucketPnls.reduce((s, v) => s + v, 0),
+        mean_net_pnl: m.mean(bucketPnls),
+      }
+    }
+    dropOffsetBucketing = {
+      exit_before_drop: bucket(beforeDrop),
+      exit_after_or_inside_drop: bucket(afterOrInsideDrop),
+      no_drop_localized: bucket(noDropLocalized),
+    }
+  }
+
   return {
     strategy_id: config.strategy.strategy_id,
     trade_stats: tradeStats,
@@ -236,5 +270,6 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     equity_curve: equityCurve,
     equity_curve_timestamps: equityCurveTimestamps,
     equity_curve_metrics: equityCurveMetrics,
+    drop_offset_bucketing: dropOffsetBucketing,
   }
 }

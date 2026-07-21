@@ -140,8 +140,9 @@ describe('E2E: Strategy 1 — Order Latency', () => {
 })
 
 describe('E2E: Strategy 1 — Settlement Localization', () => {
-  it('Scenario Settlement: exit anchored to localized T_drop + exit_offset', () => {
-    // Qualifying drop at T+3. exit_offset=2 → exitTs = T+3+2 = T+5. Funding received since exitTs >= T_drop.
+  it('Scenario Settlement A: exit ignores T_drop — fires at T_settle+exit_offset even when the drop localizes later (T+8)', () => {
+    // Drop localizes at T_settle+8. exit_offset=6 → fixed-clock exit at T+6, i.e. BEFORE the
+    // drop (favorable variance). The old T_drop-keyed exit would have fired at T+8+6=T+14.
     const strat = new Strategy1()
     strat.initialize(
       {
@@ -149,7 +150,7 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
         direction: 'long',
         negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
-        exit_offset_seconds: 2,
+        exit_offset_seconds: 6,
         amount_usd: 20,
         leverage: 4,
       },
@@ -161,13 +162,13 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
 
     const fundingTime = new Date('2025-06-01T00:00:00Z')
     const basePrice = 50000
-    const exitBidOpen = 49950 // price at T+5
+    const exitBidOpen = 49950 // price at fixed-clock exit T+6
 
     const overrides = new Map<number, Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number }>>()
     overrides.set(-5, { askOpen: basePrice + 5 }) // entry candle
-    // T+3: qualifying drop (drop_move 0.8% ≥ Q≈0.75%) → localizes T_drop here
-    overrides.set(3, { bidOpen: basePrice, bidHigh: basePrice + 10, bidLow: basePrice - 400 })
-    overrides.set(5, { bidOpen: exitBidOpen }) // exit candle at T+3+2=T+5
+    // T+8: qualifying drop (drop_move 0.8% ≥ Q≈0.75%) → localizes T_drop here, after the exit
+    overrides.set(8, { bidOpen: basePrice, bidHigh: basePrice + 10, bidLow: basePrice - 400 })
+    overrides.set(6, { bidOpen: exitBidOpen }) // exit candle at fixed clock T_settle+6
 
     const window = buildWindow({ fundingTime, basePrice, overrides })
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.015 })
@@ -176,15 +177,54 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
     if (!result) throw new Error('expected result')
 
     expect(result.real_settlement_detected).toBe(true)
-    expect(result.real_settlement_ts).toBe(
-      new Date(fundingTime.getTime() + 3000).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19)
-    )
-    expect(result.t_drop_offset_s).toBe(3)
-    // Exit at T+5 (T_drop T+3 + exit_offset 2)
+    expect(result.t_drop_offset_s).toBe(8)
     const entryMs = fundingTime.getTime() - 5000
     const exitMs = entryMs + result.hold_duration * 1000
-    expect(exitMs).toBe(fundingTime.getTime() + 5000)
-    // Funding received: entry(T-5) <= T_drop(T+3) <= exit(T+5)
+    expect(exitMs).toBe(fundingTime.getTime() + 6000)
+  })
+
+  it('Scenario Settlement B: exit ignores T_drop — fires at the same T_settle+exit_offset when the drop localizes earlier (T+2)', () => {
+    // Same fixed clock (T+6) as Scenario A, but the drop localizes earlier this time (T+2), i.e.
+    // the exit now fires AFTER the drop. The absolute exit clock must not move.
+    const strat = new Strategy1()
+    strat.initialize(
+      {
+        strategy_id: 'strategy_1',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        exit_offset_seconds: 6,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      0,
+      0,
+      { tp_post_settlement_buffer_seconds: 1 }
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const basePrice = 50000
+    const exitBidOpen = 49950 // price at fixed-clock exit T+6
+
+    const overrides = new Map<number, Partial<{ bidOpen: number; bidHigh: number; bidLow: number; askOpen: number }>>()
+    overrides.set(-5, { askOpen: basePrice + 5 }) // entry candle
+    // T+2: qualifying drop → localizes T_drop here, before the exit
+    overrides.set(2, { bidOpen: basePrice, bidHigh: basePrice + 10, bidLow: basePrice - 400 })
+    overrides.set(6, { bidOpen: exitBidOpen }) // exit candle at fixed clock T_settle+6 (unchanged)
+
+    const window = buildWindow({ fundingTime, basePrice, overrides })
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.015 })
+
+    const result = strat.execute(event, window, ctx(window, event))
+    if (!result) throw new Error('expected result')
+
+    expect(result.real_settlement_detected).toBe(true)
+    expect(result.t_drop_offset_s).toBe(2)
+    const entryMs = fundingTime.getTime() - 5000
+    const exitMs = entryMs + result.hold_duration * 1000
+    expect(exitMs).toBe(fundingTime.getTime() + 6000)
+    // Funding received: entry(T-5) <= T_settle(T) <= exit(T+6)
     expect(result.funding_received).toBe(true)
   })
 
@@ -218,7 +258,8 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
     overrides.set(0, { askOpen: basePrice + 5 }) // entry candle at T_settle
     // T+3: qualifying drop → localizes T_drop here, after T_settle
     overrides.set(3, { bidOpen: basePrice, bidHigh: basePrice + 10, bidLow: basePrice - 400 })
-    overrides.set(5, { bidOpen: basePrice - 50 }) // exit candle at T_drop(T+3) + exit_offset(2) = T+5
+    // Exit candle at fixed clock T_settle(T) + exit_offset(2) = T+2 — left at its default flat
+    // price so it doesn't perturb the T+3 drop candle's prev_close (T+2's bid_close).
 
     const window = buildWindow({ fundingTime, basePrice, overrides })
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.015 })
@@ -234,8 +275,9 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
     expect(result.funding_received).toBe(false)
   })
 
-  it('Scenario Settlement-Fallback: no drop localized → exit at latest edge + offset', () => {
-    // All candles flat (no qualifying drop) → fallback to the latest edge (T + dropSearchWindow).
+  it('Scenario Settlement-Fallback: no drop localized → exit still fixed at T_settle + exit_offset', () => {
+    // All candles flat (no qualifying drop) → t_drop_offset_s is null, but the exit clock is
+    // fixed regardless of drop localization, so it fires at T_settle + exit_offset = T+2.
     const strat = new Strategy1()
     strat.initialize(
       {
@@ -271,9 +313,9 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
 
     expect(result.real_settlement_detected).toBe(false)
     expect(result.t_drop_offset_s).toBeNull()
-    // Falls back to latest edge T+10: exit at T+10+2 = T+12
+    // Exit clock ignores drop localization entirely: T_settle + exit_offset(2) = T+2
     const entryMs = fundingTime.getTime() - 5000
     const exitMs = entryMs + result.hold_duration * 1000
-    expect(exitMs).toBe(fundingTime.getTime() + 12000)
+    expect(exitMs).toBe(fundingTime.getTime() + 2000)
   })
 })

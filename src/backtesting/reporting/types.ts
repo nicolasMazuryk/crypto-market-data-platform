@@ -150,6 +150,23 @@ export interface EquityCurveMetrics {
   equity_curve_quality_score: number
 }
 
+/** Aggregate stats for one drop-offset bucket. */
+export interface DropOffsetBucket {
+  count: number
+  total_net_pnl: number
+  mean_net_pnl: number
+}
+
+/** §16 bucketing of net_pnl by whether the (fixed-clock) exit preceded T_drop. */
+export interface DropOffsetBucketing {
+  /** Exit fired before T_drop: t_drop_offset_s > exit_offset_seconds (favorable). */
+  exit_before_drop: DropOffsetBucket
+  /** Exit fired at/after/inside the drop: t_drop_offset_s <= exit_offset_seconds. */
+  exit_after_or_inside_drop: DropOffsetBucket
+  /** No qualifying drop localized (t_drop_offset_s === null). */
+  no_drop_localized: DropOffsetBucket
+}
+
 /** Complete backtest report */
 export interface BacktestReport {
   strategy_id: string
@@ -167,4 +184,5 @@ export interface BacktestReport {
   equity_curve: number[]
   equity_curve_timestamps: string[]
   equity_curve_metrics: EquityCurveMetrics | null
+  drop_offset_bucketing?: DropOffsetBucketing | undefined
 }

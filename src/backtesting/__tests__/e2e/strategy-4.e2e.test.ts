@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Strategy41 } from '../../strategies/strategy-4-1.js'
 import { Strategy42 } from '../../strategies/strategy-4-2.js'
-import { buildWindow, makeFundingEvent, BINANCE_FEES, DEFAULT_SLIPPAGE } from './fixtures.js'
+import { buildWindow, makeFundingEvent, BINANCE_FEES, DEFAULT_SLIPPAGE, expectTrade } from './fixtures.js'
 
 const TOLERANCE = 1e-10
 
@@ -48,8 +48,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
     expect(strategy.shouldTrigger(event)).toBe(true)
 
-    const result = strategy.execute(event, window)
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.fill_count).toBeGreaterThan(0)
     expect(result.fill_count).toBeLessThanOrEqual(5)
     expect(result.funding_received).toBe(false) // Scenario a
@@ -135,9 +134,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.exit_reason).toBe('sl_hit')
     expect(result.pnl.net_pnl).toBeLessThan(0)
     // Exit qty = totalQty (both orders filled)
@@ -188,9 +185,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.exit_reason).toBe('sl_hit')
   })
 
@@ -232,9 +227,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.exit_reason).toBe('deadline')
   })
 
@@ -270,9 +263,7 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
 
     const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.fill_count).toBe(1)
     expect(result.exit_reason).toBe('sl_hit')
   })
@@ -316,9 +307,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.exit_reason).toBe('tp_hit')
     expect(result.pnl.funding_pnl).toBe(0) // Scenario a
   })
@@ -395,9 +384,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.exit_reason).toBe('sl_hit')
     expect(result.pnl.net_pnl).toBeLessThan(0)
   })
@@ -445,9 +432,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.exit_reason).toBe('sl_hit')
   })
 
@@ -487,9 +472,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
     })
 
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.exit_reason).toBe('deadline')
   })
 
@@ -524,9 +507,7 @@ describe('E2E: Strategy 4.2 — Single Limit LONG', () => {
 
     const window = buildWindow({ fundingTime, basePrice: 50000, overrides })
     const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
-    const result = strategy.execute(event, window)
-
-    if (!result) throw new Error('expected result')
+    const result = expectTrade(strategy.execute(event, window))
     expect(result.exit_reason).toBe('sl_hit')
     // Entry and exit fired on the same candle — zero hold duration.
     expect(result.hold_duration).toBe(0)
