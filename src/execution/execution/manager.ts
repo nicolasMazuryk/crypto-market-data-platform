@@ -156,6 +156,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
   const busUnsubs: Unsubscribe[] = []
   // Track entry fill timestamps per intentId for exit latency metric
   const entryFilledAt = new Map<string, number>()
+  // intentId → callback invoked by handleEntryOrderEvent's ladder branch on every rung fill.
+  // Lets spawnLadderTracker (R11 lifecycle) arm/re-place the TP without the fill handler
+  // needing to know about ladder-tracker internals.
+  const ladderFillListeners = new Map<string, () => void>()
 
   // Per-exchange promise chain for serialising concurrent entry createOrder calls.
   // Prevents rate-limit exhaustion when multiple intents evaluate at the same T_funding.
@@ -1366,6 +1370,157 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     setTimeout(() => void tick(), delayMs)
   }
 
+  /**
+   * R11 ladder lifecycle tracker for `strategy_4_1a` (ladder_limit entry + sl_tp_deadline exit).
+   *
+   * The SL is engine-tracked (not a resting exchange order): it is fixed at `pAvgFull` from
+   * placement and fires a reduce-only market close on whatever qty is currently filled, the
+   * first time price crosses it. Polls `refPrice` every second, gated on `filledQty > 0`.
+   *
+   * The TP IS a resting reduce-only limit order, placed on the first rung fill and cancelled +
+   * re-placed (via `ladderFillListeners`) on each deeper fill at the new fill-weighted average.
+   * `monitor.arm` (already armed at placement for the deadline timer) is re-armed after every TP
+   * (re)placement so its ws.order watch picks up the new TP clientOrderId.
+   *
+   * Deadline and TP fills both flow through the existing `monitor` → `handleMonitorExit` path;
+   * only the SL trigger and TP arm/re-place are driven from here.
+   */
+  function spawnLadderTracker(s: IntentState, pAvgFull: number): void {
+    const { intent } = s
+    if (intent.exitPolicy.kind !== 'sl_tp_deadline') return
+    const rest = restAdapters.get(intent.exchange)
+    if (!rest) return
+
+    const { slPct, tpPct, deadlineAt } = intent.exitPolicy
+    const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
+    const slPrice = intent.side === 'long' ? pAvgFull * (1 - slPct / 100) : pAvgFull * (1 + slPct / 100)
+
+    let settled = false
+    let tpVersion = 0
+    let currentTpCanonId: string | null = null
+    let tpInFlight = false
+
+    const stopTracking = (): void => {
+      settled = true
+      ladderFillListeners.delete(intent.id)
+    }
+
+    const triggerSl = (): void => {
+      if (settled) return
+      stopTracking()
+      monitor.disarm(intent.id)
+      logger.info({ event: 'ladder.sl_triggered', intentId: intent.id, slPrice }, 'ladder.sl_triggered')
+      void handleMonitorExit(s, 'sl_hit')
+    }
+
+    const replaceLadderTp = async (): Promise<void> => {
+      if (settled || tpInFlight) return
+      const totalQty = s.filledQty
+      const avgPrice = s.avgEntryPrice
+      if (totalQty <= 0 || avgPrice === undefined) return
+      tpInFlight = true
+      try {
+        const tpPrice = intent.side === 'long' ? avgPrice * (1 + tpPct / 100) : avgPrice * (1 - tpPct / 100)
+
+        if (currentTpCanonId) {
+          const prevRef: ExitOrderRef = {
+            clientOrderId: currentTpCanonId,
+            ...(s.exitOrderRefs?.tp?.exchangeOrderId !== undefined
+              ? { exchangeOrderId: s.exitOrderRefs.tp.exchangeOrderId }
+              : {}),
+          }
+          const cancelResult = await cancelSiblingExit(rest, intent, prevRef)
+          if (cancelResult === 'failed') {
+            logger.warn(
+              { event: 'ladder.tp_cancel_failed', intentId: intent.id, clientOrderId: currentTpCanonId },
+              'ladder tracker: previous TP cancel failed, skipping re-place this fill'
+            )
+            return
+          }
+        }
+
+        const tpId = ids.forIntent(intent.id, 200 + tpVersion++)
+        const canonTpId = canonicalize(intent.exchange, tpId)
+        currentTpCanonId = canonTpId
+
+        const ack = await rest.createOrder({
+          intentId: intent.id,
+          clientOrderId: tpId,
+          exchange: intent.exchange,
+          symbol: intent.exchangeSymbol,
+          side: exitSide,
+          type: 'limit',
+          qty: totalQty,
+          price: tpPrice,
+          reduceOnly: true,
+        })
+        if (ack.status !== 'accepted') {
+          logger.warn(
+            { event: 'ladder.tp_rejected', intentId: intent.id, rejectReason: ack.rejectReason },
+            'ladder tracker: TP rejected'
+          )
+          return
+        }
+
+        const tpPlaced: OrderPlacedEvent = {
+          intentId: intent.id,
+          exchange: intent.exchange,
+          symbol: intent.symbol,
+          clientOrderId: tpId,
+          kind: 'tp',
+          side: exitSide,
+          orderType: 'limit',
+          qty: totalQty,
+          price: tpPrice,
+          reduceOnly: true,
+          ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}),
+        }
+        bus.emit('order.placed', tpPlaced)
+        logger.info({ event: 'ladder.tp_placed', ...tpPlaced, tpVersion }, 'ladder.tp_placed')
+        s.exitOrderRefs = {
+          ...s.exitOrderRefs,
+          tp: { clientOrderId: canonTpId, ...(ack.exchangeOrderId ? { exchangeOrderId: ack.exchangeOrderId } : {}) },
+        }
+        // Re-arm so monitor's ws.order watch picks up the new TP clientOrderId.
+        if (s.status === 'monitoring' || s.status === 'partially_filled') monitor.arm(s)
+      } catch (err) {
+        logger.warn({ intentId: intent.id, err }, 'ladder tracker: TP placement failed')
+      } finally {
+        tpInFlight = false
+      }
+    }
+
+    ladderFillListeners.set(intent.id, () => {
+      void replaceLadderTp()
+    })
+
+    const tick = (): void => {
+      if (settled || TERMINAL.has(s.status) || s.status === 'exiting') {
+        stopTracking()
+        return
+      }
+      if (clock.now() >= deadlineAt) {
+        // The deadline timer armed via monitor.arm() drives the actual exit; stop polling.
+        stopTracking()
+        return
+      }
+      if (s.filledQty > 0) {
+        const currentPrice = refPrice(intent.exchange, intent.symbol)
+        if (currentPrice !== undefined) {
+          const breached = intent.side === 'long' ? currentPrice <= slPrice : currentPrice >= slPrice
+          if (breached) {
+            triggerSl()
+            return
+          }
+        }
+      }
+      setTimeout(tick, 1_000)
+    }
+
+    // SL is live from placement — check immediately, then poll every second.
+    setTimeout(tick, 0)
+  }
+
   async function placeLadderPostErrorProtectiveClose(
     s: IntentState,
     order: { clientOrderId: string; filledQty: number }
@@ -1432,11 +1587,11 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     s: IntentState,
     order: { clientOrderId: string; exchangeOrderId?: string; status: string; filledQty: number; avgFillPrice?: number }
   ): void {
-    if (TERMINAL.has(s.status)) {
-      // Ladder rung filled after ladder_no_fills error (cancel didn't propagate before fill).
-      // Place protective close immediately to avoid untracked open position.
+    if (TERMINAL.has(s.status) || s.status === 'exiting') {
+      // Ladder rung filled after the cancel-on-exit decision (cancel/fill race, §G-R) — the
+      // ladder's unfilled rungs stay live until SL/TP/deadline fires, so this is reachable for
+      // any terminal/exiting status, not just the ladder_no_fills error path.
       if (
-        s.status === 'error' &&
         s.intent.entryPolicy?.kind === 'ladder_limit' &&
         (order.status === 'filled' || order.status === 'partially_filled') &&
         order.filledQty > 0
@@ -1446,13 +1601,16 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       return
     }
 
-    // Ladder intents track per-rung fills separately; the T_funding timer drives handleEntryFilled.
+    // Ladder intents (R11): the SL is engine-tracked from placement (spawnLadderTracker) and the
+    // TP arms/re-places on each rung fill via ladderFillListeners; rungs stay live until SL/TP/
+    // deadline fires (handleMonitorExit), never cancelled here.
     if (s.intent.entryPolicy?.kind === 'ladder_limit' && s.ladderRungs) {
       const canonId = canonicalize(s.intent.exchange, order.clientOrderId)
       const rung = s.ladderRungs.find(r => r.canonicalId === canonId)
       if (!rung || rung.filled) return
 
       if (order.status === 'filled' || order.status === 'partially_filled') {
+        const wasUnfilled = s.filledQty <= 0
         if (order.status === 'filled') {
           rung.filled = true
           rung.filledQty = order.filledQty > 0 ? order.filledQty : rung.filledQty
@@ -1474,7 +1632,22 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         s.filledQty = totalQty
         if (totalQty > 0) s.avgEntryPrice = totalQtyPrice / totalQty
 
-        transition(s, 'partially_filled')
+        // Status was already advanced to 'monitoring' at ladder placement (SL armed with the
+        // ladder, R11) — don't regress it back to 'partially_filled'.
+        if (s.status !== 'monitoring') transition(s, 'partially_filled')
+
+        if (wasUnfilled && totalQty > 0) {
+          const posOpened: PositionOpenedEvent = {
+            intentId: s.intent.id,
+            exchange: s.intent.exchange,
+            symbol: s.intent.symbol,
+            side: s.intent.side,
+            filledQty: s.filledQty,
+            ...(s.avgEntryPrice !== undefined ? { avgEntryPrice: s.avgEntryPrice } : {}),
+          }
+          bus.emit('position.opened', posOpened)
+          logger.info({ event: 'position.opened', ...posOpened }, 'position.opened')
+        }
 
         // Emit deviation metric if a rung fills before T_funding (scenario A invariant).
         if (order.status === 'filled' && clock.now() < s.intent.nextFundingTimestamp) {
@@ -1493,6 +1666,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             code: 'ladder_pre_funding_fill',
           })
         }
+
+        // Arm/re-place the TP at the new P_avg (R11 step 3) — first fill places it, each
+        // deeper fill cancels + re-places. The SL is unaffected (fixed at P_avg_full).
+        ladderFillListeners.get(s.intent.id)?.()
       }
       return
     }
@@ -2121,7 +2298,38 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
 
     const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
 
-    if (reason === 'sl_hit' || reason === 'tp_hit') {
+    // R11 ladder lifecycle: unfilled rungs are cancelled ONLY here, when SL/TP/deadline fires —
+    // never earlier. Best-effort; a fill racing this cancel is closed by the protective-close
+    // path in handleEntryOrderEvent (status 'exiting' at that point).
+    if (s.ladderRungs && s.ladderRungs.length > 0) {
+      const rungsToCancel = s.ladderRungs.filter(r => !r.filled)
+      await Promise.allSettled(
+        rungsToCancel.map(r =>
+          rest.cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId: r.clientOrderId }).catch((err: unknown) => {
+            logger.warn(
+              { intentId: intent.id, clientOrderId: r.clientOrderId, err },
+              'manager: ladder rung cancel failed (exit)'
+            )
+          })
+        )
+      )
+    }
+
+    // R11: zero rungs ever filled by the deadline — terminal ladder_no_fills, no position/exit.
+    if (s.ladderRungs && s.ladderRungs.length > 0 && reason === 'deadline' && s.filledQty <= 0) {
+      logger.warn({ event: 'ladder.no_fills', intentId: intent.id }, 'ladder.no_fills')
+      setError(s, 'ladder_no_fills', 'no ladder rungs filled by deadline')
+      return
+    }
+
+    // A resting exchange SL/TP order already filled (detected by monitor via WS) only when this
+    // reason's ref was actually armed — the R11 ladder's SL is engine-tracked (no resting order),
+    // so an 'sl_hit' with no exitOrderRefs.sl falls through to the active-close branch below.
+    const restingExitOrderFired =
+      (reason === 'sl_hit' && s.exitOrderRefs?.sl !== undefined) ||
+      (reason === 'tp_hit' && s.exitOrderRefs?.tp !== undefined)
+
+    if (restingExitOrderFired) {
       // One exit order already filled (detected by monitor). Cancel the residual.
       const residualRef = reason === 'sl_hit' ? s.exitOrderRefs?.tp : s.exitOrderRefs?.sl
       if (residualRef) {
@@ -3243,6 +3451,23 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         s.ladderRungs = ladderRungState
         if (ladderRungState[0]) s.entryOrderId = ladderRungState[0].clientOrderId
 
+        // P_avg_full (R11): precomputed from the rungs actually feasible to place — known in
+        // advance from their prices/quantities, independent of which ones eventually fill. The
+        // SL is anchored to this fixed value with the ladder, not to the realized fill average.
+        let pAvgFullNotional = 0
+        let pAvgFullQty = 0
+        for (const rung of rungs) {
+          const rungQty = alignToLotStep(check.qty * rung.qtyFraction, market)
+          const limitPrice =
+            intent.side === 'long'
+              ? price * (1 - rung.priceOffsetPct / 100)
+              : price * (1 + rung.priceOffsetPct / 100)
+          if (rungQty <= 0 || !meetsMinNotional(rungQty, limitPrice, market)) continue
+          pAvgFullNotional += limitPrice * rungQty
+          pAvgFullQty += rungQty
+        }
+        const pAvgFull = pAvgFullQty > 0 ? pAvgFullNotional / pAvgFullQty : undefined
+
         // Place all rungs in parallel; record each via durability hook first.
         if (opts.beforeCreateOrder) {
           const beforeCreate = opts.beforeCreateOrder
@@ -3398,82 +3623,21 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           )
         )
 
-        // Set a timer at T_funding: cancel unfilled rungs, arm SL/TP from weighted avg fills.
-        const delayToFunding = Math.max(0, intent.nextFundingTimestamp - clock.now())
-        setTimeout(() => {
-          void (async () => {
-            if (TERMINAL.has(s.status)) return
+        // R11: the SL is placed WITH the ladder (fixed at P_avg_full, computed above from the
+        // rungs actually feasible to place) — not after a T_funding cancel-then-arm. Unfilled
+        // rungs stay live until SL/TP/deadline fires (handleMonitorExit cancels them there).
+        if (pAvgFull === undefined) {
+          // Defensive: the strategy-level top-rung feasibility gate should already guarantee at
+          // least one placeable rung: this only fires if market metadata changed between
+          // decision and placement.
+          logger.warn({ event: 'ladder.no_feasible_rungs', intentId: intent.id }, 'ladder.no_feasible_rungs')
+          setError(s, 'ladder_no_fills', 'no ladder rungs met feasibility at placement')
+          return s
+        }
 
-            // Cancel all unfilled rungs and collect confirmed-cancelled ones.
-            const cancelSettled = await Promise.allSettled(
-              (s.ladderRungs ?? [])
-                .filter(r => !r.filled)
-                .map(r =>
-                  rest
-                    .cancelOrder({ symbol: intent.exchangeSymbol, clientOrderId: r.clientOrderId })
-                    .then(() => r)
-                    .catch((err: unknown) => {
-                      logger.warn(
-                        { intentId: intent.id, clientOrderId: r.clientOrderId, err },
-                        'manager: ladder rung cancel failed'
-                      )
-                      throw err
-                    })
-                )
-            )
-
-            // Emit synthetic ws.order cancelled events so the persistence writer marks DB rows as cancelled.
-            const cancelNow = clock.now()
-            for (const result of cancelSettled) {
-              if (result.status === 'fulfilled') {
-                const rung = result.value
-                bus.emit('ws.order', {
-                  exchange: intent.exchange,
-                  seq: 0,
-                  receivedAt: cancelNow,
-                  order: {
-                    exchange: intent.exchange,
-                    symbol: intent.exchangeSymbol,
-                    clientOrderId: rung.clientOrderId,
-                    exchangeOrderId: '',
-                    side: entrySide,
-                    type: 'limit',
-                    qty: 0,
-                    filledQty: 0,
-                    reduceOnly: false,
-                    status: 'cancelled',
-                    submittedAt: cancelNow,
-                    updatedAt: cancelNow,
-                  },
-                })
-              }
-            }
-
-            if (s.filledQty <= 0) {
-              logger.warn({ event: 'ladder.no_fills', intentId: intent.id }, 'ladder.no_fills')
-              setError(s, 'ladder_no_fills', 'no ladder rungs filled before T_funding')
-              return
-            }
-
-            const now = clock.now()
-            metrics.intentEntryLatencyMs.observe(now - s.intent.decidedAt, {
-              exchange: s.intent.exchange,
-              strategy: s.intent.strategy,
-            })
-            entryFilledAt.set(s.intent.id, now)
-            metrics.intentFilledTotal.inc(1, { exchange: s.intent.exchange, strategy: s.intent.strategy })
-            bus.emit('order.filled', {
-              intentId: s.intent.id,
-              exchange: s.intent.exchange,
-              symbol: s.intent.symbol,
-              clientOrderId: s.entryOrderId ?? '',
-              filledQty: s.filledQty,
-              ...(s.avgEntryPrice !== undefined ? { avgFillPrice: s.avgEntryPrice } : {}),
-            })
-            transition(s, 'filled')
-            await handleEntryFilled(s)
-          })()
-        }, delayToFunding)
+        transition(s, 'monitoring')
+        monitor.arm(s)
+        spawnLadderTracker(s, pAvgFull)
 
         return s
       }

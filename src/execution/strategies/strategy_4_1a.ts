@@ -12,8 +12,13 @@ import type { EvalContext, StrategyRule, TradeIntent } from './types.js'
  * (ladderBottomMult > ladderTopMult, so bottomPrice < topPrice)
  *
  * Quantity per rung = totalQty / ladderCount (largest-remainder distributed).
- * SL/TP are anchored to the weighted-average fill price, computed by the manager
- * after T_funding passes and unfilled rungs are cancelled.
+ *
+ * R11 lifecycle (manager.ts): the SL is placed WITH the ladder, fixed at
+ * P_avg_full = Σ prices[i]·qty[i] / Σ qty[i] over the rungs actually placed — precomputable
+ * from this rule's rungs/qtyFraction output, independent of which ones eventually fill. The TP
+ * is placed on the first rung fill and cancelled + re-placed on each deeper fill at the running
+ * fill-weighted average. Unfilled rungs stay live until SL/TP/deadline fires — never cancelled
+ * at T_funding.
  *
  * Scenario A (no funding accrual): limits are placed below current ask so they fill
  * after T_funding during the expected funding-driven dump.

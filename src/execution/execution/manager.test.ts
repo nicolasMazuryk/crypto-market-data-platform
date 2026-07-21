@@ -1307,3 +1307,140 @@ describe('Task 4 — FSM ordering, Binance routing, close partial fills', () => 
     expect(manager.get(intent.id)!.status).toBe('exited')
   })
 })
+
+describe('Task 19: R11 ladder lifecycle (strategy_4_1a)', () => {
+  function makeLadderIntent(overrides: Partial<TradeIntent> = {}): TradeIntent {
+    const now = Date.now()
+    return makeIntent({
+      strategy: 'strategy_4_1a',
+      entryPolicy: {
+        kind: 'ladder_limit',
+        rungs: [
+          { priceOffsetPct: 1, qtyFraction: 0.5 },
+          { priceOffsetPct: 2, qtyFraction: 0.5 },
+        ],
+        expireAt: now + 60000,
+      },
+      exitPolicy: { kind: 'sl_tp_deadline', slPct: 3, tpPct: 0.5, deadlineAt: now + 60000, tpVariant: 'A' },
+      ...overrides,
+    })
+  }
+
+  it('places the SL fixed at P_avg_full with the ladder — never a resting exchange order', async () => {
+    const rest = makeRestAdapter()
+    const { manager, ids } = makeManager({ restAdapter: rest, refPrice: () => 50000 })
+    const intent = makeLadderIntent()
+
+    const state = await manager.submit(intent)
+
+    // rung0 = 50000*0.99 = 49500, rung1 = 50000*0.98 = 49000 (equal 0.0005 qty each)
+    // P_avg_full = (49500*0.0005 + 49000*0.0005) / 0.001 = 49250; slPrice = 49250*0.97 = 47772.5
+    expect(state.status).toBe('monitoring')
+    expect(state.exitOrderRefs?.sl).toBeUndefined()
+    // Only the two ladder limit BUYs were placed — no stop_market SL order.
+    const createCalls = vi.mocked(rest.createOrder).mock.calls
+    expect(createCalls.every(c => c[0].type === 'limit')).toBe(true)
+    void ids
+  })
+
+  it('SL fires on partial fill using P_avg_full (over ALL placed rungs), sized to currently-filled qty', async () => {
+    const rest = makeRestAdapter()
+    let price = 50000
+    const { manager, bus, ids } = makeManager({ restAdapter: rest, refPrice: () => price })
+    const intent = makeLadderIntent()
+
+    const state = await manager.submit(intent)
+    expect(state.status).toBe('monitoring')
+
+    // Only rung0 fills (49500); rung1 (49000) never fills.
+    const rung0 = ids.forIntent(intent.id, 0)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(rung0, { status: 'filled', filledQty: 0.0005, avgFillPrice: 49500 }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+
+    // Price crosses P_avg_full-based slPrice (47772.5) though never near rung0-only avg (49500).
+    price = 47700
+
+    await new Promise(r => setTimeout(r, 30))
+
+    const closeCall = vi
+      .mocked(rest.createOrder)
+      .mock.calls.find(c => c[0].type === 'market' && c[0].reduceOnly === true)
+    expect(closeCall).toBeDefined()
+    expect(closeCall![0].qty).toBeCloseTo(0.0005) // only the filled rung's qty
+    expect(manager.get(intent.id)!.exitReason).toBe('sl_hit')
+  })
+
+  it('arms the TP on the first rung fill and re-places it at the new average on a deeper fill', async () => {
+    const rest = makeRestAdapter()
+    const { manager, bus, ids } = makeManager({ restAdapter: rest, refPrice: () => 50000 })
+    const intent = makeLadderIntent()
+
+    await manager.submit(intent)
+
+    const rung0 = ids.forIntent(intent.id, 0)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(rung0, { status: 'filled', filledQty: 0.0005, avgFillPrice: 49500 }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 20))
+
+    const firstTp = vi
+      .mocked(rest.createOrder)
+      .mock.calls.find(c => c[0].type === 'limit' && c[0].reduceOnly === true)
+    expect(firstTp).toBeDefined()
+    expect(firstTp![0].price).toBeCloseTo(49500 * 1.005)
+    expect(firstTp![0].qty).toBeCloseTo(0.0005)
+
+    const cancelCallsBefore = vi.mocked(rest.cancelOrder).mock.calls.length
+
+    const rung1 = ids.forIntent(intent.id, 1)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(rung1, { status: 'filled', filledQty: 0.0005, avgFillPrice: 49000 }),
+      seq: 2,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 20))
+
+    // Old TP cancelled, new TP placed at the updated fill-weighted average.
+    expect(vi.mocked(rest.cancelOrder).mock.calls.length).toBeGreaterThan(cancelCallsBefore)
+    const tpCalls = vi.mocked(rest.createOrder).mock.calls.filter(c => c[0].type === 'limit' && c[0].reduceOnly)
+    const newAvg = (49500 * 0.0005 + 49000 * 0.0005) / 0.001
+    const secondTp = tpCalls[tpCalls.length - 1]
+    expect(secondTp![0].price).toBeCloseTo(newAvg * 1.005)
+    expect(secondTp![0].qty).toBeCloseTo(0.001)
+  })
+
+  it('keeps unfilled rungs live until exit — no cancel at placement time', async () => {
+    const rest = makeRestAdapter()
+    const { manager } = makeManager({ restAdapter: rest, refPrice: () => 50000 })
+    const intent = makeLadderIntent()
+
+    await manager.submit(intent)
+    await new Promise(r => setTimeout(r, 20))
+
+    expect(rest.cancelOrder).not.toHaveBeenCalled()
+  })
+
+  it('zero fills by deadline → ladder_no_fills, unfilled rungs cancelled', async () => {
+    const rest = makeRestAdapter()
+    const monitor = makeMonitor()
+    const { manager } = makeManager({ restAdapter: rest, monitor, refPrice: () => 50000 })
+    const intent = makeLadderIntent()
+
+    await manager.submit(intent)
+
+    monitor.triggerExit(intent.id, 'deadline')
+    await new Promise(r => setTimeout(r, 20))
+
+    expect(rest.cancelOrder).toHaveBeenCalledTimes(2)
+    expect(manager.get(intent.id)!.status).toBe('error')
+    expect(manager.get(intent.id)!.error?.code).toBe('ladder_no_fills')
+  })
+})

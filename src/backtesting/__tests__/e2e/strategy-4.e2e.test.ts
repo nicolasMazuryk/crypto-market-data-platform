@@ -267,6 +267,144 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     expect(result.fill_count).toBe(1)
     expect(result.exit_reason).toBe('sl_hit')
   })
+
+  it('Scenario R11-SL: SL anchored to P_avg_full over ALL placed rungs, fires on partial fill', () => {
+    // Only the top rung fills; the bottom rung never fills. Under the pre-R11 model, SL would
+    // anchor to the realized (top-rung-only) fill price — much higher, and would NOT fire in the
+    // 48700-48860 band this test drives to. Under R11, SL is precomputed from P_avg_full over
+    // BOTH placed rungs (looser/lower), and correctly fires once price crosses it.
+    // pCurrent ≈ 50005; ladderTop = 50005*0.996 = 49804.98; ladderBottom = 50005*0.97 = 48504.85
+    // P_avg_full = (49804.98 + 48504.85) / 2 = 49154.915
+    // slPrice = P_avg_full * (1 - 0.01*0.6) = 49154.915 * 0.994 ≈ 48856.09
+    const strategy = new Strategy41('strategy_4_1a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_4_1a',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        ladder_count: 2,
+        ladder_top_mult: 0.4,
+        ladder_bottom_mult: 3.0,
+        take_profit_pct: 0.2,
+        deadline_seconds: 60,
+        sl_multiplier: 0.6,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      0,
+      0
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const window = buildWindow({
+      fundingTime,
+      basePrice: 50000,
+      priceFn: offset => {
+        if (offset < 0) return 50000
+        if (offset <= 5) return 50000 - offset * 120 // fills top rung by offset 2, stops at 49400
+        if (offset <= 12) return 49400 - (offset - 5) * 100 // dips to 48700 — above ladderBottom 48504.85
+        return 48700
+      },
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = expectTrade(strategy.execute(event, window))
+    expect(result.fill_count).toBe(1)
+    expect(result.exit_reason).toBe('sl_hit')
+  })
+
+  it('Scenario R11-unfilled-live: a late dip fills a lower rung after the TP is already resting', () => {
+    // Rung 0 fills early and arms TP at P_avg (rung0 only). Price then sits flat — well below
+    // that TP — before a later dip fills rung 1. The R11 lifecycle must keep rung 1 live (not
+    // cancelled at T_settle) and re-price the TP to the new (lower) P_avg once it fills.
+    const strategy = new Strategy41('strategy_4_1a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_4_1a',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        ladder_count: 2,
+        ladder_top_mult: 0.4,
+        ladder_bottom_mult: 1.0,
+        take_profit_pct: 0.2,
+        deadline_seconds: 60,
+        sl_multiplier: 1.5,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      0,
+      0
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    // ladderTop ≈ 49804.98 (rung 0), ladderBottom ≈ 49504.95 (rung 1). Rung 0 fills at offset 2;
+    // price holds at 49700 (below rung-0-only TP ≈ 49904.58, above rung 1) until offset 10, when
+    // it dips to fill rung 1 (P_avg -> 49654.965, new TP ≈ 49754.27); then recovers past the TP.
+    const window = buildWindow({
+      fundingTime,
+      basePrice: 50000,
+      priceFn: offset => {
+        if (offset < 0) return 50000
+        if (offset === 1) return 49850
+        if (offset >= 2 && offset <= 9) return 49700
+        if (offset >= 10 && offset <= 11) return 49500
+        return 49800
+      },
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = expectTrade(strategy.execute(event, window))
+    expect(result.fill_count).toBe(2)
+    expect(result.exit_reason).toBe('tp_hit')
+  })
+
+  it('Scenario R11-pre-settlement: a pre-settlement rung fill still books FUNDING_PNL = 0', () => {
+    // The single rung fills before T_settle (entry_offset_seconds puts placement ahead of
+    // funding_time). R7: the position is kept and funding is never booked, and the fill is
+    // counted in pre_settle_fill_count for audit.
+    const strategy = new Strategy41('strategy_4_1a')
+    strategy.initialize(
+      {
+        strategy_id: 'strategy_4_1a',
+        direction: 'long',
+        negative_funding_threshold_percent: -0.4,
+        entry_offset_seconds: 5,
+        ladder_count: 1,
+        ladder_top_mult: 0.4,
+        ladder_bottom_mult: 0.4,
+        take_profit_pct: 0.2,
+        deadline_seconds: 60,
+        sl_multiplier: 1.5,
+        amount_usd: 20,
+        leverage: 4,
+      },
+      BINANCE_FEES,
+      0,
+      0
+    )
+
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const window = buildWindow({
+      fundingTime,
+      basePrice: 50000,
+      priceFn: offset => {
+        if (offset < -3) return 50000
+        if (offset < 0) return 49700 // fills the rung before T_settle (offset 0)
+        return 49700
+      },
+    })
+
+    const event = makeFundingEvent({ fundingTime, fundingRate: -0.01 })
+    const result = expectTrade(strategy.execute(event, window))
+    expect(result.fill_count).toBe(1)
+    expect(result.pre_settle_fill_count).toBe(1)
+    expect(result.funding_received).toBe(false)
+    expect(result.pnl.funding_pnl).toBe(0)
+  })
 })
 
 describe('E2E: Strategy 4.2 — Single Limit LONG', () => {

@@ -16,11 +16,8 @@ export interface FeasibilityResult {
  * Check whether an order quantity is feasible against exchange lot-step and
  * minimum-notional constraints, flooring the quantity to the nearest lot step first.
  *
- * NOT YET WIRED into simulateOrders/simulateLadderOrders/any strategy (task 12 scope).
- * Backtesting order quantities are normalized units (e.g. `1`), not real contract size —
- * there is no `amount_usd`/leverage threading yet, so applying this against today's
- * normalized qty and a stub `minCost` would produce numbers that look precise but aren't.
- * Full wiring lands in task 19/20 once ladder order sizing uses real notional amounts.
+ * Wired into `strategy-4-1.ts` (ladder rung drop / top-rung skip) against the backtest's
+ * default constant market params, since there is no real per-symbol CCXT metadata source.
  */
 export function checkOrderFeasibility(params: FeasibilityParams): FeasibilityResult {
   const { quantity, price, lotStep, minCost, contractSize = 1 } = params

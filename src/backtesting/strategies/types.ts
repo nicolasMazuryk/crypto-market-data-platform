@@ -65,6 +65,8 @@ export interface TradeResult {
   real_settlement_detected?: boolean
   /** `T_drop - T_settle` in seconds; `null` on fallback (strategy_1, strategy_2 only) */
   t_drop_offset_s?: number | null
+  /** Rungs filled before T_settle (ladder strategies, R7 audit — funding is still 0) */
+  pre_settle_fill_count?: number
 }
 
 /** Base strategy interface that all strategies implement */
