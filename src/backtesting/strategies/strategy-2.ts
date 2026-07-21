@@ -8,8 +8,11 @@ import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import { computeTDropOffsetSeconds } from '../engine/localization.js'
+import { eventMissDraw } from '../engine/seeded-rng.js'
 import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 import type { ExitReason } from '../config/schema.js'
+
+const DEFAULT_WS_EVENT_CONFIG = { missRate: 0.02, extraDelaySeconds: 2 }
 
 /**
  * Strategy 2: Negative Funding LONG - Retracement Exit
@@ -30,13 +33,15 @@ export class Strategy2 implements BaseStrategy {
   private fundingSettlement: FundingSettlementConfig = {
     tp_post_settlement_buffer_seconds: 1,
   }
+  private wsEventConfig: { missRate: number; extraDelaySeconds: number } = DEFAULT_WS_EVENT_CONFIG
 
   initialize(
     config: Strategy2Config,
     feeSchedule: FeeSchedule,
     slippage: number,
     orderLatencyMs: number,
-    fundingSettlement?: FundingSettlementConfig
+    fundingSettlement?: FundingSettlementConfig,
+    wsEventConfig?: { missRate: number; extraDelaySeconds: number }
   ): void {
     // TODO(task-1N): wire latency shift
     void orderLatencyMs
@@ -44,6 +49,7 @@ export class Strategy2 implements BaseStrategy {
     this.feeSchedule = feeSchedule
     this.slippage = slippage
     if (fundingSettlement) this.fundingSettlement = fundingSettlement
+    if (wsEventConfig) this.wsEventConfig = wsEventConfig
   }
 
   shouldTrigger(event: FundingEvent): boolean {
@@ -72,11 +78,9 @@ export class Strategy2 implements BaseStrategy {
 
     const slPrice = entryFill.price * (1 - absF * this.config.sl_multiplier)
 
-    // P_funding is the reference price at T_settle; the engine anchors the drop search here.
-    gated.advanceTo(fundingTs)
-    const fundingCandle = gated.getRowAt(fundingTs)
-    if (fundingCandle?.bid_open == null) return null
-    const pFunding = fundingCandle.bid_open
+    // Anchor = entry-decision reference price (T_settle - entry_offset_seconds), bid basis.
+    if (entryCandle.bid_open == null) return null
+    const anchor = entryCandle.bid_open
 
     // TP cannot become valid until max(T_low+1s, T_drop + buffer), and never before
     // T_drop + 1s (structural floor: credit-gated action never fires on the drop candle).
@@ -84,6 +88,15 @@ export class Strategy2 implements BaseStrategy {
     const structuralFloorMs = tDropEpochMs + 1000
     const bufferMs = this.fundingSettlement.tp_post_settlement_buffer_seconds * 1000
     const settlementEpochMs = Math.max(structuralFloorMs, tDropEpochMs + bufferMs)
+
+    // Arming: live tracker arms at T_drop, or (on a deterministic per-event WS-miss draw) the
+    // fixed T_settle + funding_fee_timeout_seconds fallback. On the no_drop_localized fallback,
+    // tDropTs is already the window edge, so the non-missed branch covers that arming source too.
+    const missed = eventMissDraw(event.exchange, event.symbol, event.funding_time) < this.wsEventConfig.missRate
+    const armMs = missed
+      ? event.funding_time.getTime() + this.config.funding_fee_timeout_seconds * 1000
+      : tDropEpochMs
+    const armTs = toClickHouseDateTime(new Date(armMs))
 
     // Simulate SL + dynamic TP online, advancing the gate one candle at a time. P_low is learned
     // only from candles already seen after funding; the repriced TP becomes active on the
@@ -124,10 +137,10 @@ export class Strategy2 implements BaseStrategy {
         break
       }
 
-      if (row.ts >= fundingTs && row.ts <= deadlineTs && row.bid_low !== null && row.bid_low < pLow) {
+      if (row.ts >= armTs && row.ts <= deadlineTs && row.bid_low !== null && row.bid_low < pLow) {
         pLow = row.bid_low
-        if (pFunding > pLow) {
-          activeTpPrice = pLow + (pFunding - pLow) * this.config.retracement_pct
+        if (anchor > pLow) {
+          activeTpPrice = pLow + (anchor - pLow) * this.config.retracement_pct
           activeTpFrom = toClickHouseDateTime(
             new Date(Math.max(new Date(row.ts.replace(' ', 'T') + 'Z').getTime() + 1000, settlementEpochMs))
           )

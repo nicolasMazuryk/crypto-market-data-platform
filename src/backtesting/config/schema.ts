@@ -137,6 +137,8 @@ export interface Strategy2Config {
   negative_funding_threshold_percent: number
   /** Seconds before T_funding to enter (>= 2, market-order latency) */
   entry_offset_seconds: number
+  /** Max seconds after T_settle before the missed-WS-event fallback timeout arms the tracker (5..120) */
+  funding_fee_timeout_seconds: number
   /** Retracement level (0-1, e.g., 0.50 for 50%) */
   retracement_pct: number
   /** Max seconds after T_funding before forced exit (2..180) */

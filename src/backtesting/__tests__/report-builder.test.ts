@@ -101,6 +101,7 @@ describe('buildReport — drop offset bucketing', () => {
         direction: 'long',
         negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
+        funding_fee_timeout_seconds: 30,
         retracement_pct: 0.5,
         deadline_seconds: 60,
         sl_multiplier: 1,
