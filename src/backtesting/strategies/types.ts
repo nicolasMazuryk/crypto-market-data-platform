@@ -78,7 +78,8 @@ export interface BaseStrategy {
     feeSchedule: FeeSchedule,
     slippage: number,
     orderLatencyMs: number,
-    fundingSettlement?: FundingSettlementConfig
+    fundingSettlement?: FundingSettlementConfig,
+    wsEventConfig?: { missRate: number; extraDelaySeconds: number }
   ): void
 
   /** Check if this funding event meets selection criteria */

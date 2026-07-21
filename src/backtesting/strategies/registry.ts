@@ -1,6 +1,7 @@
 import type { StrategyId } from '../config/schema.js'
 import type { BaseStrategy } from './types.js'
 import { Strategy1 } from './strategy-1.js'
+import { Strategy1Ws } from './strategy-1-ws.js'
 import { Strategy2 } from './strategy-2.js'
 import { Strategy3 } from './strategy-3.js'
 import { Strategy41 } from './strategy-4-1.js'
@@ -16,6 +17,8 @@ export function createStrategy(id: StrategyId): BaseStrategy {
   switch (id) {
     case 'strategy_1':
       return new Strategy1()
+    case 'strategy_1_ws':
+      return new Strategy1Ws()
     case 'strategy_2':
       return new Strategy2()
     case 'strategy_3a':

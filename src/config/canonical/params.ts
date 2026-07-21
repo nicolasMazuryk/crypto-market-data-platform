@@ -238,7 +238,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
   },
   {
     name: 'funding_fee_timeout_seconds',
-    // No bt equivalent: backtest has no WS funding-fee event to time out on.
+    btKey: 'funding_fee_timeout_seconds',
     liveKey: 'fundingFeeTimeoutSeconds',
     unit: 'seconds',
     sign: 'absolute',

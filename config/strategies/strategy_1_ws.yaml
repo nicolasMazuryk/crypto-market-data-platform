@@ -1,10 +1,10 @@
-# Strategy 1 WS: Negative Funding LONG - WS-gated exit
-# Identical to strategy_1 but exits on the funding-fee WS event instead of a fixed offset.
+# Strategy 1 WS: Negative Funding LONG - Funding-Fee-Event Exit
+# Identical entry to strategy_1 but exits on the funding-fee WS event instead of a fixed offset.
 
 strategy_id: 'strategy_1_ws'
-enabled: true
-negativeFundingThresholdPercent: 0.3
-entryOffsetSeconds: 3
-fundingFeeTimeoutSeconds: 10
-amountUsd: 10
-leverage: 5
+direction: 'long'
+negative_funding_threshold_percent: -1.1 # -1.1%
+entry_offset_seconds: 5 # Enter at T_funding - 5s
+funding_fee_timeout_seconds: 30 # Fallback deadline if the WS event is missed
+amount_usd: 20
+leverage: 4

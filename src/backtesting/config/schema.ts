@@ -115,6 +115,21 @@ export interface Strategy1Config {
   leverage: number
 }
 
+/** Strategy 1-WS: Negative Funding LONG - Funding-Fee-Event Exit */
+export interface Strategy1WsConfig {
+  strategy_id: 'strategy_1_ws'
+  direction: 'long'
+  negative_funding_threshold_percent: number
+  /** Seconds before T_funding to enter (>= 2, market-order latency) */
+  entry_offset_seconds: number
+  /** Max seconds after T_settle before the missed-WS-event fallback timeout fires (5..120) */
+  funding_fee_timeout_seconds: number
+  /** Notional size in USD */
+  amount_usd: number
+  /** Leverage multiplier */
+  leverage: number
+}
+
 /** Strategy 2: Negative Funding LONG - Retracement Exit */
 export interface Strategy2Config {
   strategy_id: 'strategy_2'
@@ -204,7 +219,13 @@ export interface Strategy42Config {
 }
 
 /** Union of all strategy configs */
-export type StrategyConfig = Strategy1Config | Strategy2Config | Strategy3Config | Strategy41Config | Strategy42Config
+export type StrategyConfig =
+  | Strategy1Config
+  | Strategy1WsConfig
+  | Strategy2Config
+  | Strategy3Config
+  | Strategy41Config
+  | Strategy42Config
 
 /** Fully resolved config: base merged with strategy */
 export interface ResolvedConfig {
@@ -213,6 +234,13 @@ export interface ResolvedConfig {
 }
 
 /** All valid strategy IDs */
-export const VALID_STRATEGY_IDS = ['strategy_1', 'strategy_2', 'strategy_3a', 'strategy_4_1a', 'strategy_4_2a'] as const
+export const VALID_STRATEGY_IDS = [
+  'strategy_1',
+  'strategy_1_ws',
+  'strategy_2',
+  'strategy_3a',
+  'strategy_4_1a',
+  'strategy_4_2a',
+] as const
 
 export type StrategyId = (typeof VALID_STRATEGY_IDS)[number]

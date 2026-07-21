@@ -45,7 +45,8 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
     feeSchedule,
     base.market_slippage_pct / 100,
     base.order_latency_ms,
-    base.funding_settlement
+    base.funding_settlement,
+    { missRate: base.ws_event_miss_rate, extraDelaySeconds: base.ws_exit_extra_delay_seconds }
   )
 
   const trades: TradeResult[] = []

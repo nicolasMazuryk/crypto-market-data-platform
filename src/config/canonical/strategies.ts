@@ -71,7 +71,7 @@ export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
     btExtra: { direction: z.literal('long').default('long') },
   },
   strategy_1_ws: {
-    hasBacktest: false,
+    hasBacktest: true,
     params: [
       'negative_funding_threshold_percent',
       'entry_offset_seconds',
@@ -79,6 +79,7 @@ export const STRATEGY_DEFS: Record<StrategyId, StrategyDef> = {
       'amount_usd',
       'leverage',
     ],
+    btExtra: { direction: z.literal('long').default('long') },
   },
   strategy_2: {
     hasBacktest: true,
