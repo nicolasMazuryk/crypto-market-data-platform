@@ -179,6 +179,7 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
     expect(result.real_settlement_ts).toBe(
       new Date(fundingTime.getTime() + 3000).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19)
     )
+    expect(result.t_drop_offset_s).toBe(3)
     // Exit at T+5 (T_drop T+3 + exit_offset 2)
     const entryMs = fundingTime.getTime() - 5000
     const exitMs = entryMs + result.hold_duration * 1000
@@ -269,6 +270,7 @@ describe('E2E: Strategy 1 — Settlement Localization', () => {
     if (!result) throw new Error('expected result')
 
     expect(result.real_settlement_detected).toBe(false)
+    expect(result.t_drop_offset_s).toBeNull()
     // Falls back to latest edge T+10: exit at T+10+2 = T+12
     const entryMs = fundingTime.getTime() - 5000
     const exitMs = entryMs + result.hold_duration * 1000

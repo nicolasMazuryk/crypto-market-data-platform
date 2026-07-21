@@ -5,6 +5,7 @@ import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
 import { applyOrderLatency } from '../engine/latency.js'
+import { computeTDropOffsetSeconds } from '../engine/localization.js'
 import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 
 /**
@@ -102,6 +103,7 @@ export class Strategy1 implements BaseStrategy {
       funding_received: applyFunding,
       real_settlement_ts: tDropTs,
       real_settlement_detected: !noDropLocalized,
+      t_drop_offset_s: computeTDropOffsetSeconds(context, event.funding_time),
     }
   }
 }

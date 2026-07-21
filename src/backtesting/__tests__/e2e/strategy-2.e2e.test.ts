@@ -172,6 +172,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     expect(result.real_settlement_ts).toBe(
       new Date(fundingTime.getTime() + 4000).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19)
     )
+    expect(result.t_drop_offset_s).toBe(4)
     // exit at T+5 (not T+2)
     const exitTimeMs = fundingTime.getTime() - 5000 + result.hold_duration * 1000
     expect(exitTimeMs).toBe(fundingTime.getTime() + 5000)
@@ -216,6 +217,7 @@ describe('E2E: Strategy 2 — Retracement Exit', () => {
     if (!result) throw new Error('expected result')
     expect(result.exit_reason).toBe('tp_hit')
     expect(result.real_settlement_detected).toBe(true)
+    expect(result.t_drop_offset_s).toBe(4)
     // exit at T+5 (not T+2 or T+4): tpValidFrom=max(T+2, T+4+1s floor)=T+5, bid_high at T+5=50005>pTarget
     const exitTimeMs = fundingTime.getTime() - 5000 + result.hold_duration * 1000
     expect(exitTimeMs).toBe(fundingTime.getTime() + 5000)

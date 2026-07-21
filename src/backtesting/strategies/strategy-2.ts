@@ -7,6 +7,7 @@ import { checkStopFill } from '../orders/stop-order.js'
 import { calculatePnl } from '../pnl/calculator.js'
 import { shouldApplyFunding, fundingFraction } from '../pnl/funding-applicability.js'
 import { toClickHouseDateTime } from '../../db/types.js'
+import { computeTDropOffsetSeconds } from '../engine/localization.js'
 import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 import type { ExitReason } from '../config/schema.js'
 
@@ -185,6 +186,7 @@ export class Strategy2 implements BaseStrategy {
       funding_received: applyFunding,
       real_settlement_ts: tDropTs,
       real_settlement_detected: !noDropLocalized,
+      t_drop_offset_s: computeTDropOffsetSeconds(context, event.funding_time),
     }
   }
 }

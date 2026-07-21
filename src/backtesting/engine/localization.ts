@@ -26,3 +26,10 @@ export function buildLookaheadContext(
     gated,
   }
 }
+
+/** `(T_drop − T_settle)` in seconds, or `null` when no drop was localized (fallback edge used). */
+export function computeTDropOffsetSeconds(context: LookaheadContext, fundingTime: Date): number | null {
+  if (context.noDropLocalized) return null
+  const tDropMs = new Date(context.tDropTs.replace(' ', 'T') + 'Z').getTime()
+  return (tDropMs - fundingTime.getTime()) / 1000
+}

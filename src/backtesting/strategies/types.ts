@@ -63,6 +63,8 @@ export interface TradeResult {
   real_settlement_ts?: string
   /** Whether a qualifying drop candle was localized (false = fallback to the window edge) */
   real_settlement_detected?: boolean
+  /** `T_drop - T_settle` in seconds; `null` on fallback (strategy_1, strategy_2 only) */
+  t_drop_offset_s?: number | null
 }
 
 /** Base strategy interface that all strategies implement */

@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 
-import type { ResolvedConfig, ErrorCode } from '../config/schema.js'
+import type { ResolvedConfig } from '../config/schema.js'
 import { EXIT_REASONS, ERROR_CODES } from '../../config/canonical/enums.js'
 import type { SkipReason } from '../data/types.js'
 import type { TradeResult } from '../strategies/types.js'
@@ -16,15 +16,17 @@ import type {
   DataQualitySection,
   ReproducibilitySection,
   TradeLogEntry,
+  ErrorLogEntry,
 } from './types.js'
 import * as m from './metrics.js'
 import { computeEquityCurveMetrics } from './equity-curve-metrics.js'
+import { buildConservatismReport } from './conservatism.js'
 
 interface BuildReportInput {
   config: ResolvedConfig
   trades: TradeResult[]
-  /** Representable terminals reached via failure/no-fill paths (§12.2), one per emitted code. */
-  errorCodes?: ErrorCode[]
+  /** Representable terminals reached via failure/no-fill paths (§12.2), one per emitted event. */
+  errorEvents?: ErrorLogEntry[]
   totalEventsScanned: number
   skipReasons: SkipReason[]
   triggeredCount: number
@@ -38,7 +40,7 @@ export function buildReport(input: BuildReportInput): BacktestReport {
   const {
     config,
     trades,
-    errorCodes = [],
+    errorEvents = [],
     totalEventsScanned,
     skipReasons,
     triggeredCount,
@@ -136,10 +138,10 @@ export function buildReport(input: BuildReportInput): BacktestReport {
   // Error code distribution (all §12.2 codes, zero-filled for unused ones)
   const errorCodeDist: ErrorCodeDistribution = {} as ErrorCodeDistribution
   for (const code of ERROR_CODES) {
-    const count = errorCodes.filter(c => c === code).length
+    const count = errorEvents.filter(e => e.error_code === code).length
     errorCodeDist[code] = {
       count,
-      pct: errorCodes.length > 0 ? count / errorCodes.length : 0,
+      pct: errorEvents.length > 0 ? count / errorEvents.length : 0,
     }
   }
 
@@ -168,25 +170,55 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     git_commit: gitCommit,
   }
 
-  // Trade log
+  // Trade log — unified per-event audit log: every triggered event that reached a terminal
+  // state (trade or no-position error) gets one entry, sorted chronologically for determinism.
   let tradeLog: TradeLogEntry[] | undefined
   if (config.base.reporting.include_trade_log) {
-    tradeLog = trades.map(t => ({
+    const tradeEntries: TradeLogEntry[] = trades.map(t => ({
       timestamp: t.funding_time.toISOString(),
       symbol: t.symbol,
       exchange: t.exchange,
       trigger_funding_rate: t.funding_rate,
       cumulative_funding_rate: t.cumulative_funding_rate ?? t.funding_rate,
       funding_events_collected: t.funding_events_collected ?? 1,
-      delta_pnl: t.pnl.delta_pnl,
-      spread_pnl: t.pnl.spread_pnl,
-      funding_pnl: t.pnl.funding_pnl,
-      fees: t.pnl.fees,
-      net_pnl: t.pnl.net_pnl,
+      delta_pnl: t.pnl.delta_pnl * 100,
+      spread_pnl: t.pnl.spread_pnl * 100,
+      funding_pnl: t.pnl.funding_pnl * 100,
+      fees: t.pnl.fees * 100,
+      net_pnl: t.pnl.net_pnl * 100,
       exit_reason: t.exit_reason,
+      error_code: null,
       hold_duration: t.hold_duration,
+      fill_count: t.fill_count,
+      funding_received: t.funding_received,
+      t_drop_offset_s: t.t_drop_offset_s ?? null,
     }))
+    const errorEntries: TradeLogEntry[] = errorEvents.map(e => ({
+      timestamp: e.funding_time.toISOString(),
+      symbol: e.symbol,
+      exchange: e.exchange,
+      trigger_funding_rate: e.funding_rate,
+      cumulative_funding_rate: null,
+      funding_events_collected: null,
+      delta_pnl: null,
+      spread_pnl: null,
+      funding_pnl: null,
+      fees: null,
+      net_pnl: null,
+      exit_reason: null,
+      error_code: e.error_code,
+      hold_duration: null,
+      fill_count: null,
+      funding_received: null,
+      t_drop_offset_s: e.t_drop_offset_s,
+    }))
+    tradeLog = [...tradeEntries, ...errorEntries].sort(
+      (a, b) =>
+        a.timestamp.localeCompare(b.timestamp) || a.exchange.localeCompare(b.exchange) || a.symbol.localeCompare(b.symbol)
+    )
   }
+
+  const conservatism = buildConservatismReport(config, trades, errorEvents)
 
   return {
     strategy_id: config.strategy.strategy_id,
@@ -200,6 +232,7 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     data_quality: dataQuality,
     reproducibility: reproducibility,
     trade_log: tradeLog,
+    conservatism,
     equity_curve: equityCurve,
     equity_curve_timestamps: equityCurveTimestamps,
     equity_curve_metrics: equityCurveMetrics,

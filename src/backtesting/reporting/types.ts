@@ -73,7 +73,21 @@ export interface ReproducibilitySection {
   git_commit: string | null
 }
 
-/** Per-trade log entry */
+/** Enriched, report-facing shape for a no-position terminal (§12.2 error_code). */
+export interface ErrorLogEntry {
+  exchange: string
+  symbol: string
+  funding_time: Date
+  funding_rate: number
+  error_code: ErrorCode
+  t_drop_offset_s: number | null
+}
+
+/**
+ * Per-event audit log entry (§10.3). Every triggered funding event that reached a terminal
+ * state gets one entry — a trade or a no-position error — with `exit_reason` XOR `error_code`
+ * set. P&L fields are percent (×100 of the internal fraction-based `PnlBreakdown`).
+ */
 export interface TradeLogEntry {
   timestamp: string
   symbol: string
@@ -81,17 +95,38 @@ export interface TradeLogEntry {
   /** Funding rate of the trigger event (single event). */
   trigger_funding_rate: number
   /** Sum of all collected funding rates across the carry period. */
-  cumulative_funding_rate: number
+  cumulative_funding_rate: number | null
   /** Number of funding events accrued during the carry period. */
-  funding_events_collected: number
-  delta_pnl: number
-  spread_pnl: number
-  funding_pnl: number
-  fees: number
-  net_pnl: number
-  exit_reason: ExitReason
-  hold_duration: number
+  funding_events_collected: number | null
+  /** Price change P&L, percent. */
+  delta_pnl: number | null
+  /** Spread P&L, percent. */
+  spread_pnl: number | null
+  /** Funding fee P&L, percent. */
+  funding_pnl: number | null
+  /** Total fees, percent. */
+  fees: number | null
+  /** Net P&L, percent. */
+  net_pnl: number | null
+  exit_reason: ExitReason | null
+  error_code: ErrorCode | null
+  hold_duration: number | null
+  fill_count: number | null
+  funding_received: boolean | null
+  t_drop_offset_s: number | null
 }
+
+/** Single item in the §14 conservatism report. */
+export interface ConservatismItem {
+  key: string
+  description: string
+  active: boolean
+  estimated_bias_pct: number | null
+  /** Why bias is null, or the measurement basis, when relevant. */
+  note?: string
+}
+
+export type ConservatismReport = ConservatismItem[]
 
 /** Per-metric scores for equity curve quality */
 export interface EquityCurveScores {
@@ -128,6 +163,7 @@ export interface BacktestReport {
   data_quality: DataQualitySection
   reproducibility: ReproducibilitySection
   trade_log?: TradeLogEntry[] | undefined
+  conservatism: ConservatismReport
   equity_curve: number[]
   equity_curve_timestamps: string[]
   equity_curve_metrics: EquityCurveMetrics | null

@@ -7,11 +7,11 @@ import type { SkipReason } from '../data/types.js'
 
 import { createStrategy } from '../strategies/registry.js'
 import type { TradeResult } from '../strategies/types.js'
-import type { ErrorCode } from '../config/schema.js'
 import { buildReport } from '../reporting/report-builder.js'
-import type { BacktestReport } from '../reporting/types.js'
+import type { BacktestReport, ErrorLogEntry } from '../reporting/types.js'
 import { getGitCommit } from './utils.js'
-import { buildLookaheadContext } from './localization.js'
+import { buildLookaheadContext, computeTDropOffsetSeconds } from './localization.js'
+import { sortMostNegativeFirst, isWithinThresholdBand, isSnapshotFresh } from './selection-guards.js'
 
 export interface BacktestRunResult {
   report: BacktestReport
@@ -49,7 +49,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   )
 
   const trades: TradeResult[] = []
-  const errorCodes: ErrorCode[] = []
+  const errorEvents: ErrorLogEntry[] = []
   const allSkipReasons: SkipReason[] = []
   let triggeredCount = 0
   let unfilledCount = 0
@@ -61,7 +61,16 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
       ? Math.abs(strategyConfig.negative_funding_threshold_percent) / 100
       : 0
 
-  const events = await queryFundingEvents(base.exchange, base.symbol, base.start_date, base.end_date, fundingThreshold)
+  const queriedEvents = await queryFundingEvents(
+    base.exchange,
+    base.symbol,
+    base.start_date,
+    base.end_date,
+    fundingThreshold
+  )
+  // §9 most-negative-first selection priority; final trade_log ordering is unaffected since
+  // trades are re-sorted chronologically before the report is built.
+  const events = sortMostNegativeFirst(queriedEvents)
 
   totalEventsScanned = events.length
   logger.info({ events: events.length }, 'Found funding events meeting threshold')
@@ -90,6 +99,20 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
         continue
       }
 
+      // §9 0.1pp band guard: the SQL query already requires abs(funding_rate) >= threshold,
+      // strictly tighter than the 0.1pp band, so this is satisfied by construction — kept
+      // explicit so the guard is documented and directly testable at the selection point.
+      if (!isWithinThresholdBand(Math.abs(event.funding_rate) * 100, fundingThreshold * 100)) {
+        continue
+      }
+      // §9 60s staleness guard: the backtest has exactly one settled-rate observation *at* the
+      // decision instant (no separate polled snapshot exists — this is the
+      // settled-rate-as-selection-proxy conservatism, §14), so staleness is trivially 0 and
+      // this guard always passes by construction.
+      if (!isSnapshotFresh(0)) {
+        continue
+      }
+
       triggeredCount++
 
       // Engine performs the one sanctioned lookahead (§3.2): localize T_drop and hand the
@@ -104,7 +127,14 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
       if (result === null) {
         unfilledCount++
       } else if ('error_code' in result) {
-        errorCodes.push(result.error_code)
+        errorEvents.push({
+          exchange: event.exchange,
+          symbol: event.symbol,
+          funding_time: event.funding_time,
+          funding_rate: event.funding_rate,
+          error_code: result.error_code,
+          t_drop_offset_s: computeTDropOffsetSeconds(context, event.funding_time),
+        })
       } else {
         trades.push(result)
       }
@@ -134,7 +164,7 @@ export async function runBacktestEngine(config: ResolvedConfig): Promise<Backtes
   const report = buildReport({
     config,
     trades,
-    errorCodes,
+    errorEvents,
     totalEventsScanned,
     skipReasons: allSkipReasons,
     triggeredCount,
