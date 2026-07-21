@@ -1203,7 +1203,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const feeUnsub = bus.on('ws.funding_fee', event => {
         if (event.exchange !== intent.exchange) return
         if (event.symbol !== intent.symbol) return
-        if (event.fundingTime < fundingTs - toleranceMs) return
+        if (event.fundingTime < fundingTs - toleranceMs || event.fundingTime > fundingTs + toleranceMs) return
         openFundingGate()
         feeUnsub()
       })

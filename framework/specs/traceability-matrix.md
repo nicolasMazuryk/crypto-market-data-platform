@@ -26,7 +26,7 @@ Maps every requirement to its verdict and the task(s) that close it. **Conformin
 | E1 kill-switch modes                 | §7.1        | Contradicts (naming) | 23                | —              |
 | F3 submission stagger default        | §8          | Partial/Contradicts  | 22                | —              |
 | F4 rate-limit reservation            | §8          | Missing              | 22                | —              |
-| F6 REST funding poll coverage        | §8          | Partial              | 22                | —              |
+| F6 REST funding poll coverage        | §8          | Partial              | 22, 25            | —              |
 | F7 S2 tracker ±5s upper bound        | §8          | Partial              | 22                | —              |
 | F8 OKX deltas                        | §8          | Config-owned         | 5, 22             | R9             |
 | G2 60s stale snapshot                | §9.2        | Contradicts          | 22                | —              |
@@ -103,6 +103,7 @@ Maps every requirement to its verdict and the task(s) that close it. **Conformin
 | 22   | F3, F4, F6, F7, F8, G2, G3, R9        |
 | 23   | E1, OQ-3                              |
 | 24   | S6 validation, S6 nuance              |
+| 25   | F6 (adapter gap)                      |
 
 ## Conforming requirements (no task)
 

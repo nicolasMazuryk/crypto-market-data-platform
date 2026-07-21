@@ -289,3 +289,28 @@ describe('strategy_1 live YAMLs (Task 06 exitOffsetSeconds >=6 migration)', () =
     ).toThrow()
   })
 })
+
+// Task 22 (F8/R9): OKX per-exchange deltas (§8) are config-driven via per-exchange YAML, not
+// hardcoded engine constants — assert the canonical params load straight through with no fallback.
+describe('OKX per-exchange deltas load from live-configs YAML (F8/R9, verification only)', () => {
+  it('strategy_1-okx.yaml sets leverage=4 (binance=5)', () => {
+    const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', 'strategy_1-okx.yaml')
+    const raw = YAML.parse(readFileSync(yamlPath, 'utf8')) as Record<string, unknown>
+    const config = parseEngineConfig({ mode: 'dry_run', exchanges: [], ...raw })
+
+    expect(config.strategies[0]?.id).toBe('strategy_1')
+    expect((config.strategies[0] as { leverage?: number }).leverage).toBe(4)
+  })
+
+  it.each(['strategy_1_ws', 'strategy_6'])(
+    '%s-okx.yaml sets fundingFeeTimeoutSeconds=45 (binance=10)',
+    strategyId => {
+      const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', `${strategyId}-okx.yaml`)
+      const raw = YAML.parse(readFileSync(yamlPath, 'utf8')) as Record<string, unknown>
+      const config = parseEngineConfig({ mode: 'dry_run', exchanges: [], ...raw })
+
+      expect(config.strategies[0]?.id).toBe(strategyId)
+      expect((config.strategies[0] as { fundingFeeTimeoutSeconds?: number }).fundingFeeTimeoutSeconds).toBe(45)
+    }
+  )
+})

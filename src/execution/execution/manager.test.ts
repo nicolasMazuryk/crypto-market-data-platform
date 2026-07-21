@@ -982,6 +982,191 @@ describe('UNDOC-03: spawnRetracementTracker re-arm on start', () => {
     // TP price = P_low + (anchor - P_low) * retracementPct = 48000 + (50000-48000)*0.5 = 49000
     expect(tpCall![0].price).toBeCloseTo(49000)
   })
+
+  // Task 22: S2 (strategy_2) retracement funding-fee gate now checks both bounds of the
+  // ±5s tolerance window around fundingTs (previously only checked the lower bound).
+  function makeFundingEventRetracementState(now: number, fundingTs: number): { intent: TradeIntent; state: IntentState } {
+    const intent = makeIntent({
+      id: 'retracement-intent',
+      volume: 0.001,
+      exitPolicy: {
+        kind: 'sl_tp_deadline_retracement_funding_event',
+        slPct: 1,
+        retracementPct: 0.5,
+        anchorPrice: 50000,
+        deadlineAt: now + 120_000,
+        fundingTs,
+        timeoutAt: now + 120_000, // far enough out that the hard timeout won't fire during the test
+      },
+    })
+    const state: IntentState = {
+      intent,
+      status: 'monitoring',
+      filledQty: 0.001,
+      avgEntryPrice: 50000,
+      updatedAt: now,
+    }
+    return { intent, state }
+  }
+
+  function makeRetracementManager(state: IntentState) {
+    const bus = createEventBus()
+    const clock = createClock()
+    const ids = createIds()
+    const metricsReg = new MetricsRegistry()
+    const metrics = registerExecutionMetrics(metricsReg)
+    const rest = makeRestAdapter()
+    const monitor = makeMonitor()
+
+    const markets: MarketMetadataProvider = {
+      list: () => [makeMarket()],
+      get: () => makeMarket(),
+      resolve: () => undefined,
+      refresh: vi.fn(),
+      onUpdate: vi.fn().mockReturnValue(() => {}),
+    }
+
+    const manager = createExecutionManager({
+      bus,
+      clock,
+      ids,
+      logger: createExecutionLogger(),
+      metrics,
+      restAdapters: new Map([['binance', rest]]),
+      state: makeStateStore(),
+      markets,
+      killSwitch: makeKillSwitch(),
+      monitor,
+      preflight: () => ({ ok: true, qty: 0.001 }),
+      refPrice: () => 48000,
+      initialState: {
+        intentStates: new Map([[state.intent.id, state]]),
+        byEntryOrderId: new Map(),
+        byEntryExchangeOrderId: new Map(),
+        byCloseOrderId: new Map(),
+        byCloseExchangeOrderId: new Map(),
+      },
+    })
+    manager.start()
+    return { manager, bus }
+  }
+
+  it('S2 funding-fee gate does NOT open when event.fundingTime is more than 5s after fundingTs', async () => {
+    const now = Date.now()
+    const fundingTs = now
+    const { intent, state } = makeFundingEventRetracementState(now, fundingTs)
+    const { bus } = makeRetracementManager(state)
+
+    const gateOpened = vi.fn()
+    bus.on('intent.funding_gate_opened', gateOpened)
+
+    bus.emit('ws.funding_fee', {
+      exchange: intent.exchange,
+      symbol: intent.symbol,
+      fundingTime: fundingTs + 6_000, // 6s after fundingTs — outside the ±5s tolerance
+      fundingRate: -0.006,
+      fundingAmount: -0.05,
+      asset: 'USDT',
+      positionQty: 0.001,
+      receivedAt: now,
+    })
+
+    await new Promise(r => setTimeout(r, 20))
+
+    expect(gateOpened).not.toHaveBeenCalled()
+  })
+
+  it('S2 funding-fee gate opens when event.fundingTime is within the ±5s tolerance', async () => {
+    const now = Date.now()
+    const fundingTs = now
+    const { intent, state } = makeFundingEventRetracementState(now, fundingTs)
+    const { bus } = makeRetracementManager(state)
+
+    const gateOpened = vi.fn()
+    bus.on('intent.funding_gate_opened', gateOpened)
+
+    bus.emit('ws.funding_fee', {
+      exchange: intent.exchange,
+      symbol: intent.symbol,
+      fundingTime: fundingTs + 4_000, // within tolerance
+      fundingRate: -0.006,
+      fundingAmount: -0.05,
+      asset: 'USDT',
+      positionQty: 0.001,
+      receivedAt: now,
+    })
+
+    await new Promise(r => setTimeout(r, 20))
+
+    expect(gateOpened).toHaveBeenCalledWith({ intentId: intent.id })
+  })
+})
+
+// Task 22 (F6): strategy_6 MAIN entry gate opens from a poller-emitted ws.funding_fee event too —
+// proving funding-fee-event coverage extends beyond the S2 tracker gate above.
+describe('Task 22 F6: strategy_6 entry gate opens from ws.funding_fee event', () => {
+  it('places MAIN order once ws.funding_fee fires within the ±5s tolerance around fundingTs', async () => {
+    const now = Date.now()
+    const fundingTs = now + 5_000
+
+    const rest = makeRestAdapter()
+    rest.getOrder = vi.fn().mockImplementation(
+      async (params: { clientOrderId?: string; exchangeOrderId?: string }) =>
+        ({
+          clientOrderId: params.clientOrderId ?? 'pre',
+          exchangeOrderId: params.exchangeOrderId ?? 'eid-pre',
+          status: 'filled',
+          filledQty: 0.001,
+          side: 'sell',
+          type: 'market',
+          reduceOnly: false,
+          submittedAt: now,
+          updatedAt: now,
+        }) satisfies Order
+    )
+
+    const { manager, bus } = makeManager({ restAdapter: rest })
+
+    const intent = makeIntent({
+      entryPolicy: {
+        kind: 'pre_funding_then_main',
+        preFundingSide: 'short',
+        preFundingVolume: 0.001,
+        mainSide: 'long',
+        mainVolume: 0.002,
+      },
+      exitPolicy: {
+        kind: 'sl_tp_deadline_post_funding_event',
+        tpMultiplier: 1,
+        slMultiplier: 1,
+        fundingTs,
+        timeoutAt: now + 120_000,
+        deadlineAt: now + 300_000,
+      },
+    })
+
+    const placedKinds: string[] = []
+    bus.on('order.placed', ev => placedKinds.push(ev.kind))
+
+    await manager.submit(intent)
+
+    // Simulate the funding-income poller emitting ws.funding_fee for this (exchange, symbol).
+    bus.emit('ws.funding_fee', {
+      exchange: intent.exchange,
+      symbol: intent.symbol,
+      fundingTime: fundingTs + 1_000, // within ±5s tolerance
+      fundingRate: -0.006,
+      fundingAmount: -0.05,
+      asset: 'USDT',
+      positionQty: 0.001,
+      receivedAt: now,
+    })
+
+    await new Promise(r => setTimeout(r, 20))
+
+    expect(placedKinds).toContain('entry')
+    expect(rest.createOrder).toHaveBeenCalledWith(expect.objectContaining({ side: 'buy', qty: 0.002 }))
+  })
 })
 
 describe('Task 3 fixes', () => {

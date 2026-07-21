@@ -159,6 +159,12 @@ export function runRestAdapterConformance(fixtures: RestConformanceFixtures): vo
       ).resolves.not.toThrow()
     })
 
+    it('cancelOrder: acquires order_write with critical priority', async () => {
+      const { adapter, limiter } = fixtures.makeAdapter()
+      await adapter.cancelOrder({ symbol: fixtures.sampleSymbol, clientOrderId: 'cid-1' })
+      expect(limiter.acquire).toHaveBeenCalledWith('order_write', expect.objectContaining({ priority: 'critical' }))
+    })
+
     it('cancelOrder: OrderNotFound → no-op', async () => {
       const nfErr = new Error('not found')
       nfErr.name = 'OrderNotFound'

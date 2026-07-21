@@ -436,6 +436,124 @@ describe('FundingEventScheduler (hourly wake)', () => {
     expect(evaluateSpy).toHaveBeenCalledWith('binance', 'ANYRATE')
     scheduler.stop()
   })
+
+  it('defaults staleSnapshotMaxAgeMs to 60s: a 45s-old snapshot survives, a 61s-old snapshot is filtered', () => {
+    const nft = FIRST_WAKE + 60_000
+    const latestMap = new Map([
+      ['FRESHUSDT', makeSnapshot('FRESHUSDT', nft, FIRST_WAKE - 45_000, -0.5)],
+      ['STALEUSDT', makeSnapshot('STALEUSDT', nft, FIRST_WAKE - 61_000, -0.5)],
+    ])
+    const evaluateSpy = vi.fn()
+
+    const scheduler = createFundingEventScheduler({
+      clock: makeClock(),
+      evaluator: {
+        evaluate: (ex, sym) => {
+          evaluateSpy(ex, sym)
+          return []
+        },
+      },
+      funding: makeFunding(latestMap),
+      exchanges: ['binance'],
+      configsByStrategy: makeConfig(10),
+      config: makeSchedulerConfig(),
+      evaluateLeadMs: 1500,
+      logger: noopLogger,
+    })
+
+    vi.advanceTimersByTime(FIRST_WAKE + 100_000)
+
+    expect(evaluateSpy).toHaveBeenCalledWith('binance', 'FRESHUSDT')
+    expect(evaluateSpy).not.toHaveBeenCalledWith('binance', 'STALEUSDT')
+
+    scheduler.stop()
+  })
+
+  it('sorts candidates descending by fundingRate when only positive (S6) thresholds are enabled', () => {
+    const nft = FIRST_WAKE + 60_000
+    const latestMap = new Map([
+      ['LOWUSDT', makeSnapshot('LOWUSDT', nft, FIRST_WAKE - 10_000, 0.5)],
+      ['HIGHUSDT', makeSnapshot('HIGHUSDT', nft, FIRST_WAKE - 10_000, 0.9)],
+      ['MIDUSDT', makeSnapshot('MIDUSDT', nft, FIRST_WAKE - 10_000, 0.7)],
+    ])
+    const evaluateSpy = vi.fn()
+    const configs = new Map<StrategyId, StrategyConfig>([
+      [
+        'strategy_6',
+        {
+          id: 'strategy_6',
+          enabled: true,
+          mainSide: 'long',
+          fundingThresholdPercent: 0.5,
+          entryOffsetSeconds: 10,
+          fundingFeeTimeoutSeconds: 10,
+          tpMultiplier: 1,
+          slMultiplier: 1,
+          deadlineSeconds: 300,
+          mainAmountUsd: 10,
+          leverage: 5,
+        },
+      ],
+    ])
+
+    const scheduler = createFundingEventScheduler({
+      clock: makeClock(),
+      evaluator: {
+        evaluate: (ex, sym) => {
+          evaluateSpy(ex, sym)
+          return []
+        },
+      },
+      funding: makeFunding(latestMap),
+      exchanges: ['binance'],
+      configsByStrategy: configs,
+      config: makeSchedulerConfig(),
+      evaluateLeadMs: 1500,
+      logger: noopLogger,
+    })
+
+    vi.advanceTimersByTime(FIRST_WAKE + 100_000)
+
+    // All three candidates share the same nextFundingTimestamp, so equal-delay timers fire in
+    // scheduling order — which reflects the sort order (most extreme positive first).
+    const order = evaluateSpy.mock.calls.map(call => call[1] as string)
+    expect(order).toEqual(['HIGHUSDT', 'MIDUSDT', 'LOWUSDT'])
+
+    scheduler.stop()
+  })
+
+  it('keeps ascending sort (most negative first) when a negative-threshold strategy is enabled', () => {
+    const nft = FIRST_WAKE + 60_000
+    const latestMap = new Map([
+      ['LOWUSDT', makeSnapshot('LOWUSDT', nft, FIRST_WAKE - 10_000, -0.5)],
+      ['HIGHUSDT', makeSnapshot('HIGHUSDT', nft, FIRST_WAKE - 10_000, -0.9)],
+      ['MIDUSDT', makeSnapshot('MIDUSDT', nft, FIRST_WAKE - 10_000, -0.7)],
+    ])
+    const evaluateSpy = vi.fn()
+
+    const scheduler = createFundingEventScheduler({
+      clock: makeClock(),
+      evaluator: {
+        evaluate: (ex, sym) => {
+          evaluateSpy(ex, sym)
+          return []
+        },
+      },
+      funding: makeFunding(latestMap),
+      exchanges: ['binance'],
+      configsByStrategy: makeConfig(10),
+      config: makeSchedulerConfig(),
+      evaluateLeadMs: 1500,
+      logger: noopLogger,
+    })
+
+    vi.advanceTimersByTime(FIRST_WAKE + 100_000)
+
+    const order = evaluateSpy.mock.calls.map(call => call[1] as string)
+    expect(order).toEqual(['HIGHUSDT', 'MIDUSDT', 'LOWUSDT'])
+
+    scheduler.stop()
+  })
 })
 
 describe('FundingEventScheduler with fundingTimeOverrideMs', () => {

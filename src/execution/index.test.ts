@@ -8,6 +8,9 @@ import YAML from 'yaml'
 import type { CcxtMarket } from '../exchanges/types.js'
 import { makeBtcPerp, makeEthPerp } from './test-helpers/ccxtMock.js'
 import { REQUIRED_IP_ALLOW_LIST } from './provisioning/registry/schema.js'
+import type * as ManagerModule from './execution/manager.js'
+
+const { createExecutionManagerSpy } = vi.hoisted(() => ({ createExecutionManagerSpy: vi.fn() }))
 
 const { MockEx, ccxtMock, loggerInfo } = vi.hoisted(() => {
   class MockEx {
@@ -60,6 +63,16 @@ vi.mock('./core/logger.js', () => {
   }
   return { createExecutionLogger: () => logger }
 })
+vi.mock('./execution/manager.js', async importOriginal => {
+  const actual = await importOriginal<typeof ManagerModule>()
+  return {
+    ...actual,
+    createExecutionManager: (opts: Parameters<typeof actual.createExecutionManager>[0]) => {
+      createExecutionManagerSpy(opts)
+      return actual.createExecutionManager(opts)
+    },
+  }
+})
 
 import { startEngine, type EngineHandle } from './index.js'
 
@@ -86,6 +99,7 @@ describe('execution engine slice 1 bootstrap', () => {
     handle = undefined
     MockEx.reset()
     loggerInfo.mockClear()
+    createExecutionManagerSpy.mockClear()
     for (const p of tmpPaths.splice(0)) {
       const dir = p.endsWith('.yaml') ? p.slice(0, p.lastIndexOf('/')) : p
       if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
@@ -116,6 +130,23 @@ describe('execution engine slice 1 bootstrap', () => {
     const healthz = await fetchText(`http://127.0.0.1:${String(handle.metricsPort)}/healthz`)
     expect(healthz.status).toBe(200)
     expect(healthz.body).toBe('ok')
+  })
+
+  it('configures submissionStaggerMs for all supported exchanges', async () => {
+    MockEx.setup.binanceusdm = { markets: {} }
+    MockEx.setup.bitget = { markets: {} }
+
+    handle = await startEngine({
+      configPath: 'config/execution.dry-run.yaml',
+      metricsPort: 0,
+      healthPort: 0,
+    })
+
+    expect(createExecutionManagerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        submissionStaggerMs: { bybit: 150, binance: 100, okx: 100, gateio: 100, kucoin: 100, bitget: 100 },
+      })
+    )
   })
 
   it('fails fast on invalid config', async () => {

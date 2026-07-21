@@ -543,7 +543,7 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     ...(persistenceWriter ? { beforeCreateOrder: params => persistenceWriter.writeOrderSync(params) } : {}),
     // Stagger concurrent entry createOrder calls per exchange to prevent rate-limit exhaustion
     // when multiple intents evaluate at the same T_funding. Single-symbol cycles unaffected.
-    submissionStaggerMs: { bybit: 150, binance: 100 },
+    submissionStaggerMs: { bybit: 150, binance: 100, okx: 100, gateio: 100, kucoin: 100, bitget: 100 },
   })
   execManager.start()
 

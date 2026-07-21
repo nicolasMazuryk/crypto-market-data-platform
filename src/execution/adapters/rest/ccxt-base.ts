@@ -502,7 +502,9 @@ export function createCcxtRestAdapter(
     async cancelOrder(ref: OrderRef): Promise<void> {
       await ensureMarketsIfNeeded()
       const unified = resolve(ref.symbol)
-      return call('order_write', 'normal', 'cancelOrder', async () => {
+      // Priority classes are the §8 realization of the "10% reservation" intent: cancels
+      // must not queue behind normal traffic, so they get protective 'critical' priority.
+      return call('order_write', 'critical', 'cancelOrder', async () => {
         try {
           const params = spec.buildCancelOrderParams(ref)
           await requireCcxtMethod('cancelOrder').call(ccxtExchange, ref.exchangeOrderId ?? '', unified, params)

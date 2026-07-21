@@ -102,7 +102,7 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
     }
 
     let scheduledCount = 0
-    const staleMaxAgeMs = opts.staleSnapshotMaxAgeMs ?? 30_000
+    const staleMaxAgeMs = opts.staleSnapshotMaxAgeMs ?? 60_000
     const prewarmTasks: [Exchange, string, number][] = []
 
     for (const exchange of exchanges) {
@@ -120,9 +120,16 @@ export function createFundingEventScheduler(opts: FundingEventSchedulerOptions):
         return snap.nextFundingTimestamp >= now && snap.nextFundingTimestamp <= windowEnd
       })
 
+      // §9.3: positive-only threshold sets (S6) sort most-extreme-positive first; otherwise
+      // most-negative first (backward compatible; live runs one strategy per process).
+      const enabledThresholds = Array.from(configsByStrategy.values())
+        .filter(cfg => cfg.enabled)
+        .map(cfg => strategyThreshold(cfg))
+      const isPositiveOnly = enabledThresholds.length > 0 && enabledThresholds.every(t => t > 0)
+
       const snaps = eligibleWindowSnaps
         .filter(snap => isNearAnyEnabledThreshold(snap.fundingRatePercent, configsByStrategy))
-        .sort((a, b) => a.fundingRate - b.fundingRate) // most negative first
+        .sort((a, b) => (isPositiveOnly ? b.fundingRate - a.fundingRate : a.fundingRate - b.fundingRate))
 
       logger.info(
         {
