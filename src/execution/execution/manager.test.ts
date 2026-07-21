@@ -1444,3 +1444,75 @@ describe('Task 19: R11 ladder lifecycle (strategy_4_1a)', () => {
     expect(manager.get(intent.id)!.error?.code).toBe('ladder_no_fills')
   })
 })
+
+describe('Task 20: R11 single-limit lifecycle (strategy_4_2a)', () => {
+  function makeSingleLimitIntent(overrides: Partial<TradeIntent> = {}): TradeIntent {
+    const now = Date.now()
+    return makeIntent({
+      strategy: 'strategy_4_2a',
+      entryPolicy: { kind: 'limit', priceOffsetPct: 1, expireAt: now + 60000 },
+      exitPolicy: { kind: 'sl_tp_deadline', slPct: 3, tpPct: 0.5, deadlineAt: now + 60000, tpVariant: 'A' },
+      ...overrides,
+    })
+  }
+
+  it('anchors the SL to P_limit, not the fill price', async () => {
+    const rest = makeRestAdapter()
+    const { manager, bus, ids } = makeManager({ restAdapter: rest, refPrice: () => 50000 })
+    const intent = makeSingleLimitIntent()
+
+    await manager.submit(intent)
+
+    // limitPrice = 50000 * (1 - 1/100) = 49500
+    const entryCid = ids.forIntent(intent.id, 0)
+    // Filled at a price different from P_limit — SL must still anchor to P_limit (49500), not this fill.
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(entryCid, { status: 'filled', filledQty: 0.001, avgFillPrice: 49450 }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 20))
+
+    const slCall = vi.mocked(rest.createOrder).mock.calls.find(c => c[0].type === 'stop_market')
+    expect(slCall).toBeDefined()
+    expect(slCall![0].stopPrice).toBeCloseTo(49500 * (1 - 3 / 100))
+  })
+
+  it('anchors the TP to the fill price (unaffected by the SL anchor swap)', async () => {
+    const rest = makeRestAdapter()
+    const { manager, bus, ids } = makeManager({ restAdapter: rest, refPrice: () => 50000 })
+    const intent = makeSingleLimitIntent()
+
+    await manager.submit(intent)
+
+    const entryCid = ids.forIntent(intent.id, 0)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(entryCid, { status: 'filled', filledQty: 0.001, avgFillPrice: 49450 }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 20))
+
+    const tpCall = vi.mocked(rest.createOrder).mock.calls.find(c => c[0].type === 'limit' && c[0].reduceOnly)
+    expect(tpCall).toBeDefined()
+    expect(tpCall![0].price).toBeCloseTo(49450 * (1 + 0.5 / 100))
+  })
+
+  it('limit never fills by expireAt → limit_expired, no SL/TP placed', async () => {
+    const rest = makeRestAdapter()
+    const { manager, ids } = makeManager({ restAdapter: rest, refPrice: () => 50000 })
+    const intent = makeSingleLimitIntent({
+      entryPolicy: { kind: 'limit', priceOffsetPct: 1, expireAt: Date.now() + 10 },
+    })
+
+    await manager.submit(intent)
+    await new Promise(r => setTimeout(r, 40))
+
+    expect(manager.get(intent.id)!.status).toBe('error')
+    expect(manager.get(intent.id)!.error?.code).toBe('limit_expired')
+    expect(vi.mocked(rest.createOrder).mock.calls.some(c => c[0].type === 'stop_market')).toBe(false)
+    void ids
+  })
+})

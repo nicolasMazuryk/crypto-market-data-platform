@@ -65,6 +65,8 @@ export interface IntentState {
   fundingGateOpen?: boolean
   /** Incremented each time the close-placement branch is entered in handleMonitorExit. */
   closeAttemptCount?: number
+  /** Present for single limit_limit entries (R11): P_limit for SL anchoring. */
+  entryLimitPrice?: number
 }
 
 export interface ExecutionManager {

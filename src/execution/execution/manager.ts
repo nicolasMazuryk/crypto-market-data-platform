@@ -625,7 +625,12 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           )
         }
 
-        const slPrice = intent.side === 'long' ? price * (1 - slPct / 100) : price * (1 + slPct / 100)
+        // R11: SL anchors to P_limit for single-limit entries (precomputable at placement);
+        // TP stays anchored to the fill price. strategy_3 (market entry, no entryPolicy) and
+        // strategy_4_1a (ladder_limit, handled via spawnLadderTracker) are unaffected.
+        const slAnchor =
+          intent.entryPolicy?.kind === 'limit' && s.entryLimitPrice !== undefined ? s.entryLimitPrice : price
+        const slPrice = intent.side === 'long' ? slAnchor * (1 - slPct / 100) : slAnchor * (1 + slPct / 100)
         const tpPrice = intent.side === 'long' ? price * (1 + tpPct / 100) : price * (1 - tpPct / 100)
 
         if (opts.beforeCreateOrder) {
@@ -3653,6 +3658,8 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           intent.side === 'long'
             ? price * (1 - entryPolicy.priceOffsetPct / 100)
             : price * (1 + entryPolicy.priceOffsetPct / 100)
+
+        s.entryLimitPrice = limitPrice
 
         if (opts.beforeCreateOrder) {
           try {
