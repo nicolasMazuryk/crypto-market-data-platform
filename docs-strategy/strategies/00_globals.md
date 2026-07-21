@@ -162,7 +162,19 @@ Within one 1 s candle the trade sequence is unknown; never resolve that ambiguit
 
 ### 7.1 Kill switch
 
-States `off | paused | flatten`. When `!= off`, `preflight()` rejects every new intent with `intent.error { code: 'kill_switch' }` before any exchange API call — engine-internal only, no exchange-side activity. `flatten` additionally runs `flattenAll()` (reduce-only market closes across all exchanges). Code ref: `src/execution/execution/preflight.ts:32`. **Backtest:** not modeled (operational, not strategic); listed in every parity ledger as _not modeled — operational_.
+Kill-switch mode is `EngineMode = live | dry_run | drain_only | halted` (`src/execution/risk/types.ts:4`, `KillSwitchState.mode`). When mode blocks placement (`killSwitch.canPlaceOrder(...)` false), `preflight()` rejects every new intent with `intent.error { code: 'kill_switch' }` before any exchange API call — engine-internal only, no exchange-side activity. Code ref: `src/execution/execution/preflight.ts:32`.
+
+`flatten` is an **action**, not a mode: reduce-only market closes via `flattenAll()`, triggered by the emergency CLI `src/execution/cli/flatten.ts` (runs even when the engine process is dead, via REST adapters directly), the shutdown path `src/execution/index.ts:752`, and the wired flattener `killSwitch.wireFlattener(() => execManager.flattenAll())` (`src/execution/index.ts:561`). Tripping to `halted` does **not** itself flatten. Flatten-driven closes emit exit_reason `kill_switch_flatten` (§12.1).
+
+| §7.1 spec name | Engine concept | Behavior |
+|---|---|---|
+| `off` | mode `live` | Normal placement allowed |
+| `paused` | mode `halted` | Preflight rejects new intents (`code: kill_switch`); no exchange activity |
+| `flatten` | CLI/shutdown `flattenAll()` action | Reduce-only market closes; exit_reason `kill_switch_flatten` |
+| — | mode `dry_run` | Engine mode, no spec-name counterpart: simulate placement, no live orders |
+| — | mode `drain_only` | Engine mode, no spec-name counterpart: manage/exit existing positions, reject new entries |
+
+**Backtest:** not modeled (operational, not strategic); listed in every parity ledger as _not modeled — operational_.
 
 ### 7.2 Post-exit order sweep (`sweepReduceOnlyOrders`)
 
