@@ -544,6 +544,9 @@ export async function startEngine(options: StartEngineOptions): Promise<EngineHa
     // Stagger concurrent entry createOrder calls per exchange to prevent rate-limit exhaustion
     // when multiple intents evaluate at the same T_funding. Single-symbol cycles unaffected.
     submissionStaggerMs: { bybit: 150, binance: 100, okx: 100, gateio: 100, kucoin: 100, bitget: 100 },
+    ...(config.testing?.strategy6ShadowMode !== undefined
+      ? { strategy6ShadowMode: config.testing.strategy6ShadowMode }
+      : {}),
   })
   execManager.start()
 

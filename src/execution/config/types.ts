@@ -11,6 +11,10 @@ export interface TestingConfig {
   fundingTimeOverride?: FundingTimeOverrideConfig
   /** Delay in ms before shadow adapter fills an order. Default: 150ms. Use a large value (e.g. 30000) to hold positions open for kill-switch trip testing. */
   shadowFillDelayMs?: number
+  /** strategy_6 live-empirical validation §6.2.1: stub order submission at the WS-order-adapter
+   *  choke point (log-only synthetic ACK/fill) so the state machine + calibration timeline run
+   *  without ever touching the real exchange. Independent of `mode` (dry_run gates credentials). */
+  strategy6ShadowMode?: boolean
 }
 
 export interface RateLimitBucket {

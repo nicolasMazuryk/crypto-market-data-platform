@@ -124,6 +124,7 @@ const FundingTimeOverrideRawSchema = z.object({
 const TestingRawSchema = z.object({
   fundingTimeOverride: FundingTimeOverrideRawSchema.optional(),
   shadowFillDelayMs: z.number().nonnegative().optional(),
+  strategy6ShadowMode: z.boolean().optional(),
 })
 
 export const EngineConfigRawSchema = z.object({
@@ -165,10 +166,14 @@ function parseTestingConfig(
 ): TestingConfig | undefined {
   if (!raw) return undefined
 
-  const { shadowFillDelayMs, fundingTimeOverride: override } = raw
+  const { shadowFillDelayMs, strategy6ShadowMode, fundingTimeOverride: override } = raw
+  const shadowFields = {
+    ...(shadowFillDelayMs !== undefined ? { shadowFillDelayMs } : {}),
+    ...(strategy6ShadowMode !== undefined ? { strategy6ShadowMode } : {}),
+  }
 
   if (!override) {
-    return shadowFillDelayMs !== undefined ? { shadowFillDelayMs } : undefined
+    return Object.keys(shadowFields).length > 0 ? shadowFields : undefined
   }
 
   const { acknowledgeLiveOverride, source } = override
@@ -179,7 +184,7 @@ function parseTestingConfig(
   } else if (override.time) {
     resolvedMs = resolveHHMMSS(override.time, now)
   } else {
-    return shadowFillDelayMs !== undefined ? { shadowFillDelayMs } : undefined
+    return Object.keys(shadowFields).length > 0 ? shadowFields : undefined
   }
 
   const delta = resolvedMs - now
@@ -200,7 +205,7 @@ function parseTestingConfig(
   const fundingCfg: FundingTimeOverrideConfig = { resolvedMs, source, acknowledgeLiveOverride }
   return {
     fundingTimeOverride: fundingCfg,
-    ...(shadowFillDelayMs !== undefined ? { shadowFillDelayMs } : {}),
+    ...shadowFields,
   }
 }
 

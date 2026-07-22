@@ -142,6 +142,7 @@ function makeManager(
     preflight?: (intent: TradeIntent, price: number) => PreflightResult
     refPrice?: (exchange: string, symbol: string) => number | undefined
     stateStore?: StateStore
+    strategy6ShadowMode?: boolean
   } = {}
 ) {
   const bus = createEventBus()
@@ -176,6 +177,7 @@ function makeManager(
     preflight: overrides.preflight ?? ((_i, _p) => ({ ok: true, qty: 0.001 })),
     refPrice: overrides.refPrice ?? ((_e, _s) => 50000),
     ...(overrides.orderWsAdapter ? { orderWsAdapters: new Map([[exchange, overrides.orderWsAdapter]]) } : {}),
+    ...(overrides.strategy6ShadowMode !== undefined ? { strategy6ShadowMode: overrides.strategy6ShadowMode } : {}),
   })
   manager.start()
   return { manager, bus, clock, ids, rest, monitor }
@@ -1166,6 +1168,163 @@ describe('Task 22 F6: strategy_6 entry gate opens from ws.funding_fee event', ()
 
     expect(placedKinds).toContain('entry')
     expect(rest.createOrder).toHaveBeenCalledWith(expect.objectContaining({ side: 'buy', qty: 0.002 }))
+  })
+})
+
+describe('Task 24: strategy_6 settled-|F| nuance + shadow harness', () => {
+  function makeS6Intent(overrides: Partial<TradeIntent> = {}) {
+    const now = Date.now()
+    const fundingTs = now + 5_000
+    const intent = makeIntent({
+      fundingRatePercent: -0.6,
+      side: 'long',
+      entryPolicy: {
+        kind: 'pre_funding_then_main',
+        preFundingSide: 'short',
+        preFundingVolume: 0.001,
+        mainSide: 'long',
+        mainVolume: 0.002,
+      },
+      exitPolicy: {
+        kind: 'sl_tp_deadline_post_funding_event',
+        tpMultiplier: 1,
+        slMultiplier: 1,
+        fundingTs,
+        timeoutAt: now + 120_000,
+        deadlineAt: now + 300_000,
+      },
+      ...overrides,
+    })
+    return { intent, fundingTs, now }
+  }
+
+  it('TP/SL derive from the settled |F| observed on ws.funding_fee, not intent.fundingRatePercent', async () => {
+    const rest = makeRestAdapter()
+    vi.mocked(rest.getPositions).mockResolvedValue([
+      { exchange: 'binance', symbol: 'BTCUSDT', qty: 0.001, side: 'long', leverage: 5, updatedAt: Date.now() },
+    ])
+    const { manager, bus, ids } = makeManager({ restAdapter: rest })
+    const { intent, fundingTs } = makeS6Intent()
+
+    await manager.submit(intent)
+
+    const preCid = ids.forIntent(intent.id, 90)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(preCid, { side: 'sell', status: 'filled', filledQty: 0.001, avgFillPrice: 50000 }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 10))
+
+    // Settled rate (-1.2%) differs from intent.fundingRatePercent (-0.6%).
+    bus.emit('ws.funding_fee', {
+      exchange: intent.exchange,
+      symbol: intent.symbol,
+      fundingTime: fundingTs + 1_000,
+      fundingRate: -0.012,
+      fundingAmount: -0.1,
+      asset: 'USDT',
+      positionQty: 0.001,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 10))
+
+    const mainCid = ids.forIntent(intent.id, 0)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(mainCid, { side: 'buy', status: 'filled', filledQty: 0.002, avgFillPrice: 50000 }),
+      seq: 2,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 20))
+
+    expect(manager.get(intent.id)?.settledFundingRatePercent).toBeCloseTo(1.2)
+    // absF = 1.2 (settled) -> tpPrice = 50000*1.012 = 50600, slPrice = 50000*0.988 = 49400
+    expect(rest.createOrder).toHaveBeenCalledWith(expect.objectContaining({ type: 'stop_market', stopPrice: 49400 }))
+    expect(rest.createOrder).toHaveBeenCalledWith(expect.objectContaining({ type: 'limit', price: 50600 }))
+  })
+
+  it('falls back to intent.fundingRatePercent when the settled ws.funding_fee rate is 0', async () => {
+    const rest = makeRestAdapter()
+    vi.mocked(rest.getPositions).mockResolvedValue([
+      { exchange: 'binance', symbol: 'BTCUSDT', qty: 0.001, side: 'long', leverage: 5, updatedAt: Date.now() },
+    ])
+    const { manager, bus, ids } = makeManager({ restAdapter: rest })
+    const { intent, fundingTs } = makeS6Intent()
+
+    await manager.submit(intent)
+
+    const preCid = ids.forIntent(intent.id, 90)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(preCid, { side: 'sell', status: 'filled', filledQty: 0.001, avgFillPrice: 50000 }),
+      seq: 1,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 10))
+
+    // fundingRate 0 -> empty-position diagnostic event; must NOT be trusted as the settled rate.
+    bus.emit('ws.funding_fee', {
+      exchange: intent.exchange,
+      symbol: intent.symbol,
+      fundingTime: fundingTs + 1_000,
+      fundingRate: 0,
+      fundingAmount: 0,
+      asset: 'USDT',
+      positionQty: 0.001,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 10))
+
+    const mainCid = ids.forIntent(intent.id, 0)
+    bus.emit('ws.order', {
+      exchange: 'binance',
+      order: makeOrder(mainCid, { side: 'buy', status: 'filled', filledQty: 0.002, avgFillPrice: 50000 }),
+      seq: 2,
+      receivedAt: Date.now(),
+    })
+    await new Promise(r => setTimeout(r, 20))
+
+    expect(manager.get(intent.id)?.settledFundingRatePercent).toBeUndefined()
+    // absF falls back to |intent.fundingRatePercent| = 0.6 -> tpPrice = 50300, slPrice = 49700
+    expect(rest.createOrder).toHaveBeenCalledWith(expect.objectContaining({ type: 'stop_market', stopPrice: 49700 }))
+    expect(rest.createOrder).toHaveBeenCalledWith(expect.objectContaining({ type: 'limit', price: 50300 }))
+  })
+
+  it('strategy6ShadowMode: true stubs entry-order submission — no real entry order ever submitted, timeline log produced', async () => {
+    vi.useFakeTimers()
+    try {
+      const rest = makeRestAdapter()
+      const { manager, bus, ids } = makeManager({ restAdapter: rest, strategy6ShadowMode: true })
+      const { intent, fundingTs } = makeS6Intent({ strategy: 'strategy_6' })
+
+      const submitPromise = manager.submit(intent)
+      await vi.advanceTimersByTimeAsync(200) // let the synthetic PRE_FUNDING fill settle
+      await submitPromise
+
+      expect(rest.createOrder).not.toHaveBeenCalled()
+      expect(manager.get(intent.id)?.preFundingFilledQty).toBe(0.001)
+
+      bus.emit('ws.funding_fee', {
+        exchange: intent.exchange,
+        symbol: intent.symbol,
+        fundingTime: fundingTs + 1_000,
+        fundingRate: -0.012,
+        fundingAmount: -0.1,
+        asset: 'USDT',
+        positionQty: 0.001,
+        receivedAt: Date.now(),
+      })
+      await vi.advanceTimersByTimeAsync(200) // let the synthetic MAIN fill settle
+
+      expect(manager.get(intent.id)?.entryOrderId).toBe(ids.forIntent(intent.id, 0))
+      // Entry orders (PRE_FUNDING, MAIN) never reach the real adapter — the choke point is stubbed.
+      expect(rest.createOrder).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'market' }))
+      expect(manager.get(intent.id)?.s6Timeline?.mainFillAt).toBeDefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

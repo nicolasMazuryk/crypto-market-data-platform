@@ -82,6 +82,9 @@ export interface ExecutionManagerOptions {
    *  Prevents rate-limit exhaustion when multiple intents evaluate at the same T_funding.
    *  Single-symbol cycles are unaffected (no prior submission to wait for). */
   submissionStaggerMs?: Partial<Record<Exchange, number>>
+  /** strategy_6 shadow validation phase (§6.2.1): stub the real adapter at the order-submission
+   *  choke point and synthesize ACK/fill so the state machine + timeline logging run log-only. */
+  strategy6ShadowMode?: boolean
 }
 
 export interface ExecutionManagerHandle extends ExecutionManager {
@@ -110,7 +113,45 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     return rest
   }
 
+  // strategy_6 shadow validation phase (§6.2.1): stub the real adapter at this choke point —
+  // the entry-order call site (PRE_FUNDING, MAIN) — so those never reach the exchange while the
+  // state machine still runs and produces the calibration timeline off a synthetic ACK + fill.
+  // SL/TP exit legs are placed via `rest.createOrder` directly (unaffected by this flag) since
+  // the validation protocol (§6.2) only concerns the causally-gated entry path.
+  function shadowCreateOrder(req: OrderRequest): OrderAck {
+    const now = clock.now()
+    const exchangeOrderId = `shadow-${req.clientOrderId}`
+    logger.info({ event: 'strategy6.shadow.order', ...req }, 'strategy6.shadow.order')
+    const ack: OrderAck = { clientOrderId: req.clientOrderId, exchangeOrderId, status: 'accepted', submittedAt: now, ackedAt: now }
+    const fillDelayMs = 150
+    setTimeout(() => {
+      const price = req.price ?? refPrice(req.exchange, req.symbol) ?? 0
+      bus.emit('ws.order', {
+        exchange: req.exchange,
+        seq: 0,
+        receivedAt: clock.now(),
+        order: {
+          exchange: req.exchange,
+          symbol: req.symbol,
+          clientOrderId: req.clientOrderId,
+          exchangeOrderId,
+          side: req.side,
+          type: req.type,
+          qty: req.qty,
+          filledQty: req.qty,
+          avgFillPrice: price,
+          reduceOnly: req.reduceOnly ?? false,
+          status: 'filled',
+          submittedAt: now,
+          updatedAt: clock.now(),
+        },
+      })
+    }, fillDelayMs)
+    return ack
+  }
+
   async function createOrderWithOkxWsFallback(strategy: string, req: OrderRequest): Promise<OrderAck> {
+    if (strategy === 'strategy_6' && opts.strategy6ShadowMode) return shadowCreateOrder(req)
     const ack = await orderClient(req.exchange, strategy).createOrder(req)
     if (
       req.exchange === 'okx' &&
@@ -834,7 +875,17 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
       const exitSide: OrderSide = intent.side === 'long' ? 'sell' : 'buy'
       const { tpMultiplier, slMultiplier } = intent.exitPolicy
       const price = s.avgEntryPrice ?? refPrice(intent.exchange, intent.symbol) ?? 0
-      const absF = Math.abs(intent.fundingRatePercent)
+      if (s.settledFundingRatePercent === undefined) {
+        logger.warn(
+          {
+            event: 'strategy6.settled_rate_fallback',
+            intentId: intent.id,
+            intentFundingRatePercent: intent.fundingRatePercent,
+          },
+          'strategy6: settled funding rate unavailable at MAIN fill, falling back to intent.fundingRatePercent'
+        )
+      }
+      const absF = Math.abs(s.settledFundingRatePercent ?? intent.fundingRatePercent)
 
       const preFundingVolume =
         s.preFundingFilledQty ??
@@ -1751,6 +1802,24 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         strategy: s.intent.strategy,
       })
       entryFilledAt.set(s.intent.id, now)
+      if (s.s6Timeline) {
+        s.s6Timeline.mainFillAt = now
+        logger.info(
+          {
+            event: 'strategy6.event_timeline',
+            intentId: s.intent.id,
+            exchange: s.intent.exchange,
+            symbol: s.intent.symbol,
+            tSettle: s.s6Timeline.tSettle,
+            eventReceiveAt: s.s6Timeline.eventReceiveAt,
+            eventLatencyMs: s.s6Timeline.eventReceiveAt - s.s6Timeline.tSettle,
+            mainSendAt: s.s6Timeline.mainSendAt,
+            mainFillAt: s.s6Timeline.mainFillAt,
+            settledFundingRatePercent: s.settledFundingRatePercent,
+          },
+          'strategy6.event_timeline'
+        )
+      }
       metrics.intentFilledTotal.inc(1, { exchange: s.intent.exchange, strategy: s.intent.strategy })
       const filled: OrderFilledEvent = {
         intentId: s.intent.id,
@@ -3112,6 +3181,27 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         let fundingFeeUnsub: Unsubscribe | null = null
         let timeoutHandle: ReturnType<typeof setTimeout> | null = null
 
+        // Consolidated calibration log (§6.2.3) for the partial-fill/abort paths — the MAIN-fill
+        // path emits its own copy (with mainFillAt) from handleEntryOrderEvent.
+        const emitS6PartialTimeline = (): void => {
+          if (!s.s6Timeline) return
+          logger.info(
+            {
+              event: 'strategy6.event_timeline',
+              intentId: intent.id,
+              exchange: intent.exchange,
+              symbol: intent.symbol,
+              tSettle: s.s6Timeline.tSettle,
+              eventReceiveAt: s.s6Timeline.eventReceiveAt,
+              eventLatencyMs: s.s6Timeline.eventReceiveAt - s.s6Timeline.tSettle,
+              mainSendAt: s.s6Timeline.mainSendAt,
+              mainFillAt: s.s6Timeline.mainFillAt,
+              settledFundingRatePercent: s.settledFundingRatePercent,
+            },
+            'strategy6.event_timeline'
+          )
+        }
+
         const closePreFunding = async () => {
           // Cancel the pre-funding order before closing to stop further fills.
           if (s.preFundingOrderId && !TERMINAL.has(s.status)) {
@@ -3186,7 +3276,15 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
             eventType: 'close_pre_funding_failed',
             payload: { intentId: intent.id },
           })
+          bus.emit('ops.event', {
+            ts: clock.now(),
+            level: 'fatal',
+            exchange: intent.exchange,
+            eventType: 'strategy6.canary_halt',
+            payload: { intentId: intent.id, reason: 'close_pre_funding_failed' },
+          })
           setError(s, 'close_pre_funding_failed', 'pre-funding close failed after 3 attempts')
+          emitS6PartialTimeline()
         }
 
         const confirmPreFundingFilled = async (): Promise<boolean> => {
@@ -3250,6 +3348,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
                     payload: { intentId: intent.id, kind: 'entry', err: String(err) },
                   })
                 })
+            }
+
+            s.s6Timeline = {
+              tSettle: fundingTs,
+              eventReceiveAt: clock.now(),
+              ...s.s6Timeline,
+              mainSendAt: clock.now(),
             }
 
             let ack
@@ -3334,6 +3439,10 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           if (event.exchange !== intent.exchange) return
           if (event.symbol !== intent.symbol) return
           if (event.fundingTime < fundingTs - toleranceMs || event.fundingTime > fundingTs + toleranceMs) return
+          if (Number.isFinite(event.fundingRate) && event.fundingRate !== 0) {
+            s.settledFundingRatePercent = Math.abs(event.fundingRate) * 100
+          }
+          s.s6Timeline = { tSettle: fundingTs, eventReceiveAt: event.receivedAt, ...s.s6Timeline }
           void placeMain()
         })
 
@@ -3346,6 +3455,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           logger.warn({ intentId: intent.id }, 'strategy6: funding fee timeout — closing pre-funding')
           void closePreFunding().then(() => {
             setError(s, 'funding_event_timeout', 'no ws.funding_fee event received within timeout')
+            emitS6PartialTimeline()
           })
         }, timeoutDelay)
 

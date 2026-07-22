@@ -67,6 +67,15 @@ export interface IntentState {
   closeAttemptCount?: number
   /** Present for single limit_limit entries (R11): P_limit for SL anchoring. */
   entryLimitPrice?: number
+  /** Settled |F| (percent) observed on ws.funding_fee at MAIN gate; feeds TP/SL per §2 step 4. */
+  settledFundingRatePercent?: number
+  /** strategy_6 calibration timeline (§6.2.3): funding settlement → WS event → MAIN send/fill. */
+  s6Timeline?: {
+    tSettle: number
+    eventReceiveAt: number
+    mainSendAt?: number
+    mainFillAt?: number
+  }
 }
 
 export interface ExecutionManager {
