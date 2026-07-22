@@ -26,7 +26,7 @@ interface Row {
 }
 
 function parseStrategy(tag: string): string {
-  // Split on last '-' to handle tags like strategy_5-binance_bybit
+  // Split on last '-' to handle tags like strategy_1-binance_bybit
   const idx = tag.lastIndexOf('-')
   return tag.slice(0, idx)
 }

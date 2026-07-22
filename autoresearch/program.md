@@ -50,70 +50,87 @@ other absolute path outside the worktree
 - Do NOT call Bash for any reason — not `cat`, `ls`, `find`, `git`, or
   anything else. The harness rejects shell output and you do not need it.
 
+## Sign note
+
+`negative_funding_threshold_percent` is a **signed percent, must be `< 0`** (range `[-2.0, 0)`).
+You tune a negative number — more negative = stricter/rarer trigger, not a magnitude to make
+more positive. TP/SL are now **percent** (`stop_loss_percent`, `take_profit_pct`), not fractions.
+`amount_usd`, `leverage`, `direction`, and `tp_mode` are **structural — do not tune**
+
 ## Hard parameter bounds
 
 Proposals outside any of these ranges will be rejected by the loader. Do not propose values outside these ranges, ever. Each param is listed under the strategy/strategies that use it — do not edit params your strategy does not own.
 
 ### strategy_1 (LONG — instant exit)
 
-- `funding_threshold`: >= 0.001 AND <= 0.015
-- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `exit_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, or 5 — no decimals)
+- `negative_funding_threshold_percent`: −2.0 <= v < 0.1
+- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `exit_offset_seconds`: >= 6 AND <= 15 ← **integer only** (6, 7, 8, 9, 10, 11, 12, 13, 14, 15 — no decimals)
+
+### strategy_1_ws (LONG — funding-fee-event exit)
+
+- `negative_funding_threshold_percent`: −2.0 <= v < 0.1
+- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `funding_fee_timeout_seconds`: >= 5 AND <= 120 ← **integer only**
 
 ### strategy_2 (LONG — retracement exit)
 
-- `funding_threshold`: >= 0.001 AND <= 0.015
-- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `retracement_pct`: >= 0.20 AND <= 2.00
-- `deadline_seconds`: >= 5 AND <= 900 ← **integer only** (no decimals)
-- `sl_mult`: >= 0.50 AND <= 4.0 ← SL at entry × (1 − F × mult)
+- `negative_funding_threshold_percent`: −2.0 <= v < 0.1
+- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `retracement_pct`: 0 < v <= 2.0 ← **fraction**, not percent
+- `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
+- `sl_multiplier`: >= 0.5 AND <= 4.0 ← SL at entry × (1 − F × mult)
+- `funding_fee_timeout_seconds`: >= 5 AND <= 120 ← **integer only**
 
 ### strategy_3a (SHORT — ride the drop)
 
-- `funding_threshold`: >= 0.001 AND <= 0.015
-- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `stop_loss`: >= 0.002 AND <= 0.040
-- `tp_multiplier`: >= 1.2 AND <= 5.0 ← TP_a = F × multiplier; values < 1 target less than the funding; only active in mode A
-- `tp_addend_pct`: >= 0.1 AND <= 4.0 ← TP_b = F + addend_pct/100; only active in mode B
-- `deadline_seconds`: >= 3 AND <= 900 ← **integer only** (no decimals)
+- `negative_funding_threshold_percent`: −2.0 <= v < 0.1
+- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `stop_loss_percent`: >= 0.2 AND <= 4.0 ← **percent**
+- `tp_mode`: `A` or `B`
+- `tp_multiplier`: >= 1.2 AND <= 5.0 ← mode A only; TP = |F| × mult;
+- `tp_addend_pct`: mode B only; **percent**; no hard bound
+- `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
 
 ### strategy_4_1a (LONG — ladder limit)
 
-- `funding_threshold`: >= 0.001 AND <= 0.015
-- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `ladder_count`: >= 2 AND <= 8 ← **integer only** (2, 3, 4, 5, 6, 7, or 8 — no decimals)
-- `ladder_top_mult`: >= 0.3 AND <= 2.5
-- `ladder_bottom_mult`: >= 0.8 AND <= 4.0
-- `take_profit`: >= 0.001 AND <= 0.020
-- `deadline_seconds`: >= 10 AND <= 900 ← **integer only** (no decimals)
-- `sl_mult`: >= 1.0 AND <= 5.0 ← SL at P_avg × (1 − F × mult)
+- `negative_funding_threshold_percent`: −2.0 <= v < 0.1
+- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `ladder_count`: >= 2 AND <= 10 ← **integer only** (2, 3, 4, 5, 6, 7, 8, 9 or 10 — no decimals)
+- `ladder_top_mult`: >= 0.3 AND <= 2.5 ← must stay < `ladder_bottom_mult` (schema-enforced)
+- `ladder_bottom_mult`: >= 0.8 AND <= 4.0 ← must stay > `ladder_top_mult` (schema-enforced)
+- `take_profit_pct`: >= 0.1 AND <= 2.0 ← **percent**
+- `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
+- `sl_multiplier`: >= 0.5 AND <= 4.0
 
 ### strategy_4_2a (LONG — single limit)
 
-- `funding_threshold`: >= 0.001 AND <= 0.015
-- `entry_offset_seconds`: >= 1 AND <= 5 ← **integer only** (1, 2, 3, 4, or 5 — no decimals)
-- `limit_offset_mult`: >= 0.3 AND <= 3.0 ← entry at P × (1 − F × mult); default is 1.0
-- `take_profit`: >= 0.001 AND <= 0.020
-- `deadline_seconds`: >= 10 AND <= 900 ← **integer only** (no decimals)
-- `sl_mult`: >= 0.6 AND <= 4.0 ← SL at entry × (1 − F × mult); MUST be > limit_offset_mult
+- `negative_funding_threshold_percent`: −2.0 <= v < 0.1
+- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `limit_offset_mult`: >= 0.3 AND <= 3.0 ← must stay < `sl_multiplier`
+- `take_profit_pct`: >= 0.1 AND <= 2.0 ← **percent**
+- `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
+- `sl_multiplier`: >= 1.0 AND <= 4.0
 
 ## Coupling rules
 
-**IMPORTANT:** Violating any of these produces a parameter set that can never make money or will never fire. Do not propose a YAML that breaks them.
+**IMPORTANT:** Violating any of these produces a parameter set that can never make money, will never fire, or will be rejected by the schema. Do not propose a YAML that breaks them.
 
-1. **`ladder_top_mult < ladder_bottom_mult`** (strategy_4_1x): ladder range is `F × (bottom_mult − top_mult)`; if inverted the ladder collapses to nothing.
-2. **`sl_mult > ladder_bottom_mult`** (strategy_4_1x): the lowest ladder rung sits at `P × (1 − F × ladder_bottom_mult)` and SL at `pAvg × (1 − F × sl_mult)`. If `sl_mult ≤ ladder_bottom_mult`, the SL sits at or above the deepest rung → any partial fill at the lower rungs stops out immediately. (Combined with rule #1, this also implies `sl_mult > ladder_top_mult`.)
-3. **`entry_mult < sl_mult`** (strategy_4_3x): entry price is `P × (1 − F × entry_mult)`, SL is `P × (1 − F × sl_mult)`. If `sl_mult ≤ entry_mult`, the SL sits at or above the entry limit → position stops out the instant it fills.
-4. **`limit_offset_mult < sl_mult`** (strategy_4_2x): entry limit sits at `P × (1 − F × limit_offset_mult)`, SL at `entry × (1 − F × sl_mult)`. If `sl_mult ≤ limit_offset_mult`, SL is at or above the entry limit price → position stops out instantly on fill.
-5. **`sl_mult + retracement_pct > 1`** (strategy_2): SL is anchored at `entry × (1 − F × sl_mult)`; the retracement TP sits roughly at `entry × (1 − F × (1 − retracement_pct))` assuming the post-funding drop scales with F. If `sl_mult ≤ 1 − retracement_pct`, SL sits above the retracement target → SL fires during the drop before TP can ever resolve.
-6. **`tp_multiplier × funding_threshold <= stop_loss × 4`** (strategy_3a/3b, soft guideline): if `TP_a` is far larger than the SL budget, the TP almost never resolves before deadline; widening TP without also widening stop_loss (or tightening deadline) is wasteful.
+1. **`ladder_bottom_mult > ladder_top_mult`** (strategy_4_1a, schema-enforced `.refine`): ladder range is `F × (bottom_mult − top_mult)`; if inverted the schema rejects the config.
+2. **`sl_multiplier > ladder_bottom_mult`** (strategy_4_1a, soft): the lowest ladder rung sits at `P × (1 − F × ladder_bottom_mult)` and SL at `pAvg × (1 − F × sl_multiplier)`. If `sl_multiplier <= ladder_bottom_mult`, the SL sits at or above the deepest rung → any partial fill at the lower rungs stops out immediately.
+3. **`sl_multiplier > limit_offset_mult`** (strategy_4_2a, schema-enforced): entry limit sits at `P × (1 − F × limit_offset_mult)`, SL at `entry × (1 − F × sl_multiplier)`. If `sl_multiplier <= limit_offset_mult`, SL is at or above the entry limit price → position stops out instantly on fill.
+4. **`sl_multiplier ≳ 1 − retracement_pct`** (strategy_2, soft): SL is anchored at `entry × (1 − F × sl_multiplier)`; the retracement TP sits roughly at `entry × (1 − F × (1 − retracement_pct))`. If `sl_multiplier` is too small relative to `1 − retracement_pct`, SL fires during the drop before TP can ever resolve.
+5. **Don't let `tp_multiplier` grow so large the TP never resolves before deadline** (strategy_3a, soft): if `TP_a = |F| × tp_multiplier` is far larger than the stop-loss budget, the TP almost never resolves before deadline; widening it without also widening `stop_loss_percent` (or tightening `deadline_seconds`) is wasteful.
 
 ## Direction-aware reasoning
 
-The engine handles signs; you edit only magnitudes. But the direction determines which side of entry each boundary sits on — keep this in mind when reasoning about whether tightening or widening a param helps or hurts:
+The engine handles signs; you edit only magnitudes (except `negative_funding_threshold_percent`,
+which you tune as a negative number directly). But the direction determines which side of entry
+each boundary sits on — keep this in mind when reasoning about whether tightening or widening a
+param helps or hurts:
 
-- **LONG strategies (1, 2, 4.1, 4.2, 4.3):** triggered by negative funding. TP is placed **above** the fill price; SL (where present, strategies 2, 4.1, 4.2, 4.3) is placed **below**. Widening `take_profit` makes the target harder to reach. Widening `sl_mult` increases the loss budget and reduces premature stop-outs.
-- **SHORT strategies (3a, 3b):** also triggered by negative funding, but the position is short — profit comes from the price drop. TP is placed **below** entry; SL is placed **above**. Tightening `stop_loss` means a smaller adverse move above entry triggers the stop. Raising `tp_multiplier` makes the target further below entry and harder to reach.
+- **LONG strategies (1, 1_ws, 2, 4_1a, 4_2a):** triggered by negative funding. TP is placed **above** the fill price; SL (where present, strategies 2, 4_1a, 4_2a) is placed **below**. Widening `take_profit_pct` makes the target harder to reach. Widening `sl_multiplier` increases the loss budget and reduces premature stop-outs.
+- **SHORT strategies (3a):** also triggered by negative funding, but the position is short — profit comes from the price drop. TP is placed **below** entry; SL is placed **above**. Tightening `stop_loss_percent` means a smaller adverse move above entry triggers the stop. Raising `tp_multiplier` (mode A) or `tp_addend_pct` (mode B) makes the target further below entry and harder to reach.
 
 ## Response shape (keep it tight)
 
@@ -177,31 +194,33 @@ filesystem before editing — every such call is wasted tokens and time.
 
 1. **No micro-tweaks once a direction plateaus.** If the last 2–3 steps along
    one parameter stopped producing meaningful PnL gains, do **not** propose
-   another tiny step on the same parameter (e.g. `0.35% → 0.34%`). Instead,
+   another tiny step on the same parameter (e.g. `-0.35% → -0.34%`). Instead,
    either:
    - **Jump magnitudes on the same parameter.** Try a value that is
      multiplicatively (not incrementally) different — e.g. if you've been
-     searching `funding_threshold` between 0.30%–0.60%, try `1.0%` or `0.05%`.
-     The point is to _gauge the regime_, not to refine the local minimum.
-   - **Switch parameters.** Move to a different field — `stop_loss`,
+     searching `negative_funding_threshold_percent` between -0.30% and -0.60%,
+     try `-1.0%` or `-0.05%`. The point is to _gauge the regime_, not to
+     refine the local minimum.
+   - **Switch parameters.** Move to a different field — `stop_loss_percent`,
      `tp_multiplier`, `entry_offset_seconds`, etc. — and tune it from scratch.
 
 2. **Parameters are coupled — re-tune after every change.** The optimum of one
    parameter depends on the values of the others. If you found
-   `funding_threshold = 0.3%` was best, then changed `tp_multiplier` from 1.5
-   to 2 and improved further, the _original_ funding_threshold optimum is no
-   longer trustworthy. After any improvement on parameter B, return to
-   parameter A and re-search it under the new B. The general loop:
+   `negative_funding_threshold_percent = -0.3%` was best, then changed
+   `tp_multiplier` from 1.5 to 2 and improved further, the _original_
+   threshold optimum is no longer trustworthy. After any improvement on
+   parameter B, return to parameter A and re-search it under the new B. The
+   general loop:
    - improve A → improve B → re-improve A under new B → re-improve B under
      new A → … until the cycle stops yielding improvements.
 
 3. **Different magnitudes of one parameter imply different optima for the
-   others.** A high-funding regime (e.g. `funding_threshold = 1%`) may want
-   `stop_loss = 3%` and `tp_multiplier = 2`. A low-funding regime (e.g.
-   `funding_threshold = 0.3%`) may want `stop_loss = 0.8%` and
-   `tp_multiplier = 1.4`. When you make a magnitude jump on one parameter,
-   expect the others' optima to also move — don't assume the previously-good
-   values still hold. Probe widely.
+   others.** A high-funding regime (e.g.
+   `negative_funding_threshold_percent = -1%`) may want `stop_loss_percent = 3`
+   and `tp_multiplier = 2`. A low-funding regime (e.g. `-0.3%`) may want
+   `stop_loss_percent = 0.8` and `tp_multiplier = 1.4`. When you make a
+   magnitude jump on one parameter, expect the others' optima to also move —
+   don't assume the previously-good values still hold. Probe widely.
 
 ## Strategy: pick one edit per iteration
 

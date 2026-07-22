@@ -1,7 +1,0 @@
-strategy_id: strategy_spot_futures
-exchange: okx
-perp_exchange: okx
-spot_exchange: okx
-F_threshold: 0.0005
-minTotalProfit: -0.0025
-fundingConvergenceThreshold: 0.0000062

@@ -1,9 +1,0 @@
-# Strategy 1: Negative Funding LONG - Instant Exit
-strategies:
-  - id: strategy_1
-    enabled: true
-    negativeFundingThresholdPercent: -0.1
-    entryOffsetSeconds: 3
-    exitOffsetSeconds: 6
-    amountUsd: 10
-    leverage: 5

@@ -14,19 +14,6 @@
 #   4. npm run fleet:reconcile          # diff vs server state and apply
 
 combinations:
-  - id: strategy_1-binance
-    strategy: strategy_1
-    exchange: binance
-    enabled: true
-    strategy_config: live-configs/strategies/strategy_1-binance.yaml
-    runtime:
-      metrics_port: 9500
-      health_port: 9600
-      log_level: info
-    risk:
-      maxConcurrentIntents: 200
-      maxNotionalUsd: 50000
-
   - id: strategy_1_ws-binance
     strategy: strategy_1_ws
     exchange: binance
@@ -74,19 +61,6 @@ combinations:
     runtime:
       metrics_port: 9504
       health_port: 9604
-      log_level: info
-    risk:
-      maxConcurrentIntents: 200
-      maxNotionalUsd: 50000
-
-  - id: strategy_1-bybit
-    strategy: strategy_1
-    exchange: bybit
-    enabled: true
-    strategy_config: live-configs/strategies/strategy_1-bybit.yaml
-    runtime:
-      metrics_port: 9505
-      health_port: 9605
       log_level: info
     risk:
       maxConcurrentIntents: 200
@@ -144,19 +118,6 @@ combinations:
       maxConcurrentIntents: 200
       maxNotionalUsd: 50000
 
-  - id: strategy_1-okx
-    strategy: strategy_1
-    exchange: okx
-    enabled: true
-    strategy_config: live-configs/strategies/strategy_1-okx.yaml
-    runtime:
-      metrics_port: 9510
-      health_port: 9610
-      log_level: info
-    risk:
-      maxConcurrentIntents: 200
-      maxNotionalUsd: 50000
-
   - id: strategy_1_ws-okx
     strategy: strategy_1_ws
     exchange: okx
@@ -204,19 +165,6 @@ combinations:
     runtime:
       metrics_port: 9514
       health_port: 9614
-      log_level: info
-    risk:
-      maxConcurrentIntents: 200
-      maxNotionalUsd: 50000
-
-  - id: strategy_1-gateio
-    strategy: strategy_1
-    exchange: gateio
-    enabled: true
-    strategy_config: live-configs/strategies/strategy_1-gateio.yaml
-    runtime:
-      metrics_port: 9515
-      health_port: 9615
       log_level: info
     risk:
       maxConcurrentIntents: 200
@@ -274,19 +222,6 @@ combinations:
       maxConcurrentIntents: 200
       maxNotionalUsd: 50000
 
-  - id: strategy_1-kucoin
-    strategy: strategy_1
-    exchange: kucoin
-    enabled: true
-    strategy_config: live-configs/strategies/strategy_1-kucoin.yaml
-    runtime:
-      metrics_port: 9520
-      health_port: 9620
-      log_level: info
-    risk:
-      maxConcurrentIntents: 200
-      maxNotionalUsd: 50000
-
   - id: strategy_1_ws-kucoin
     strategy: strategy_1_ws
     exchange: kucoin
@@ -339,19 +274,6 @@ combinations:
       maxConcurrentIntents: 200
       maxNotionalUsd: 50000
 
-  - id: strategy_1-bitget
-    strategy: strategy_1
-    exchange: bitget
-    enabled: true
-    strategy_config: live-configs/strategies/strategy_1-bitget.yaml
-    runtime:
-      metrics_port: 9525
-      health_port: 9625
-      log_level: info
-    risk:
-      maxConcurrentIntents: 200
-      maxNotionalUsd: 50000
-
   - id: strategy_1_ws-bitget
     strategy: strategy_1_ws
     exchange: bitget
@@ -399,6 +321,84 @@ combinations:
     runtime:
       metrics_port: 9529
       health_port: 9629
+      log_level: info
+    risk:
+      maxConcurrentIntents: 200
+      maxNotionalUsd: 50000
+
+  - id: strategy_3a-binance
+    strategy: strategy_3a
+    exchange: binance
+    enabled: true
+    strategy_config: live-configs/strategies/strategy_3a-binance.yaml
+    runtime:
+      metrics_port: 9530
+      health_port: 9630
+      log_level: info
+    risk:
+      maxConcurrentIntents: 200
+      maxNotionalUsd: 50000
+
+  - id: strategy_3a-bybit
+    strategy: strategy_3a
+    exchange: bybit
+    enabled: true
+    strategy_config: live-configs/strategies/strategy_3a-bybit.yaml
+    runtime:
+      metrics_port: 9531
+      health_port: 9631
+      log_level: info
+    risk:
+      maxConcurrentIntents: 200
+      maxNotionalUsd: 50000
+
+  - id: strategy_3a-okx
+    strategy: strategy_3a
+    exchange: okx
+    enabled: true
+    strategy_config: live-configs/strategies/strategy_3a-okx.yaml
+    runtime:
+      metrics_port: 9532
+      health_port: 9632
+      log_level: info
+    risk:
+      maxConcurrentIntents: 200
+      maxNotionalUsd: 50000
+
+  - id: strategy_3a-gateio
+    strategy: strategy_3a
+    exchange: gateio
+    enabled: true
+    strategy_config: live-configs/strategies/strategy_3a-gateio.yaml
+    runtime:
+      metrics_port: 9533
+      health_port: 9633
+      log_level: info
+    risk:
+      maxConcurrentIntents: 200
+      maxNotionalUsd: 50000
+
+  - id: strategy_3a-kucoin
+    strategy: strategy_3a
+    exchange: kucoin
+    enabled: true
+    strategy_config: live-configs/strategies/strategy_3a-kucoin.yaml
+    runtime:
+      metrics_port: 9534
+      health_port: 9634
+      log_level: info
+    risk:
+      maxConcurrentIntents: 200
+      maxNotionalUsd: 50000
+
+  - id: strategy_3a-bitget
+    strategy: strategy_3a
+    exchange: bitget
+    enabled: true
+    strategy_config: live-configs/strategies/strategy_3a-bitget.yaml
+    runtime:
+      metrics_port: 9535
+      health_port: 9635
       log_level: info
     risk:
       maxConcurrentIntents: 200

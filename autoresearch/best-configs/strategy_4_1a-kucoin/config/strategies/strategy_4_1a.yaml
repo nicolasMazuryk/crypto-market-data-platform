@@ -3,12 +3,13 @@
 
 strategy_id: 'strategy_4_1a'
 direction: 'long'
-funding_threshold: 0.015 # 1.5%
-entry_offset_seconds: 1 # Setup at T_funding - 3s
+negative_funding_threshold_percent: -1.5
+entry_offset_seconds: 2
 ladder_count: 3
 ladder_top_mult: 1.7
 ladder_bottom_mult: 1.99
-take_profit: 0.020 # 2.0% above P_avg
-deadline_seconds: 600 # Max hold after T_funding (10 minutes)
-funding_applied_on_same_second: false
-sl_mult: 2.0 # SL at P_avg × (1 − F × 2.0)
+take_profit_pct: 2.0
+deadline_seconds: 600
+sl_multiplier: 2.0
+amount_usd: 20
+leverage: 4

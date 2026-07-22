@@ -1,7 +1,0 @@
-strategy_id: strategy_spot_futures
-exchange: bybit
-perp_exchange: bybit
-spot_exchange: bybit
-F_threshold: 0.001
-minTotalProfit: -0.003
-fundingConvergenceThreshold: 0

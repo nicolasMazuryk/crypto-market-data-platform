@@ -3,9 +3,10 @@
 
 strategy_id: 'strategy_2'
 direction: 'long'
-funding_threshold: 0.015 # 1.5%
-entry_offset_seconds: 1 # Enter at T_funding - 5s
-retracement_pct: 2.0 # 200% retracement target
-deadline_seconds: 600 # Max hold after T_funding (10 minutes)
-sl_mult: 1.5 # SL at entry × (1 − F × 1.5)
-funding_applied_on_same_second: false
+negative_funding_threshold_percent: -1.5
+entry_offset_seconds: 2
+retracement_pct: 1.0 # clamped to new 0<v<=1.0 bound
+deadline_seconds: 600
+sl_multiplier: 1.5
+amount_usd: 20
+leverage: 4

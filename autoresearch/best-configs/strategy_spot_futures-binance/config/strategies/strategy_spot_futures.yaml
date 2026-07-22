@@ -1,7 +1,0 @@
-strategy_id: strategy_spot_futures
-exchange: binance
-perp_exchange: binance
-spot_exchange: binance
-F_threshold: 0.001
-minTotalProfit: -0.002
-fundingConvergenceThreshold: 0.000005

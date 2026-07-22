@@ -10,9 +10,9 @@
  *   3. Rewrites state.json to match the TSV-derived state exactly
  *
  * Usage:
- *   tsx scripts/seed-from-best.ts --strategy strategy_spot_futures
- *   tsx scripts/seed-from-best.ts --tags strategy_spot_futures-binance,strategy_spot_futures-bybit
- *   tsx scripts/seed-from-best.ts --strategy strategy_spot_futures --dry-run
+ *   tsx scripts/seed-from-best.ts --strategy strategy_1
+ *   tsx scripts/seed-from-best.ts --tags strategy_1-binance,strategy_1-bybit
+ *   tsx scripts/seed-from-best.ts --strategy strategy_1 --dry-run
  */
 import { execSync } from 'child_process'
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs'

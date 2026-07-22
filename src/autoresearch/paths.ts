@@ -62,9 +62,16 @@ export function getProposalIterPath(repoRoot: string, tag: string, iter: number)
   return path.join(getProposalsDir(repoRoot, tag), `iter_${String(iter)}.json`)
 }
 
+const STRATEGY_DOC_FILENAMES: Record<string, string> = {
+  strategy_1: '01_strategy_1',
+  strategy_1_ws: '02_strategy_1_ws',
+  strategy_2: '03_strategy_2',
+  strategy_3a: '04_strategy_3a',
+  strategy_4_1a: '05_strategy_4_1a',
+  strategy_4_2a: '06_strategy_4_2a',
+  strategy_6: '07_strategy_6',
+}
+
 export function strategyDocFamily(strategyId: string): string {
-  if (strategyId === 'strategy_3a') return 'strategy_3'
-  if (strategyId === 'strategy_4_1a') return 'strategy_4_1'
-  if (strategyId === 'strategy_4_2a') return 'strategy_4_2'
-  return strategyId
+  return STRATEGY_DOC_FILENAMES[strategyId] ?? strategyId
 }

@@ -1,7 +1,0 @@
-strategy_id: strategy_spot_futures
-exchange: gateio
-perp_exchange: gateio
-spot_exchange: gateio
-F_threshold: 0.001
-minTotalProfit: -0.002
-fundingConvergenceThreshold: 0.000001

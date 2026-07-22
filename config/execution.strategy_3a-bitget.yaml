@@ -1,0 +1,28 @@
+mode: live
+exchanges:
+  - exchange: bitget
+    enabled: true
+    credentialsEnvPrefix: BITGET
+    marketRefreshMs: 60000
+    fundingPullMs: 10000
+    rateLimits:
+      criticalReservationFraction: 0.1
+      criticalWindowSeconds: 60
+      buckets: []
+strategies:
+  - id: strategy_3a
+    enabled: true
+    negativeFundingThresholdPercent: -0.1
+    entryOffsetSeconds: 3
+    stopLossPercent: 1
+    tpVariantAMultiplier: 1.5
+    tpVariantBOffsetPercent: 0.3
+    deadlineSeconds: 900
+    amountUsd: 10
+    leverage: 5
+observability:
+  metricsPort: 9535
+  healthPort: 9635
+risk:
+  globalMaxConcurrentIntents: 200
+  globalMaxNotionalUsd: 50000

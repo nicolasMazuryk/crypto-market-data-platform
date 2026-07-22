@@ -324,7 +324,7 @@ Env vars emitted per exchange:
 
 Available strategies per exchange (active — verify in registry.yaml):
 
-- `strategy_1`, `strategy_1_ws`, `strategy_2`, `strategy_4_1a`, `strategy_6`
+- `strategy_1_ws`, `strategy_2`, `strategy_3a`, `strategy_4_1a`, `strategy_6`
 
 ## Development Notes
 

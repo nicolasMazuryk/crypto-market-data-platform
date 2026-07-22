@@ -2,10 +2,11 @@
 
 strategy_id: 'strategy_4_2a'
 direction: 'long'
-funding_threshold: 0.020 # 2.0%
+negative_funding_threshold_percent: -2.0
 entry_offset_seconds: 2
-limit_offset_mult: 1.28 # Limit at P * (1 - F * 1.28)
-take_profit: 0.0035
+limit_offset_mult: 1.28
+take_profit_pct: 0.35
 deadline_seconds: 30
-funding_applied_on_same_second: false
-sl_mult: 1.5 # SL at entry × (1 − F × 1.5); must be > limit_offset_mult
+sl_multiplier: 1.5 # must be > limit_offset_mult
+amount_usd: 20
+leverage: 4
