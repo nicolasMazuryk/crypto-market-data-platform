@@ -59,6 +59,7 @@
     "autoresearch:dashboard": "tsx src/autoresearch/orchestrate.ts --dashboard",
     "autoresearch:collect-best": "tsx scripts/collect-best-configs.ts",
     "autoresearch:seed-from-best": "tsx scripts/seed-from-best.ts",
+    "autoresearch:fresh-start-from-best": "tsx scripts/fresh-start-from-best.ts",
     "remote:clickhouse:query": "bash scripts/remote-clickhouse-query.sh",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
