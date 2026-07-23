@@ -208,33 +208,33 @@ describe('§11.1 hard parameter bounds', () => {
     })
   })
 
-  describe('retracement_pct: 0 < v <= 1', () => {
+  describe('retracement_pct: 0 < v <= 2', () => {
     it('rejects 0 (exclusive min) on both loaders', () => {
       rejects(GeneratedBacktestStrategySchema, bt2({ retracement_pct: 0 }))
       rejects(GeneratedLiveStrategySchema, live2({ retracementPct: 0 }))
     })
-    it('rejects above max (1.1) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt2({ retracement_pct: 1.1 }))
-      rejects(GeneratedLiveStrategySchema, live2({ retracementPct: 1.1 }))
+    it('rejects above max (2.1) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt2({ retracement_pct: 2.1 }))
+      rejects(GeneratedLiveStrategySchema, live2({ retracementPct: 2.1 }))
     })
-    it('accepts the max (1.0) on both loaders', () => {
-      accepts(GeneratedBacktestStrategySchema, bt2({ retracement_pct: 1.0 }))
-      accepts(GeneratedLiveStrategySchema, live2({ retracementPct: 1.0 }))
+    it('accepts the max (2.0) on both loaders', () => {
+      accepts(GeneratedBacktestStrategySchema, bt2({ retracement_pct: 2.0 }))
+      accepts(GeneratedLiveStrategySchema, live2({ retracementPct: 2.0 }))
     })
   })
 
-  describe('deadline_seconds: 10..3600 (R3)', () => {
-    it('rejects below min (5) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt2({ deadline_seconds: 5 }))
-      rejects(GeneratedLiveStrategySchema, live2({ deadlineSeconds: 5 }))
+  describe('deadline_seconds: 5..900', () => {
+    it('rejects below min (4) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt2({ deadline_seconds: 4 }))
+      rejects(GeneratedLiveStrategySchema, live2({ deadlineSeconds: 4 }))
     })
-    it('rejects above max (3601) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt2({ deadline_seconds: 3601 }))
-      rejects(GeneratedLiveStrategySchema, live2({ deadlineSeconds: 3601 }))
+    it('rejects above max (901) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt2({ deadline_seconds: 901 }))
+      rejects(GeneratedLiveStrategySchema, live2({ deadlineSeconds: 901 }))
     })
-    it('accepts the real live value (1800) on both loaders', () => {
-      accepts(GeneratedBacktestStrategySchema, bt2({ deadline_seconds: 1800 }))
-      accepts(GeneratedLiveStrategySchema, live2({ deadlineSeconds: 1800 }))
+    it('accepts the real live value (600) on both loaders', () => {
+      accepts(GeneratedBacktestStrategySchema, bt2({ deadline_seconds: 600 }))
+      accepts(GeneratedLiveStrategySchema, live2({ deadlineSeconds: 600 }))
     })
   })
 
@@ -253,14 +253,14 @@ describe('§11.1 hard parameter bounds', () => {
     })
   })
 
-  describe('stop_loss_percent: 0.2..5.0', () => {
+  describe('stop_loss_percent: 0.2..4.0', () => {
     it('rejects below min (0.1) on both loaders', () => {
       rejects(GeneratedBacktestStrategySchema, bt3a({ stop_loss_percent: 0.1 }))
       rejects(GeneratedLiveStrategySchema, live3a({ stopLossPercent: 0.1 }))
     })
-    it('rejects above max (5.1) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt3a({ stop_loss_percent: 5.1 }))
-      rejects(GeneratedLiveStrategySchema, live3a({ stopLossPercent: 5.1 }))
+    it('rejects above max (4.1) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt3a({ stop_loss_percent: 4.1 }))
+      rejects(GeneratedLiveStrategySchema, live3a({ stopLossPercent: 4.1 }))
     })
     it('accepts the min (0.2) on both loaders', () => {
       accepts(GeneratedBacktestStrategySchema, bt3a({ stop_loss_percent: 0.2 }))
@@ -268,35 +268,35 @@ describe('§11.1 hard parameter bounds', () => {
     })
   })
 
-  describe('take_profit_pct: 0.05..5.0', () => {
-    it('rejects below min (0.04) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt41a({ take_profit_pct: 0.04 }))
-      rejects(GeneratedLiveStrategySchema, live41a({ takeProfitPct: 0.04 }))
+  describe('take_profit_pct: 0.1..2.0', () => {
+    it('rejects below min (0.09) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt41a({ take_profit_pct: 0.09 }))
+      rejects(GeneratedLiveStrategySchema, live41a({ takeProfitPct: 0.09 }))
     })
-    it('rejects above max (5.1) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt41a({ take_profit_pct: 5.1 }))
-      rejects(GeneratedLiveStrategySchema, live41a({ takeProfitPct: 5.1 }))
+    it('rejects above max (2.1) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt41a({ take_profit_pct: 2.1 }))
+      rejects(GeneratedLiveStrategySchema, live41a({ takeProfitPct: 2.1 }))
     })
-    it('accepts the min (0.05) on both loaders', () => {
-      accepts(GeneratedBacktestStrategySchema, bt41a({ take_profit_pct: 0.05 }))
-      accepts(GeneratedLiveStrategySchema, live41a({ takeProfitPct: 0.05 }))
+    it('accepts the min (0.1) on both loaders', () => {
+      accepts(GeneratedBacktestStrategySchema, bt41a({ take_profit_pct: 0.1 }))
+      accepts(GeneratedLiveStrategySchema, live41a({ takeProfitPct: 0.1 }))
     })
   })
 
-  describe('ladder_count: 2..20', () => {
+  describe('ladder_count: 2..10', () => {
     it('rejects below min (1) on both loaders', () => {
       rejects(GeneratedBacktestStrategySchema, bt41a({ ladder_count: 1 }))
       rejects(GeneratedLiveStrategySchema, live41a({ ladderCount: 1 }))
     })
-    it('rejects above max (21) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt41a({ ladder_count: 21 }))
-      rejects(GeneratedLiveStrategySchema, live41a({ ladderCount: 21 }))
+    it('rejects above max (11) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt41a({ ladder_count: 11 }))
+      rejects(GeneratedLiveStrategySchema, live41a({ ladderCount: 11 }))
     })
-    it('accepts the min (2) and max (20) on both loaders', () => {
+    it('accepts the min (2) and max (10) on both loaders', () => {
       accepts(GeneratedBacktestStrategySchema, bt41a({ ladder_count: 2 }))
       accepts(GeneratedLiveStrategySchema, live41a({ ladderCount: 2 }))
-      accepts(GeneratedBacktestStrategySchema, bt41a({ ladder_count: 20 }))
-      accepts(GeneratedLiveStrategySchema, live41a({ ladderCount: 20 }))
+      accepts(GeneratedBacktestStrategySchema, bt41a({ ladder_count: 10 }))
+      accepts(GeneratedLiveStrategySchema, live41a({ ladderCount: 10 }))
     })
   })
 
@@ -312,18 +312,18 @@ describe('§11.1 hard parameter bounds', () => {
     })
   })
 
-  describe('negative_funding_threshold_percent: -5.0 <= v < 0', () => {
-    it('rejects below min (-5.1) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt1({ negative_funding_threshold_percent: -5.1 }))
-      rejects(GeneratedLiveStrategySchema, live1({ negativeFundingThresholdPercent: -5.1 }))
+  describe('negative_funding_threshold_percent: -2.0 <= v < 0', () => {
+    it('rejects below min (-2.1) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt1({ negative_funding_threshold_percent: -2.1 }))
+      rejects(GeneratedLiveStrategySchema, live1({ negativeFundingThresholdPercent: -2.1 }))
     })
     it('rejects 0 (exclusive max — signed, must stay negative) on both loaders', () => {
       rejects(GeneratedBacktestStrategySchema, bt1({ negative_funding_threshold_percent: 0 }))
       rejects(GeneratedLiveStrategySchema, live1({ negativeFundingThresholdPercent: 0 }))
     })
-    it('accepts the min (-5.0) on both loaders', () => {
-      accepts(GeneratedBacktestStrategySchema, bt1({ negative_funding_threshold_percent: -5.0 }))
-      accepts(GeneratedLiveStrategySchema, live1({ negativeFundingThresholdPercent: -5.0 }))
+    it('accepts the min (-2.0) on both loaders', () => {
+      accepts(GeneratedBacktestStrategySchema, bt1({ negative_funding_threshold_percent: -2.0 }))
+      accepts(GeneratedLiveStrategySchema, live1({ negativeFundingThresholdPercent: -2.0 }))
     })
   })
 
@@ -359,9 +359,9 @@ describe('§11.1 hard parameter bounds', () => {
       if (!liveResult.success) expect(liveResult.error.issues[0]?.message).toContain('unit_suspect_fraction')
     })
 
-    it('rejects retracement_pct=1.5 (percent mistaken for fraction) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt2({ retracement_pct: 1.5 }))
-      rejects(GeneratedLiveStrategySchema, live2({ retracementPct: 1.5 }))
+    it('rejects retracement_pct=2.5 (above the 2.0 max) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt2({ retracement_pct: 2.5 }))
+      rejects(GeneratedLiveStrategySchema, live2({ retracementPct: 2.5 }))
     })
 
     it('rejects an unrecognized key (typo) on both loaders', () => {

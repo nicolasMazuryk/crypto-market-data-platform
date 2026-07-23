@@ -42,7 +42,7 @@ const STRATEGY_CONFIG = {
       entryOffsetSeconds: 2,
       stopLossPercent: 1.0,
       tpVariantAMultiplier: 1.8,
-      deadlineSeconds: 3300,
+      deadlineSeconds: 300,
       amountUsd: 10,
       leverage: 5,
     },

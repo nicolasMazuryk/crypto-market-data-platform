@@ -86,7 +86,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     // OQ-7: canonicalized to -0.4 for all of strategy_1/1_ws/2/3a/4.1a/4.2a (kills the
     // -0.5 drift previously on strategy_1/1_ws/3a).
     default: -0.4,
-    bounds: { min: -5.0, max: 0, exclusiveMax: true },
+    bounds: { min: -2.0, max: 0, exclusiveMax: true },
   },
   {
     name: 'entry_offset_seconds',
@@ -95,16 +95,16 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'seconds',
     sign: 'absolute',
     default: {
-      strategy_1: 10,
-      strategy_1_ws: 10,
+      strategy_1: 5,
+      strategy_1_ws: 5,
       strategy_2: 5,
-      strategy_3a: 10,
+      strategy_3a: 5,
       strategy_4_1a: 5,
       strategy_4_2a: 5,
-      strategy_6: 10,
+      strategy_6: 5,
     },
     hardConstraint: { positive: true },
-    bounds: { min: 2 },
+    bounds: { min: 2, max: 5 },
   },
   {
     name: 'exit_offset_seconds',
@@ -114,7 +114,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     // R2: default bumped 2 -> 6 to satisfy the new >=6 bound.
     default: { strategy_1: 6 },
-    bounds: { min: 6 },
+    bounds: { min: 6, max: 15 },
   },
   {
     name: 'retracement_pct',
@@ -123,13 +123,12 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'fraction',
     sign: 'absolute',
     default: { strategy_2: 0.5 },
-    hardConstraint: { min: 0, max: 1 },
+    hardConstraint: { min: 0, max: 2 },
     bounds: {
       min: 0,
       exclusiveMin: true,
-      max: 1,
-      maxMessage:
-        'retracement_pct must be a fraction (0 < v ≤ 1.0); a value above 1.0 looks like a percent, not a fraction',
+      max: 2,
+      maxMessage: 'retracement_pct must be a fraction (0 < v ≤ 2.0)',
     },
   },
   {
@@ -145,8 +144,11 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
       strategy_4_2a: 60,
       strategy_6: 3300,
     },
-    // R3: 10..3600.
-    bounds: { min: 10, max: 3600 },
+    // program.md hard bounds: 5..900 (autoresearch-tuned strategies only).
+    // strategy_6 isn't in the autoresearch matrix and runs deadlines well past 900s
+    // (deployed at 1800s) — left unconstrained above the floor.
+    bounds: { min: 5, max: 900 },
+    perStrategyBounds: { strategy_6: { min: 5 } },
   },
   {
     name: 'sl_multiplier',
@@ -170,7 +172,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'percent',
     sign: 'absolute',
     default: { strategy_3a: 1 },
-    bounds: { min: 0.2, max: 5.0 },
+    bounds: { min: 0.2, max: 4.0 },
   },
   {
     name: 'tp_variant_a_multiplier',
@@ -179,6 +181,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'multiplier',
     sign: 'absolute',
     default: { strategy_3a: 1.5 },
+    bounds: { min: 1.2, max: 5.0 },
   },
   {
     name: 'tp_variant_b_offset_percent',
@@ -196,8 +199,8 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: { strategy_4_1a: 0.2, strategy_4_2a: 0.2 },
     bounds: {
-      min: 0.05,
-      max: 5.0,
+      min: 0.1,
+      max: 2.0,
       minMessage: 'unit_suspect_fraction: value looks like a fraction; percent expected',
     },
   },
@@ -210,7 +213,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     default: { strategy_4_1a: 5 },
     hardConstraint: { min: 2 },
     // hardConstraint.min:2 above is redundant with this bound; left as-is (harmless).
-    bounds: { min: 2, max: 20 },
+    bounds: { min: 2, max: 10 },
   },
   {
     name: 'ladder_top_mult',
@@ -219,6 +222,9 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'multiplier',
     sign: 'absolute',
     default: { strategy_4_1a: 0.5 },
+    // No fixed numeric bound: only the cross-field coupling (must stay < ladder_bottom_mult,
+    // schema-enforced .refine) is checked — a hard range here would conflict with that
+    // coupling at the registry's own defaults for the other side.
   },
   {
     name: 'ladder_bottom_mult',
@@ -227,6 +233,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'multiplier',
     sign: 'absolute',
     default: { strategy_4_1a: 1.5 },
+    // No fixed numeric bound — see ladder_top_mult.
   },
   {
     name: 'limit_offset_mult',
@@ -235,6 +242,9 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     unit: 'multiplier',
     sign: 'absolute',
     default: { strategy_4_2a: 0.75 },
+    // No fixed numeric bound: only the cross-field coupling (must stay < sl_multiplier,
+    // schema-enforced) is checked — a hard range here would conflict with that coupling
+    // at the registry's own sl_multiplier default.
   },
   {
     name: 'funding_fee_timeout_seconds',
