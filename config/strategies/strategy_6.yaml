@@ -1,0 +1,12 @@
+# Strategy 6: Post-funding directional (LONG), WS-gated entry
+
+strategy_id: 'strategy_6'
+direction: 'long'
+funding_threshold_percent: 0.1
+entry_offset_seconds: 3
+funding_fee_timeout_seconds: 10
+tp_multiplier: 1.5
+sl_multiplier: 1.5
+deadline_seconds: 1800
+amount_usd: 10
+leverage: 5

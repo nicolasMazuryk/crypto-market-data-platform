@@ -184,7 +184,7 @@ export class BybitProvisioningAdapter implements ProvisioningAdapter {
     const params: Record<string, unknown> = {
       transferId: randomUUID(),
       coin: 'USDT',
-      amount: String(amountUsdt),
+      amount: amountUsdt.toFixed(8),
       fromAccountType: isMasterToSub ? 'FUND' : 'UNIFIED',
       toAccountType: isMasterToSub ? 'UNIFIED' : 'FUND',
       fromMemberId: isMasterToSub ? masterUid : subUid,

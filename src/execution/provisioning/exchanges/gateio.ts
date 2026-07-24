@@ -155,7 +155,7 @@ export class GateioProvisioningAdapter implements ProvisioningAdapter {
     await this.client.privateWalletPostSubAccountTransfers({
       sub_account: subAccountId,
       currency: 'USDT',
-      amount: String(amountUsdt),
+      amount: amountUsdt.toFixed(6),
       direction: direction === 'master_to_sub' ? 'to' : 'from',
       sub_account_type: 'futures',
     })
