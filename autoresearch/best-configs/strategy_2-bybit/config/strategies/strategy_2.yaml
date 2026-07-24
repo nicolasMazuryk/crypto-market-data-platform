@@ -3,9 +3,9 @@
 
 strategy_id: 'strategy_2'
 direction: 'long'
-negative_funding_threshold_percent: -1.5
+negative_funding_threshold_percent: -1.8
 entry_offset_seconds: 5
-retracement_pct: 1.0 # clamped to new 0<v<=1.0 bound
+retracement_pct: 0.5 # reduced from 1.0 to exit on smaller retracement
 deadline_seconds: 600
 sl_multiplier: 3.5
 amount_usd: 20

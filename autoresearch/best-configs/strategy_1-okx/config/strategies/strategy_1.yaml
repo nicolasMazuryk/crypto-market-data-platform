@@ -3,8 +3,8 @@
 
 strategy_id: 'strategy_1'
 direction: 'long'
-negative_funding_threshold_percent: -0.75
-entry_offset_seconds: 3
-exit_offset_seconds: 10 # Exit at T_funding + 10s (clamped to new >=10 bound)
+negative_funding_threshold_percent: -1.0
+entry_offset_seconds: 4
+exit_offset_seconds: 12
 amount_usd: 20
 leverage: 4

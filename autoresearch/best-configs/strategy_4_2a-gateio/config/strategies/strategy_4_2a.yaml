@@ -3,7 +3,7 @@
 strategy_id: 'strategy_4_2a'
 direction: 'long'
 negative_funding_threshold_percent: -2.0
-entry_offset_seconds: 3
+entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
 limit_offset_mult: 1.28
 take_profit_pct: 0.35
 deadline_seconds: 30
