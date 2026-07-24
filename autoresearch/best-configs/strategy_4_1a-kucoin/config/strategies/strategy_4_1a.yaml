@@ -7,7 +7,7 @@ negative_funding_threshold_percent: -2.0
 entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
 ladder_count: 3
 ladder_top_mult: 1.7
-ladder_bottom_mult: 1.99
+ladder_bottom_mult: 2.3
 take_profit_pct: 2.0
 deadline_seconds: 600
 sl_multiplier: 2.7
