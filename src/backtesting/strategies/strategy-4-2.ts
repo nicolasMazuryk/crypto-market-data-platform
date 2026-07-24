@@ -131,9 +131,10 @@ export class Strategy42 implements BaseStrategy {
       direction: 'long',
       avgEntryPrice: entryPrice,
       exitPrice: exit.price,
+      filledQty: fill.quantity,
+      committedCapital: this.config.amount_usd,
       fundingRate: event.funding_rate,
       appliedFraction: 0,
-      numFilled: fills.length,
       exitFeeType: exit.feeType,
       feeSchedule: this.feeSchedule,
     })

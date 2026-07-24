@@ -64,28 +64,28 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 ### strategy_1 (LONG — instant exit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
-- `exit_offset_seconds`: >= 6 AND <= 15 ← **integer only** (6, 7, 8, 9, 10, 11, 12, 13, 14, 15 — no decimals)
+- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
+- `exit_offset_seconds`: >= 10 AND <= 15 ← **integer only** (10, 11, 12, 13, 14, 15 — no decimals)
 
 ### strategy_1_ws (LONG — funding-fee-event exit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
-- `funding_fee_timeout_seconds`: >= 5 AND <= 120 ← **integer only**
+- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
+- `funding_fee_timeout_seconds`: >= 10 AND <= 120 ← **integer only**
 
 ### strategy_2 (LONG — retracement exit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
 - `retracement_pct`: 0 < v <= 2.0 ← **fraction**, not percent
 - `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
 - `sl_multiplier`: >= 0.5 AND <= 4.0 ← SL at entry × (1 − F × mult)
-- `funding_fee_timeout_seconds`: >= 5 AND <= 120 ← **integer only**
+- `funding_fee_timeout_seconds`: >= 10 AND <= 120 ← **integer only**
 
 ### strategy_3a (SHORT — ride the drop)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
 - `stop_loss_percent`: >= 0.2 AND <= 4.0 ← **percent**
 - `tp_mode`: `A` or `B`
 - `tp_multiplier`: >= 1.2 AND <= 5.0 ← mode A only; TP = |F| × mult;
@@ -95,7 +95,7 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 ### strategy_4_1a (LONG — ladder limit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
 - `ladder_count`: >= 2 AND <= 10 ← **integer only** (2, 3, 4, 5, 6, 7, 8, 9 or 10 — no decimals)
 - `ladder_top_mult`: >= 0.3 AND <= 2.5 ← must stay < `ladder_bottom_mult` (schema-enforced)
 - `ladder_bottom_mult`: >= 0.8 AND <= 4.0 ← must stay > `ladder_top_mult` (schema-enforced)
@@ -106,7 +106,7 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 ### strategy_4_2a (LONG — single limit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 2 AND <= 5 ← **integer only** (2, 3, 4, 5 — no decimals)
+- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
 - `limit_offset_mult`: >= 0.3 AND <= 3.0 ← must stay < `sl_multiplier`
 - `take_profit_pct`: >= 0.1 AND <= 2.0 ← **percent**
 - `deadline_seconds`: >= 5 AND <= 900 ← **integer only**

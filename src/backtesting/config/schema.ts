@@ -105,9 +105,9 @@ export interface Strategy1Config {
   direction: 'long'
   /** Signed funding-rate percent threshold, e.g. -0.4 for -0.4% (canonical: negative_funding_threshold_percent) */
   negative_funding_threshold_percent: number
-  /** Seconds before T_funding to enter (>= 2, market-order latency) */
+  /** Seconds before T_funding to enter (>= 3, market-order latency) */
   entry_offset_seconds: number
-  /** Seconds after T_funding to exit (>= 2, market-order latency) */
+  /** Seconds after T_funding to exit (>= 10, market-order latency) */
   exit_offset_seconds: number
   /** Notional size in USD */
   amount_usd: number
@@ -120,9 +120,9 @@ export interface Strategy1WsConfig {
   strategy_id: 'strategy_1_ws'
   direction: 'long'
   negative_funding_threshold_percent: number
-  /** Seconds before T_funding to enter (>= 2, market-order latency) */
+  /** Seconds before T_funding to enter (>= 3, market-order latency) */
   entry_offset_seconds: number
-  /** Max seconds after T_settle before the missed-WS-event fallback timeout fires (5..120) */
+  /** Max seconds after T_settle before the missed-WS-event fallback timeout fires (10..120) */
   funding_fee_timeout_seconds: number
   /** Notional size in USD */
   amount_usd: number
@@ -135,9 +135,9 @@ export interface Strategy2Config {
   strategy_id: 'strategy_2'
   direction: 'long'
   negative_funding_threshold_percent: number
-  /** Seconds before T_funding to enter (>= 2, market-order latency) */
+  /** Seconds before T_funding to enter (>= 3, market-order latency) */
   entry_offset_seconds: number
-  /** Max seconds after T_settle before the missed-WS-event fallback timeout arms the tracker (5..120) */
+  /** Max seconds after T_settle before the missed-WS-event fallback timeout arms the tracker (10..120) */
   funding_fee_timeout_seconds: number
   /** Retracement level (0-1, e.g., 0.50 for 50%) */
   retracement_pct: number
@@ -156,7 +156,7 @@ export interface Strategy3Config {
   strategy_id: 'strategy_3a'
   direction: 'short'
   negative_funding_threshold_percent: number
-  /** Seconds before T_funding to enter (>= 2, market-order latency) */
+  /** Seconds before T_funding to enter (>= 3, market-order latency) */
   entry_offset_seconds: number
   /** Stop-loss distance in PERCENT (e.g., 1.0 for 1%; canonical: stop_loss_percent) */
   stop_loss_percent: number
@@ -179,7 +179,7 @@ export interface Strategy41Config {
   strategy_id: 'strategy_4_1a'
   direction: 'long'
   negative_funding_threshold_percent: number
-  /** Seconds before T_funding to enter (>= 2, market-order latency) */
+  /** Seconds before T_funding to enter (>= 3, market-order latency) */
   entry_offset_seconds: number
   /** Number of limit orders in the ladder (>= 2) */
   ladder_count: number
@@ -204,7 +204,7 @@ export interface Strategy42Config {
   strategy_id: 'strategy_4_2a'
   direction: 'long'
   negative_funding_threshold_percent: number
-  /** Seconds before T_funding to enter (>= 2, market-order latency) */
+  /** Seconds before T_funding to enter (>= 3, market-order latency) */
   entry_offset_seconds: number
   /** Multiplier for limit price offset */
   limit_offset_mult: number

@@ -142,8 +142,8 @@ describe('E2E: Strategy 1-WS — Funding-Fee-Event Exit', () => {
     expect(exitMs).toBe(fundingTime.getTime() + 12000)
   })
 
-  it('Multi-event: ws_event_miss_rate=0.02 fires the timeout path strictly > 0 times across a fleet of events', () => {
-    const strategy = makeStrategy({ missRate: 0.02, extraDelaySeconds: 2 })
+  it('Multi-event: ws_event_miss_rate=0.01 fires the timeout path strictly > 0 times across a fleet of events', () => {
+    const strategy = makeStrategy({ missRate: 0.01, extraDelaySeconds: 1 })
 
     const baseTime = new Date('2025-06-01T00:00:00Z').getTime()
     const N = 300

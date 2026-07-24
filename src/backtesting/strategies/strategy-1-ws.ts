@@ -9,7 +9,7 @@ import { computeTDropOffsetSeconds } from '../engine/localization.js'
 import { eventMissDraw } from '../engine/seeded-rng.js'
 import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 
-const DEFAULT_WS_EVENT_CONFIG = { missRate: 0.02, extraDelaySeconds: 2 }
+const DEFAULT_WS_EVENT_CONFIG = { missRate: 0.01, extraDelaySeconds: 1 }
 
 /**
  * Strategy 1-WS: Negative Funding LONG - Funding-Fee-Event Exit

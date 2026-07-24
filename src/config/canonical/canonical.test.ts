@@ -44,7 +44,7 @@ describe('canonical registry — backtest/live round-trip', () => {
       strategy_id: 'strategy_1',
       direction: 'long',
       entry_offset_seconds: 5,
-      exit_offset_seconds: 6,
+      exit_offset_seconds: 10,
     }) as Record<string, unknown>
     const live = GeneratedLiveStrategySchema.parse({ id: 'strategy_1' }) as Record<string, unknown>
 
@@ -69,7 +69,7 @@ describe('canonical registry — backtest/live round-trip', () => {
         direction: 'long',
         negative_funding_threshold_percent: -0.4,
         entry_offset_seconds: 5,
-        exit_offset_seconds: 6,
+        exit_offset_seconds: 10,
         amount_usd: 20,
         leverage: 4,
       },
@@ -97,9 +97,9 @@ describe('canonical registry — backtest/live round-trip', () => {
     const parsed = GeneratedBacktestOnlyBaseSchema.parse({}) as Record<string, unknown>
     expect(parsed.market_slippage_pct).toBe(0.05)
     expect(parsed.order_latency_ms).toBe(1000)
-    expect(parsed.ws_event_miss_rate).toBe(0.02)
-    expect(parsed.ws_exit_extra_delay_seconds).toBe(2)
-    expect(parsed.drop_search_window_seconds).toBe(10)
+    expect(parsed.ws_event_miss_rate).toBe(0.01)
+    expect(parsed.ws_exit_extra_delay_seconds).toBe(1)
+    expect(parsed.drop_search_window_seconds).toBe(15)
     expect(parsed.drop_qualifier_funding_mult).toBe(0.5)
     expect(parsed.drop_qualifier_range_mult).toBe(3.0)
   })

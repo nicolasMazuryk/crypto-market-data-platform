@@ -10,6 +10,10 @@ export interface TradeStats {
   unfilled_events: number
   /** Positions still open when backtest data ran out (no exit signal fired). */
   trades_open_at_end: number
+  /** Median fill_count over executed trades (= median ladder rungs executed for ladder strategies). */
+  median_fill_count: number
+  /** Mean fill_count over executed trades (= average ladder rungs executed for ladder strategies). */
+  average_fill_count: number
 }
 
 /** Return metrics */

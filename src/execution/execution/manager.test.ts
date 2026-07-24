@@ -1112,21 +1112,66 @@ describe('Task 22 F6: strategy_6 entry gate opens from ws.funding_fee event', ()
     const fundingTs = now + 5_000
 
     const rest = makeRestAdapter()
-    rest.getOrder = vi.fn().mockImplementation(
-      async (params: { clientOrderId?: string; exchangeOrderId?: string }) =>
-        ({
-          clientOrderId: params.clientOrderId ?? 'pre',
-          exchangeOrderId: params.exchangeOrderId ?? 'eid-pre',
-          status: 'filled',
-          filledQty: 0.001,
-          side: 'sell',
-          type: 'market',
-          reduceOnly: false,
-          submittedAt: now,
-          updatedAt: now,
-        }) satisfies Order
-    )
+    const { manager, bus, ids } = makeManager({ restAdapter: rest })
 
+    const intent = makeIntent({
+      entryPolicy: {
+        kind: 'pre_funding_then_main',
+        preFundingSide: 'short',
+        preFundingVolume: 0.001,
+        mainSide: 'long',
+        mainVolume: 0.002,
+      },
+      exitPolicy: {
+        kind: 'sl_tp_deadline_post_funding_event',
+        tpMultiplier: 1,
+        slMultiplier: 1,
+        fundingTs,
+        timeoutAt: now + 120_000,
+        deadlineAt: now + 300_000,
+      },
+    })
+
+    const placedKinds: string[] = []
+    bus.on('order.placed', ev => placedKinds.push(ev.kind))
+
+    await manager.submit(intent)
+
+    // PRE_FUNDING fill confirmed via WS (no REST fallback on the MAIN hot path).
+    const preCid = ids.forIntent(intent.id, 90)
+    bus.emit('ws.order', {
+      exchange: intent.exchange,
+      order: makeOrder(preCid, { side: 'sell', status: 'filled', filledQty: 0.001, avgFillPrice: 50000 }),
+      seq: 1,
+      receivedAt: now,
+    })
+    await new Promise(r => setTimeout(r, 10))
+
+    // Simulate the funding-income poller emitting ws.funding_fee for this (exchange, symbol).
+    bus.emit('ws.funding_fee', {
+      exchange: intent.exchange,
+      symbol: intent.symbol,
+      fundingTime: fundingTs + 1_000, // within ±5s tolerance
+      fundingRate: -0.006,
+      fundingAmount: -0.05,
+      asset: 'USDT',
+      positionQty: 0.001,
+      receivedAt: now,
+    })
+
+    await new Promise(r => setTimeout(r, 20))
+
+    expect(placedKinds).toContain('entry')
+    expect(rest.createOrder).toHaveBeenCalledWith(expect.objectContaining({ side: 'buy', qty: 0.002 }))
+    expect(rest.getOrder).not.toHaveBeenCalled()
+  })
+
+  it('aborts MAIN with pre_funding_not_filled when ws.order fill never arrives (no REST confirm on hot path)', async () => {
+    const now = Date.now()
+    const fundingTs = now + 5_000
+
+    const rest = makeRestAdapter()
+    vi.mocked(rest.getPositions).mockResolvedValue([])
     const { manager, bus } = makeManager({ restAdapter: rest })
 
     const intent = makeIntent({
@@ -1152,11 +1197,11 @@ describe('Task 22 F6: strategy_6 entry gate opens from ws.funding_fee event', ()
 
     await manager.submit(intent)
 
-    // Simulate the funding-income poller emitting ws.funding_fee for this (exchange, symbol).
+    // No ws.order fill for PRE_FUNDING arrives before ws.funding_fee fires.
     bus.emit('ws.funding_fee', {
       exchange: intent.exchange,
       symbol: intent.symbol,
-      fundingTime: fundingTs + 1_000, // within ±5s tolerance
+      fundingTime: fundingTs + 1_000,
       fundingRate: -0.006,
       fundingAmount: -0.05,
       asset: 'USDT',
@@ -1166,8 +1211,9 @@ describe('Task 22 F6: strategy_6 entry gate opens from ws.funding_fee event', ()
 
     await new Promise(r => setTimeout(r, 20))
 
-    expect(placedKinds).toContain('entry')
-    expect(rest.createOrder).toHaveBeenCalledWith(expect.objectContaining({ side: 'buy', qty: 0.002 }))
+    expect(rest.getOrder).not.toHaveBeenCalled()
+    expect(placedKinds).not.toContain('entry')
+    expect(manager.get(intent.id)?.error?.code).toBe('pre_funding_not_filled')
   })
 })
 

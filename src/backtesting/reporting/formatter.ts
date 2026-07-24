@@ -33,6 +33,8 @@ export function formatReport(report: BacktestReport, outputDir: string): string 
     `  Events triggered:      ${String(ts.events_triggered)}`,
     `  Trades executed:       ${String(ts.trades_executed)}`,
     `  Unfilled events:       ${String(ts.unfilled_events)}`,
+    `  Median rungs executed:  ${ts.median_fill_count.toFixed(2)}`,
+    `  Average rungs executed: ${ts.average_fill_count.toFixed(2)}`,
     '',
     `--- Returns ---`,
     `  Total Net P&L:    ${(rm.total_net_pnl * 100).toFixed(4)}%`,

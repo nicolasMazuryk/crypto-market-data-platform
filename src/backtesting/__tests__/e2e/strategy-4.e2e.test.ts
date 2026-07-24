@@ -53,8 +53,15 @@ describe('E2E: Strategy 4.1 — Ladder LONG', () => {
     expect(result.fill_count).toBeLessThanOrEqual(5)
     expect(result.funding_received).toBe(false) // Scenario a
     expect(result.pnl.funding_pnl).toBe(0)
-    // Fees: fill_count * maker_fee + exit_fee
-    const expectedFees = result.fill_count * 0.0002 + (result.exit_reason === 'tp_hit' ? 0.0002 : 0.0004)
+    // Fees are now notional-weighted over committed capital (amount_usd = 20), no longer
+    // fill_count * maker. Reconstruct filledQty from the capital-weighted delta:
+    //   delta_pnl = filledQty * (exit - pAvg) / amount_usd  =>  filledQty = delta_pnl * C / (exit - pAvg)
+    const C = 20
+    const filledQty = (result.pnl.delta_pnl * C) / (result.exit_price - result.entry_price)
+    const entryFee = 0.0002 * (filledQty * result.entry_price)
+    const exitFeeRate = result.exit_reason === 'tp_hit' ? 0.0002 : 0.0004
+    const exitFee = exitFeeRate * (filledQty * result.exit_price)
+    const expectedFees = (entryFee + exitFee) / C
     expect(Math.abs(result.pnl.fees - expectedFees)).toBeLessThan(TOLERANCE)
   })
 

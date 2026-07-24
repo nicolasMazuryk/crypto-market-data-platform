@@ -39,7 +39,7 @@ const STRATEGY_CONFIG = {
       id: 'strategy_3a',
       enabled: true,
       negativeFundingThresholdPercent: -0.4,
-      entryOffsetSeconds: 2,
+      entryOffsetSeconds: 3,
       stopLossPercent: 1.0,
       tpVariantAMultiplier: 1.8,
       deadlineSeconds: 300,

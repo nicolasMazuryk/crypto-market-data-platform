@@ -150,50 +150,91 @@ describe('P&L Calculator', () => {
     })
   })
 
-  describe('calculateLadderPnl (S4.1)', () => {
-    it('hand-computed ladder with 3 fills', () => {
-      // 3 fills at prices [49800, 49600, 49400], equal weight
-      // P_avg = (49800 + 49600 + 49400) / 3 = 49600
-      // Exit at 49700 (TP hit)
-      // DELTA_PNL = (49700 - 49600) / 49600 = 0.002016...
-      // FUNDING_PNL = 0 (scenario a)
-      // FEES = 3 * 0.0002 + 0.0002 = 0.0008
-      // NET_PNL = 0.002016... + 0 - 0.0008 = 0.001216...
-
-      const pAvg = (49800 + 49600 + 49400) / 3
-      const expectedDelta = (49700 - pAvg) / pAvg
+  describe('calculateLadderPnl (S4.1, capital-weighted)', () => {
+    it('hand-computed full ladder (5/5 rungs filled)', () => {
+      // amount_usd = 20 committed. All 5 rungs filled: filledNotional = 20.
+      // pAvg = 100, exit = 101 (+1% move on filled notional).
+      // grossProfit = 0.20 * (101 - 100) = 0.20
+      // entryFee = maker * filledNotional = 0.0002 * 20 = 0.004
+      // exitFee  = maker * (filledQty * exit) = 0.0002 * (0.20 * 101) = 0.004040
+      // delta_pnl = 0.20 / 20 = 0.01 ; fees = (0.004 + 0.004040) / 20
+      const C = 20
+      const pAvg = 100
+      const exitPrice = 101
+      const filledQty = 0.2
+      const filledNotional = filledQty * pAvg
+      const expectedDelta = (filledQty * (exitPrice - pAvg)) / C
+      const expectedFees = (0.0002 * filledNotional + 0.0002 * (filledQty * exitPrice)) / C
 
       const pnl = calculateLadderPnl({
         direction: 'long',
         avgEntryPrice: pAvg,
-        exitPrice: 49700,
+        exitPrice,
+        filledQty,
+        committedCapital: C,
         fundingRate: -0.01,
         appliedFraction: 0, // scenario a
-        numFilled: 3,
         exitFeeType: 'maker',
         feeSchedule: defaultFees,
       })
 
       expect(Math.abs(pnl.delta_pnl - expectedDelta)).toBeLessThan(TOLERANCE)
       expect(pnl.funding_pnl).toBe(0)
-      expect(Math.abs(pnl.fees - 0.0008)).toBeLessThan(TOLERANCE)
-      expect(Math.abs(pnl.net_pnl - (expectedDelta - 0.0008))).toBeLessThan(TOLERANCE)
+      expect(Math.abs(pnl.fees - expectedFees)).toBeLessThan(TOLERANCE)
+      expect(Math.abs(pnl.net_pnl - (expectedDelta - expectedFees))).toBeLessThan(TOLERANCE)
     })
 
-    it('ladder with funding included (scenario b)', () => {
-      const pAvg = 49600
+    it('partial fill (1 of 5 rungs) dilutes the return by idle capital', () => {
+      // Only 1 rung fills: filledNotional = 4, but committed capital still 20.
+      // Same +1% move on filled notional -> capital-weighted delta = 0.01 * (4/20) = 0.002.
+      const C = 20
+      const pAvg = 100
+      const exitPrice = 101
+      const filledQty = 0.04 // filledNotional = 4 (one of five ~$4 rungs)
+      const filledNotional = filledQty * pAvg
+      const expectedDelta = (filledQty * (exitPrice - pAvg)) / C
+      const expectedFees = (0.0002 * filledNotional + 0.0002 * (filledQty * exitPrice)) / C
+
       const pnl = calculateLadderPnl({
         direction: 'long',
         avgEntryPrice: pAvg,
-        exitPrice: 49700,
+        exitPrice,
+        filledQty,
+        committedCapital: C,
         fundingRate: -0.01,
-        appliedFraction: 1, // scenario b
-        numFilled: 3,
+        appliedFraction: 0,
         exitFeeType: 'maker',
         feeSchedule: defaultFees,
       })
 
-      expect(Math.abs(pnl.funding_pnl - 0.01)).toBeLessThan(TOLERANCE)
+      // 1% move on filled notional collapses to ~0.2% of committed capital.
+      expect(Math.abs(pnl.delta_pnl - 0.002)).toBeLessThan(TOLERANCE)
+      expect(Math.abs(pnl.delta_pnl - expectedDelta)).toBeLessThan(TOLERANCE)
+      expect(Math.abs(pnl.fees - expectedFees)).toBeLessThan(TOLERANCE)
+      expect(Math.abs(pnl.net_pnl - (expectedDelta - expectedFees))).toBeLessThan(TOLERANCE)
+    })
+
+    it('ladder with funding included (scenario b) — notional-weighted over committed capital', () => {
+      const C = 20
+      const pAvg = 100
+      const filledQty = 0.2
+      const filledNotional = filledQty * pAvg
+      // funding = |F| * filledNotional / C = 0.01 * 20 / 20 = 0.01
+      const expectedFunding = (0.01 * filledNotional) / C
+
+      const pnl = calculateLadderPnl({
+        direction: 'long',
+        avgEntryPrice: pAvg,
+        exitPrice: 101,
+        filledQty,
+        committedCapital: C,
+        fundingRate: -0.01,
+        appliedFraction: 1, // scenario b
+        exitFeeType: 'maker',
+        feeSchedule: defaultFees,
+      })
+
+      expect(Math.abs(pnl.funding_pnl - expectedFunding)).toBeLessThan(TOLERANCE)
     })
   })
 })

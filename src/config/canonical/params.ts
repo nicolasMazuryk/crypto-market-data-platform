@@ -104,7 +104,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
       strategy_6: 5,
     },
     hardConstraint: { positive: true },
-    bounds: { min: 2, max: 5 },
+    bounds: { min: 3, max: 5 },
   },
   {
     name: 'exit_offset_seconds',
@@ -112,9 +112,9 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     liveKey: 'exitOffsetSeconds',
     unit: 'seconds',
     sign: 'absolute',
-    // R2: default bumped 2 -> 6 to satisfy the new >=6 bound.
-    default: { strategy_1: 6 },
-    bounds: { min: 6, max: 15 },
+    // R2: default bumped 2 -> 10 to satisfy the new >=10 bound.
+    default: { strategy_1: 10 },
+    bounds: { min: 10, max: 15 },
   },
   {
     name: 'retracement_pct',
@@ -254,7 +254,7 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     sign: 'absolute',
     default: { strategy_1_ws: 30, strategy_2: 30, strategy_6: 30 },
     hardConstraint: { positive: true },
-    bounds: { min: 5, max: 120 },
+    bounds: { min: 10, max: 120 },
     // Base default 30 already matches current live schema.ts defaults; OKX runs these
     // three strategies at 45s in the deployed per-instance YAMLs. Data only — not
     // applied automatically by generate-live.ts (no exchange dimension in the strategy
@@ -346,23 +346,23 @@ export const CANONICAL_PARAMS: CanonicalParam[] = [
     name: 'ws_event_miss_rate',
     unit: 'fraction',
     sign: 'absolute',
-    default: 0.02,
+    default: 0.01,
     backtestOnly: true,
   },
   {
     name: 'ws_exit_extra_delay_seconds',
     unit: 'seconds',
     sign: 'absolute',
-    default: 2,
+    default: 1,
     backtestOnly: true,
   },
   {
     name: 'drop_search_window_seconds',
     unit: 'seconds',
     sign: 'absolute',
-    default: 10,
+    default: 15,
     backtestOnly: true,
-    bounds: { min: 5, max: 30 },
+    bounds: { min: 10, max: 30 },
   },
   {
     name: 'drop_qualifier_funding_mult',

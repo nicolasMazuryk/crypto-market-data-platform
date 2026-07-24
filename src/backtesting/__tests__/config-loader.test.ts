@@ -20,7 +20,7 @@ describe('Config Loader', () => {
     if (config.strategy.strategy_id === 'strategy_1') {
       expect(config.strategy.negative_funding_threshold_percent).toBe(-1.1)
       expect(config.strategy.entry_offset_seconds).toBe(5)
-      expect(config.strategy.exit_offset_seconds).toBe(6)
+      expect(config.strategy.exit_offset_seconds).toBe(10)
       expect(config.strategy.amount_usd).toBe(20)
       expect(config.strategy.leverage).toBe(4)
     }
@@ -76,23 +76,23 @@ describe('Config Loader', () => {
       return tmpPath
     }
 
-    it('rejects entry_offset_seconds=1 (below the new >=2 bound)', () => {
+    it('rejects entry_offset_seconds=2 (below the new >=3 bound)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 1\nexit_offset_seconds: 6\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 2\nexit_offset_seconds: 10\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('entry_offset_seconds')
     })
 
-    it('accepts entry_offset_seconds=2 (minimum)', () => {
+    it('accepts entry_offset_seconds=3 (minimum)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 2\nexit_offset_seconds: 6\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 3\nexit_offset_seconds: 10\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).not.toThrow()
     })
 
     it('rejects entry_offset_seconds=0 (must be positive)', () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 0\nexit_offset_seconds: 6\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 0\nexit_offset_seconds: 10\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow('entry_offset_seconds')
     })
@@ -148,7 +148,7 @@ describe('Config Loader', () => {
 
     it("rejects an unrecognized/typo'd key end-to-end through the loader", () => {
       const tmpPath = writeTempYaml(
-        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 5\nexit_offset_seconds: 6\ntake_profit_percent: 0.3\n'
+        'strategy_id: strategy_1\nnegative_funding_threshold_percent: -0.3\nentry_offset_seconds: 5\nexit_offset_seconds: 10\ntake_profit_percent: 0.3\n'
       )
       expect(() => loadConfig(tmpPath, BASE_CONFIG)).toThrow()
     })

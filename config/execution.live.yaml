@@ -17,7 +17,7 @@ strategies:
   # - id: strategy_1
   #   enabled: false
   #   negativeFundingThresholdPercent: -0.3   # % — live threshold is tighter than dry-run
-  #   entryOffsetSeconds: 2                   # s
+  #   entryOffsetSeconds: 3                   # s
   #   exitOffsetSeconds: 1                    # s
   #   amountUsd: 10                           # USD
   #   leverage: 4                             # x
@@ -26,7 +26,7 @@ strategies:
   - id: strategy_3a
     enabled: true
     negativeFundingThresholdPercent: -0.4 # % — entry threshold
-    entryOffsetSeconds: 2 # s
+    entryOffsetSeconds: 3 # s
     stopLossPercent: 1.0 # %
     tpVariantAMultiplier: 1.8 # x
     tpVariantBOffsetPercent: 0.4 # % — unused in 3a
