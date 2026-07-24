@@ -178,9 +178,10 @@ export class Strategy41 implements BaseStrategy {
       direction: 'long',
       avgEntryPrice: pAvg,
       exitPrice: exit.price,
+      filledQty,
+      committedCapital: this.config.amount_usd,
       fundingRate: event.funding_rate,
       appliedFraction: 0,
-      numFilled: fills.length,
       exitFeeType: exit.feeType,
       feeSchedule: this.feeSchedule,
     })

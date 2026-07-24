@@ -3,8 +3,8 @@
 
 exchange: 'binance'
 # symbol: "HANAUSDT"  # Omit to run for all symbols on the exchange
-start_date: '2026-04-17 00:00:00'
-end_date: '2026-05-13 00:00:00'
+start_date: '2025-01-01 00:00:00'
+end_date: '2026-04-16 00:00:00'
 
 fees:
   binance:

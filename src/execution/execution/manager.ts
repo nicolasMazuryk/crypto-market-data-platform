@@ -3287,23 +3287,6 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           emitS6PartialTimeline()
         }
 
-        const confirmPreFundingFilled = async (): Promise<boolean> => {
-          if ((s.preFundingFilledQty ?? 0) > 0) return true
-          try {
-            const order = await withGetOrderTimeout(
-              rest.getOrder({
-                symbol: intent.exchangeSymbol,
-                clientOrderId: preFundingId,
-                ...(s.preFundingExchangeOrderId ? { exchangeOrderId: s.preFundingExchangeOrderId } : {}),
-              })
-            )
-            if (order) handleEntryOrderEvent(s, order)
-          } catch (err) {
-            logger.warn({ intentId: intent.id, err }, 'strategy6: pre-funding fill confirmation failed')
-          }
-          return (s.preFundingFilledQty ?? 0) > 0
-        }
-
         const placeMain = async () => {
           if (mainEventLock !== null || TERMINAL.has(s.status)) return
           let _resolve!: () => void
@@ -3313,7 +3296,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
           fundingFeeUnsub?.()
           if (timeoutHandle !== null) clearTimeout(timeoutHandle)
           try {
-            const preFundingFilled = await confirmPreFundingFilled()
+            const preFundingFilled = (s.preFundingFilledQty ?? 0) > 0
             if (!preFundingFilled) {
               setError(s, 'pre_funding_not_filled', 'pre-funding order was not confirmed filled before MAIN')
               void closePreFunding()

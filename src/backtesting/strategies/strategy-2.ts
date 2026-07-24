@@ -12,7 +12,7 @@ import { eventMissDraw } from '../engine/seeded-rng.js'
 import type { BaseStrategy, TradeResult, LookaheadContext } from './types.js'
 import type { ExitReason } from '../config/schema.js'
 
-const DEFAULT_WS_EVENT_CONFIG = { missRate: 0.02, extraDelaySeconds: 2 }
+const DEFAULT_WS_EVENT_CONFIG = { missRate: 0.01, extraDelaySeconds: 1 }
 
 /**
  * Strategy 2: Negative Funding LONG - Retracement Exit

@@ -12,7 +12,7 @@ function bt1(overrides: Record<string, unknown> = {}) {
     direction: 'long',
     negative_funding_threshold_percent: -0.4,
     entry_offset_seconds: 5,
-    exit_offset_seconds: 6,
+    exit_offset_seconds: 10,
     amount_usd: 20,
     leverage: 4,
     ...overrides,
@@ -25,7 +25,7 @@ function live1(overrides: Record<string, unknown> = {}) {
     enabled: true,
     negativeFundingThresholdPercent: -0.4,
     entryOffsetSeconds: 5,
-    exitOffsetSeconds: 6,
+    exitOffsetSeconds: 10,
     amountUsd: 20,
     leverage: 4,
     ...overrides,
@@ -186,25 +186,25 @@ function accepts(schema: { safeParse: (v: unknown) => { success: boolean } }, va
 }
 
 describe('§11.1 hard parameter bounds', () => {
-  describe('entry_offset_seconds: min 2', () => {
-    it('rejects below min (1) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt1({ entry_offset_seconds: 1 }))
-      rejects(GeneratedLiveStrategySchema, live1({ entryOffsetSeconds: 1 }))
+  describe('entry_offset_seconds: min 3', () => {
+    it('rejects below min (2) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt1({ entry_offset_seconds: 2 }))
+      rejects(GeneratedLiveStrategySchema, live1({ entryOffsetSeconds: 2 }))
     })
-    it('accepts the min (2) on both loaders', () => {
-      accepts(GeneratedBacktestStrategySchema, bt1({ entry_offset_seconds: 2 }))
-      accepts(GeneratedLiveStrategySchema, live1({ entryOffsetSeconds: 2 }))
+    it('accepts the min (3) on both loaders', () => {
+      accepts(GeneratedBacktestStrategySchema, bt1({ entry_offset_seconds: 3 }))
+      accepts(GeneratedLiveStrategySchema, live1({ entryOffsetSeconds: 3 }))
     })
   })
 
-  describe('exit_offset_seconds: min 6', () => {
-    it('rejects below min (5) on both loaders', () => {
-      rejects(GeneratedBacktestStrategySchema, bt1({ exit_offset_seconds: 5 }))
-      rejects(GeneratedLiveStrategySchema, live1({ exitOffsetSeconds: 5 }))
+  describe('exit_offset_seconds: min 10', () => {
+    it('rejects below min (9) on both loaders', () => {
+      rejects(GeneratedBacktestStrategySchema, bt1({ exit_offset_seconds: 9 }))
+      rejects(GeneratedLiveStrategySchema, live1({ exitOffsetSeconds: 9 }))
     })
-    it('accepts the min (6) on both loaders', () => {
-      accepts(GeneratedBacktestStrategySchema, bt1({ exit_offset_seconds: 6 }))
-      accepts(GeneratedLiveStrategySchema, live1({ exitOffsetSeconds: 6 }))
+    it('accepts the min (10) on both loaders', () => {
+      accepts(GeneratedBacktestStrategySchema, bt1({ exit_offset_seconds: 10 }))
+      accepts(GeneratedLiveStrategySchema, live1({ exitOffsetSeconds: 10 }))
     })
   })
 
@@ -300,15 +300,15 @@ describe('§11.1 hard parameter bounds', () => {
     })
   })
 
-  describe('funding_fee_timeout_seconds: 5..120 (live only — no backtest key)', () => {
+  describe('funding_fee_timeout_seconds: 10..120 (live only — no backtest key)', () => {
     it('rejects below min (4)', () => {
       rejects(GeneratedLiveStrategySchema, live1ws({ fundingFeeTimeoutSeconds: 4 }))
     })
     it('rejects above max (121)', () => {
       rejects(GeneratedLiveStrategySchema, live1ws({ fundingFeeTimeoutSeconds: 121 }))
     })
-    it('accepts the min (5)', () => {
-      accepts(GeneratedLiveStrategySchema, live1ws({ fundingFeeTimeoutSeconds: 5 }))
+    it('accepts the min (10)', () => {
+      accepts(GeneratedLiveStrategySchema, live1ws({ fundingFeeTimeoutSeconds: 10 }))
     })
   })
 

@@ -13,7 +13,7 @@ strategies:
   - id: strategy_1
     enabled: false
     negativeFundingThresholdPercent: -0.5 # % — entry threshold (e.g. -0.5 = −0.5 % per 8 h)
-    entryOffsetSeconds: 2 # s — enter N seconds before funding time
+    entryOffsetSeconds: 3 # s — enter N seconds before funding time
     exitOffsetSeconds: 6 # s — exit N seconds after funding time
     amountUsd: 10 # USD — notional per intent
     leverage: 4 # x — leverage applied at the exchange
@@ -21,7 +21,7 @@ strategies:
   - id: strategy_3a
     enabled: true
     negativeFundingThresholdPercent: -0.25 # % — minimum funding rate to trigger entry
-    entryOffsetSeconds: 2 # s — enter N seconds before funding time
+    entryOffsetSeconds: 3 # s — enter N seconds before funding time
     stopLossPercent: 1.0 # % — stop-loss distance from entry price
     tpVariantAMultiplier: 1.5 # x — TP = |fundingRate| × multiplier
     tpVariantBOffsetPercent: 0.4 # % — TP offset for variant B (unused in 3a)

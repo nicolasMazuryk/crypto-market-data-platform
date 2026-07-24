@@ -66,6 +66,8 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     trades_executed: trades.length,
     unfilled_events: unfilledCount,
     trades_open_at_end: tradesOpenAtEnd,
+    median_fill_count: m.median(trades.map(t => t.fill_count)),
+    average_fill_count: m.mean(trades.map(t => t.fill_count)),
   }
 
   // Return metrics
@@ -216,7 +218,9 @@ export function buildReport(input: BuildReportInput): BacktestReport {
     }))
     tradeLog = [...tradeEntries, ...errorEntries].sort(
       (a, b) =>
-        a.timestamp.localeCompare(b.timestamp) || a.exchange.localeCompare(b.exchange) || a.symbol.localeCompare(b.symbol)
+        a.timestamp.localeCompare(b.timestamp) ||
+        a.exchange.localeCompare(b.exchange) ||
+        a.symbol.localeCompare(b.symbol)
     )
   }
 

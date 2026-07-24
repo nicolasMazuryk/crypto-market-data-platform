@@ -59,7 +59,7 @@ NET_PNL     = DELTA_PNL + FUNDING_PNL − FEES
 | Doc var                | Backtest key                         | Live key                          | Unit                | Proposed       | Schema default | Notes                                              |
 | ---------------------- | ------------------------------------ | --------------------------------- | ------------------- | -------------- | -------------- | -------------------------------------------------- |
 | `F_threshold`          | `negative_funding_threshold_percent` | `negativeFundingThresholdPercent` | percent, signed < 0 | **−0.4**       | −0.4           | source live −0.1 kept as sweep point (R10)         |
-| `entry_offset_seconds` | `entry_offset_seconds`               | `entryOffsetSeconds`              | seconds             | **3**          | 5              | bound ≥ 2                                          |
+| `entry_offset_seconds` | `entry_offset_seconds`               | `entryOffsetSeconds`              | seconds             | **3**          | 5              | bound ≥ 3                                          |
 | `exit_offset_seconds`  | `exit_offset_seconds`                | `exitOffsetSeconds`               | seconds             | **6**          | 6              | bound **> 5** (R2); source live was 4 — superseded |
 | —                      | `amount_usd`                         | `amountUsd`                       | USD                 | 10             | 20             |                                                    |
 | —                      | `leverage`                           | `leverage`                        | int                 | 5 (**OKX: 4**) | 4              | margin only, never a P&L multiplier                |
@@ -72,7 +72,7 @@ No unit-shape divergences between schemas for S1. `exit_offset_seconds` is the p
 ## 6. Backtest simulation rules
 
 1. **Entry:** decision at `T_settle − entry_offset_seconds`; fill on the candle at decision + 1 s (latency), at that candle's ask proxy (open of candle, adverse side) + `market_slippage_pct`.
-2. **Funding:** credit `+|F_settled|` iff the entry fill timestamp `< T_settle` (`00_globals.md` §5.1). With `entry_offset_seconds = 2` (minimum), fill lands at `T_settle − 1 s` — still credited; with latency jitter modeled, any fill ≥ `T_settle` gets `FUNDING_PNL = 0` and the trade is still executed (the loss is real and must be booked).
+2. **Funding:** credit `+|F_settled|` iff the entry fill timestamp `< T_settle` (`00_globals.md` §5.1). With `entry_offset_seconds = 3` (minimum), fill lands at `T_settle − 2 s` — still credited; with latency jitter modeled, any fill ≥ `T_settle` gets `FUNDING_PNL = 0` and the trade is still executed (the loss is real and must be booked).
 3. **Exit — binding resolution (R2):** the exit is keyed to the **fixed offset**, identical to live: decision at `T_settle + exit_offset_seconds`, fill at decision + 1 s at bid proxy − slippage, taker fee. The backtest does **not** re-key this exit to `T_drop`. Rationale: live has no drop-awareness either; re-keying would simulate a different (better-informed) strategy.
 4. **Same-candle rules:** entry and exit are ≥ 8 s apart under proposed values — rule §5.5.1 is trivially satisfied; still enforced structurally (exit evaluation starts at `entry_candle + 1`).
 5. **`T_drop` localization runs anyway** (for reporting): every S1 trade records `t_drop_offset_s` so results can be bucketed by whether the exit preceded the drop.

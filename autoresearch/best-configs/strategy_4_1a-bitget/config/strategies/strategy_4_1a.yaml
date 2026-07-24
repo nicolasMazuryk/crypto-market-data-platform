@@ -4,7 +4,7 @@
 strategy_id: 'strategy_4_1a'
 direction: 'long'
 negative_funding_threshold_percent: -1.0
-entry_offset_seconds: 2
+entry_offset_seconds: 3
 ladder_count: 5
 ladder_top_mult: 0.5
 ladder_bottom_mult: 2.5

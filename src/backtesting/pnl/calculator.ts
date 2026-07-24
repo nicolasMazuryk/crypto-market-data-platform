@@ -69,26 +69,41 @@ export function calculatePnl(params: {
 }
 
 /**
- * Calculate P&L for ladder strategies with multiple entry fills.
+ * Calculate P&L for ladder strategies as a capital-weighted return.
  *
- * FEES = (num_filled * maker_fee) + exit_fee
+ * All components are dollar amounts divided by committed capital (`amount_usd`),
+ * so partial ladders (idle unfilled rungs) correctly dilute the return and fees
+ * are notional-accurate (entry maker fee on filled notional, not `× numFilled`).
+ *
+ * NET_PNL = DELTA_PNL + FUNDING_PNL - FEES  (invariant preserved for aggregation)
  */
 export function calculateLadderPnl(params: {
   direction: 'long' | 'short'
   /** Weighted average entry price */
   avgEntryPrice: number
   exitPrice: number
+  /** Total filled quantity across all rungs */
+  filledQty: number
+  /** Committed capital = amount_usd (full budget, including idle unfilled rungs) */
+  committedCapital: number
   fundingRate: number
   appliedFraction: number
-  numFilled: number
   exitFeeType: FeeType
   feeSchedule: FeeSchedule
 }): PnlBreakdown {
-  const delta_pnl = calculateDeltaPnl(params.direction, params.avgEntryPrice, params.exitPrice)
-  const funding_pnl = calculateFundingPnl(params.fundingRate, params.direction, params.appliedFraction)
-  const entryFees = params.numFilled * params.feeSchedule.maker_fee
-  const exitFee = calculateFee(params.exitFeeType, params.feeSchedule)
-  const fees = entryFees + exitFee
+  const filledNotional = params.filledQty * params.avgEntryPrice
+  const grossProfit =
+    params.direction === 'long'
+      ? params.filledQty * (params.exitPrice - params.avgEntryPrice)
+      : params.filledQty * (params.avgEntryPrice - params.exitPrice)
+  const entryFee = params.feeSchedule.maker_fee * filledNotional
+  const exitFee = calculateFee(params.exitFeeType, params.feeSchedule) * (params.filledQty * params.exitPrice)
+  const funding = calculateFundingPnl(params.fundingRate, params.direction, params.appliedFraction) * filledNotional
+
+  const C = params.committedCapital
+  const delta_pnl = grossProfit / C
+  const funding_pnl = funding / C
+  const fees = (entryFee + exitFee) / C
   const net_pnl = delta_pnl + funding_pnl - fees
 
   return { delta_pnl, spread_pnl: 0, funding_pnl, fees, net_pnl }
