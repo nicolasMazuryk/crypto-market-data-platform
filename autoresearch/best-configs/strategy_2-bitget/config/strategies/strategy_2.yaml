@@ -7,6 +7,6 @@ negative_funding_threshold_percent: -0.7
 entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
 retracement_pct: 1.4 # increased from 1.0 to test market over-retracement
 deadline_seconds: 600
-sl_multiplier: 3.0
+sl_multiplier: 4.0
 amount_usd: 20
 leverage: 4

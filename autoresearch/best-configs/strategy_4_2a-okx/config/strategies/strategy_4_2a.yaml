@@ -7,6 +7,6 @@ entry_offset_seconds: 3
 limit_offset_mult: 1.28
 take_profit_pct: 0.75
 deadline_seconds: 45
-sl_multiplier: 2.0 # must be > limit_offset_mult
+sl_multiplier: 2.5 # must be > limit_offset_mult
 amount_usd: 20
 leverage: 4

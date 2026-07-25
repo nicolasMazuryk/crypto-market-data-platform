@@ -4,7 +4,7 @@
 strategy_id: 'strategy_4_1a'
 direction: 'long'
 negative_funding_threshold_percent: -2.0
-entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
+entry_offset_seconds: 5 # Enter at T_funding - 5s (maximum delay for extended pre-drop price discovery)
 ladder_count: 6
 ladder_top_mult: 0.5
 ladder_bottom_mult: 2.5
