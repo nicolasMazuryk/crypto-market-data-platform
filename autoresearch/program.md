@@ -55,7 +55,9 @@ other absolute path outside the worktree
 `negative_funding_threshold_percent` is a **signed percent, must be `< 0`** (range `[-2.0, 0)`).
 You tune a negative number — more negative = stricter/rarer trigger, not a magnitude to make
 more positive. TP/SL are now **percent** (`stop_loss_percent`, `take_profit_pct`), not fractions.
-`amount_usd`, `leverage`, `direction`, and `tp_mode` are **structural — do not tune**
+`amount_usd`, `leverage`, `direction`, and `tp_mode` are **structural — do not tune**.
+`entry_offset_seconds`, `exit_offset_seconds`, `funding_fee_timeout_seconds`, and
+`deadline_seconds` are **locked** — low signal-to-noise, do not propose changes to them.
 
 ## Hard parameter bounds
 
@@ -64,52 +66,52 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 ### strategy_1 (LONG — instant exit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
-- `exit_offset_seconds`: >= 10 AND <= 15 ← **integer only** (10, 11, 12, 13, 14, 15 — no decimals)
+- `entry_offset_seconds`: **LOCKED** — do not propose changes to this parameter
+- `exit_offset_seconds`: **LOCKED** — do not propose changes to this parameter
 
 ### strategy_1_ws (LONG — funding-fee-event exit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
-- `funding_fee_timeout_seconds`: >= 10 AND <= 120 ← **integer only**
+- `entry_offset_seconds`: **LOCKED** — do not propose changes to this parameter
+- `funding_fee_timeout_seconds`: **LOCKED** — do not propose changes to this parameter
 
 ### strategy_2 (LONG — retracement exit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
+- `entry_offset_seconds`: **LOCKED** — do not propose changes to this parameter
 - `retracement_pct`: 0 < v <= 2.0 ← **fraction**, not percent
-- `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
+- `deadline_seconds`: **LOCKED** — do not propose changes to this parameter
 - `sl_multiplier`: >= 0.5 AND <= 4.0 ← SL at entry × (1 − F × mult)
-- `funding_fee_timeout_seconds`: >= 10 AND <= 120 ← **integer only**
+- `funding_fee_timeout_seconds`: **LOCKED** — do not propose changes to this parameter
 
 ### strategy_3a (SHORT — ride the drop)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
+- `entry_offset_seconds`: **LOCKED** — do not propose changes to this parameter
 - `stop_loss_percent`: >= 0.2 AND <= 4.0 ← **percent**
 - `tp_mode`: `A` or `B`
 - `tp_multiplier`: >= 1.2 AND <= 5.0 ← mode A only; TP = |F| × mult;
 - `tp_addend_pct`: mode B only; **percent**; no hard bound
-- `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
+- `deadline_seconds`: **LOCKED** — do not propose changes to this parameter
 
 ### strategy_4_1a (LONG — ladder limit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
+- `entry_offset_seconds`: **LOCKED** — do not propose changes to this parameter
 - `ladder_count`: >= 2 AND <= 10 ← **integer only** (2, 3, 4, 5, 6, 7, 8, 9 or 10 — no decimals)
 - `ladder_top_mult`: >= 0.3 AND <= 2.5 ← must stay < `ladder_bottom_mult` (schema-enforced)
 - `ladder_bottom_mult`: >= 0.8 AND <= 4.0 ← must stay > `ladder_top_mult` (schema-enforced)
 - `take_profit_pct`: >= 0.1 AND <= 2.0 ← **percent**
-- `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
+- `deadline_seconds`: **LOCKED** — do not propose changes to this parameter
 - `sl_multiplier`: >= 0.5 AND <= 4.0
 
 ### strategy_4_2a (LONG — single limit)
 
 - `negative_funding_threshold_percent`: −2.0 <= v < 0.1
-- `entry_offset_seconds`: >= 3 AND <= 5 ← **integer only** (3, 4, 5 — no decimals)
+- `entry_offset_seconds`: **LOCKED** — do not propose changes to this parameter
 - `limit_offset_mult`: >= 0.3 AND <= 3.0 ← must stay < `sl_multiplier`
 - `take_profit_pct`: >= 0.1 AND <= 2.0 ← **percent**
-- `deadline_seconds`: >= 5 AND <= 900 ← **integer only**
+- `deadline_seconds`: **LOCKED** — do not propose changes to this parameter
 - `sl_multiplier`: >= 1.0 AND <= 4.0
 
 ## Coupling rules
@@ -202,7 +204,7 @@ filesystem before editing — every such call is wasted tokens and time.
      try `-1.0%` or `-0.05%`. The point is to _gauge the regime_, not to
      refine the local minimum.
    - **Switch parameters.** Move to a different field — `stop_loss_percent`,
-     `tp_multiplier`, `entry_offset_seconds`, etc. — and tune it from scratch.
+     `tp_multiplier`, etc. — and tune it from scratch.
 
 2. **Parameters are coupled — re-tune after every change.** The optimum of one
    parameter depends on the values of the others. If you found
