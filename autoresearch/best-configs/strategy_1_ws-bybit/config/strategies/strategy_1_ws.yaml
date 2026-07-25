@@ -3,8 +3,8 @@
 
 strategy_id: 'strategy_1_ws'
 direction: 'long'
-negative_funding_threshold_percent: -1.5
+negative_funding_threshold_percent: -2.0
 entry_offset_seconds: 5
-funding_fee_timeout_seconds: 30
+funding_fee_timeout_seconds: 10
 amount_usd: 20
 leverage: 4

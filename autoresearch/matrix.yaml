@@ -7,7 +7,7 @@
 #   agent: claude | claude   (default: claude) — which coding agent drives the propose step
 #
 # Settings applied to every row unless overridden by a per-row field.
-default_iterations: 2
+default_iterations: 8
 max_parallel: 2 # concurrent runs
 max_parallel_backtests: 1 # concurrent ClickHouse-hitting backtests (1 = serialized pre-fetches avoid SSH tunnel overload)
 iteration_timeout_ms: 600000

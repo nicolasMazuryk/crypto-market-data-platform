@@ -5,7 +5,7 @@ direction: 'long'
 negative_funding_threshold_percent: -2.0
 entry_offset_seconds: 3
 limit_offset_mult: 1.4
-take_profit_pct: 0.7
+take_profit_pct: 0.5
 deadline_seconds: 120
 sl_multiplier: 2.0 # must be > limit_offset_mult
 amount_usd: 20

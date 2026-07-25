@@ -13,6 +13,7 @@ import { ensureWorktree } from '../worktree/manager.js'
 
 import { runBaselineIteration, runIteration } from './iteration.js'
 import type { Semaphore } from './pool.js'
+import { formatIterationSummary } from './summary-format.js'
 
 const CONSECUTIVE_ERROR_THRESHOLD = 5
 const RECENT_ROWS_IN_PROMPT = 100
@@ -98,7 +99,7 @@ async function runControllerLocked(opts: RunControllerOptions): Promise<RunContr
     tsvRows = [...tsvRows, baselineRow]
     state = applyRowToState(state, baselineRow)
     writeState(statePath, state)
-    logger.info({ row: baselineRow }, 'baseline iteration complete')
+    logger.info(formatIterationSummary(baselineRow, { repoRoot, tag: spec.tag, iterations: spec.iterations }))
   }
 
   if (opts.baselineOnly === true) {
@@ -167,7 +168,7 @@ async function runControllerLocked(opts: RunControllerOptions): Promise<RunContr
     tsvRows = [...tsvRows, row]
     state = applyRowToState(state, row)
     writeState(statePath, state)
-    logger.info({ iter, status: row.status, pnl: row.total_net_pnl }, 'iteration complete')
+    logger.info(formatIterationSummary(row, { repoRoot, tag: spec.tag, iterations: spec.iterations }))
 
     if (state.consecutive_errors >= CONSECUTIVE_ERROR_THRESHOLD) {
       logger.error(

@@ -8,8 +8,8 @@ entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
 ladder_count: 5
 ladder_top_mult: 1.5
 ladder_bottom_mult: 1.99
-take_profit_pct: 1.0
+take_profit_pct: 0.5
 deadline_seconds: 600
-sl_multiplier: 2.0
+sl_multiplier: 4.0
 amount_usd: 20
 leverage: 4

@@ -4,7 +4,7 @@
 strategy_id: 'strategy_3a'
 direction: 'short'
 negative_funding_threshold_percent: -1.5
-entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
+entry_offset_seconds: 4 # Enter at T_funding - 4s (clamped to new >=3 bound)
 stop_loss_percent: 2.6
 tp_mode: 'A'
 tp_multiplier: 1.2 # TP = F * 1.2
