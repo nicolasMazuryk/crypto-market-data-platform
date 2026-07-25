@@ -103,6 +103,29 @@ describe('Data Validation', () => {
     expect(result.skipReasons).toContain('PRICE_ANOMALY')
   })
 
+  it('fails for price anomaly isolated to the open side of a single candle (close unaffected)', () => {
+    const fundingTime = new Date('2025-06-01T00:00:00Z')
+    const rows: OrderbookRow[] = []
+
+    for (let i = -60; i <= 120; i++) {
+      const ts = new Date(fundingTime.getTime() + i * 1000)
+      const tsStr = ts.toISOString().replace('T', ' ').replace('Z', '').slice(0, 19)
+      const candle = makeCandle(tsStr, 50000)
+      if (i === 5) {
+        // Simulate a corrupted single tick: open side spikes ~1000x, close side
+        // stays normal (mirrors a real bad ClickHouse row observed in production).
+        candle.bid_open = 50000 * 1000
+        candle.ask_open = 50000 * 1000
+      }
+      rows.push(candle)
+    }
+
+    const window = new OHLCWindow(rows)
+    const result = validateEventData(window, fundingTime, defaultValidation)
+    expect(result.valid).toBe(false)
+    expect(result.skipReasons).toContain('PRICE_ANOMALY')
+  })
+
   it('fails for empty window', () => {
     const fundingTime = new Date('2025-06-01T00:00:00Z')
     const window = new OHLCWindow([])

@@ -44,14 +44,18 @@ export function validateEventData(
     }
   }
 
-  // Check for price anomaly across the full window
+  // Check for price anomaly across the full window. Scan every price field
+  // that order fills can actually read (fillMarketOrder uses bid_open/ask_open),
+  // not just bid_close — a spike isolated to the open side of a single candle
+  // must still be caught even when close prices look normal.
   let minPrice = Infinity
   let maxPrice = -Infinity
   for (const row of rows) {
-    const price = row.bid_close
-    if (price !== null) {
-      if (price < minPrice) minPrice = price
-      if (price > maxPrice) maxPrice = price
+    for (const price of [row.bid_open, row.ask_open, row.bid_close, row.ask_close]) {
+      if (price !== null) {
+        if (price < minPrice) minPrice = price
+        if (price > maxPrice) maxPrice = price
+      }
     }
   }
   if (minPrice > 0 && maxPrice > 0 && (maxPrice - minPrice) / minPrice > config.max_price_change_pct) {
