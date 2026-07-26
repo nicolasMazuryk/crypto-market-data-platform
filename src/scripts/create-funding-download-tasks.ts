@@ -2,10 +2,20 @@ import { pathToFileURL } from 'node:url'
 
 import { closeClickHouseClient } from '../db/client.js'
 import { insertDownloadTasks, listCompletedTaskKeys } from '../db/queries/downloadTasks.js'
-import { queryFundingEventsBelowThreshold, queryThresholdAnalysis } from '../db/queries/fundingRates.js'
+import {
+  queryFundingEventsBelowThreshold,
+  queryThresholdAnalysis,
+  type FundingTriggerEvent,
+} from '../db/queries/fundingRates.js'
 import { listExchangesBySymbol } from '../db/queries/markets.js'
 import type { DownloadTaskRow, MarketRow } from '../db/types.js'
 import { logger } from '../logger.js'
+
+export interface TaskKey {
+  exchange: string
+  symbol: string
+  date: string
+}
 
 type ScriptMode = 'analyze' | 'create'
 
@@ -89,16 +99,76 @@ export function isListedOnDate(market: MarketRow, date: string): boolean {
   return true
 }
 
-function addTask(
-  taskSet: Map<string, { exchange: string; symbol: string; date: string }>,
-  exchange: string,
-  symbol: string,
-  date: string
-): void {
+function addTask(taskSet: Map<string, TaskKey>, exchange: string, symbol: string, date: string): void {
   const key = `${exchange}:${symbol}:${date}`
   if (!taskSet.has(key)) {
     taskSet.set(key, { exchange, symbol, date })
   }
+}
+
+/**
+ * Builds the exact (exchange, symbol, date) task set that `create` would produce for a given
+ * set of below-threshold funding events: S1-4 direct tasks, midnight previous-day expansion, and
+ * S5 cross-exchange expansion. Shared with the coverage audit so its notion of "in scope" never
+ * drifts from what this script actually creates tasks for.
+ */
+export async function buildExpandedTaskSet(
+  events: FundingTriggerEvent[],
+  dateRangeStart: string,
+  excludedExchanges: string[]
+): Promise<{ taskSet: Map<string, TaskKey>; directTaskCount: number }> {
+  const taskSet = new Map<string, TaskKey>()
+
+  for (const event of events) {
+    addTask(taskSet, event.exchange, event.symbol, event.funding_date)
+
+    if (event.is_midnight) {
+      const prevDay = previousDay(event.funding_date)
+      if (prevDay >= dateRangeStart) {
+        addTask(taskSet, event.exchange, event.symbol, prevDay)
+      }
+    }
+  }
+
+  const directTaskCount = taskSet.size
+
+  const symbolDatePairs = new Set<string>()
+  for (const task of taskSet.values()) {
+    symbolDatePairs.add(`${task.symbol}:${task.date}`)
+  }
+
+  const exchangesBySymbol = new Map<string, MarketRow[]>()
+  const uniqueSymbols = new Set<string>()
+  for (const pair of symbolDatePairs) {
+    const [symbol] = pair.split(':')
+    if (symbol) {
+      uniqueSymbols.add(symbol)
+    }
+  }
+
+  for (const symbol of uniqueSymbols) {
+    exchangesBySymbol.set(symbol, await listExchangesBySymbol(symbol, true))
+  }
+
+  for (const pair of symbolDatePairs) {
+    const [symbol, date] = pair.split(':')
+    if (!symbol || !date) {
+      continue
+    }
+    const markets = exchangesBySymbol.get(symbol) ?? []
+
+    for (const market of markets) {
+      if (excludedExchanges.includes(market.exchange)) {
+        continue
+      }
+      if (!isListedOnDate(market, date)) {
+        continue
+      }
+      addTask(taskSet, market.exchange, symbol, date)
+    }
+  }
+
+  return { taskSet, directTaskCount }
 }
 
 async function runAnalyze(config: ScriptConfig): Promise<void> {
@@ -162,68 +232,13 @@ async function runCreate(config: ScriptConfig): Promise<void> {
 
   logger.info({ eventCount: events.length }, 'Found funding trigger events')
 
-  // Step 2: Build task set
-  const taskSet = new Map<string, { exchange: string; symbol: string; date: string }>()
-
-  // S1-4: Direct exchange-symbol-date tasks
-  for (const event of events) {
-    addTask(taskSet, event.exchange, event.symbol, event.funding_date)
-
-    // Midnight: also add previous day
-    if (event.is_midnight) {
-      const prevDay = previousDay(event.funding_date)
-      if (prevDay >= config.dateRangeStart) {
-        addTask(taskSet, event.exchange, event.symbol, prevDay)
-      }
-    }
-  }
-
-  const directTaskCount = taskSet.size
+  // Step 2: Build task set (S1-4 direct + midnight previous-day + S5 cross-exchange expansion)
+  const { taskSet, directTaskCount } = await buildExpandedTaskSet(
+    events,
+    config.dateRangeStart,
+    config.excludedExchanges
+  )
   logger.info({ directTasks: directTaskCount }, 'Built direct task set (S1-4 + midnight)')
-
-  // S5: Cross-exchange expansion
-  // Collect unique (symbol, date) pairs from all tasks built so far
-  const symbolDatePairs = new Set<string>()
-  for (const task of taskSet.values()) {
-    symbolDatePairs.add(`${task.symbol}:${task.date}`)
-  }
-
-  // Cache exchange listings per symbol
-  const exchangesBySymbol = new Map<string, MarketRow[]>()
-  const uniqueSymbols = new Set<string>()
-  for (const pair of symbolDatePairs) {
-    const [symbol] = pair.split(':')
-    if (!symbol) {
-      continue
-    }
-    uniqueSymbols.add(symbol)
-  }
-
-  for (const symbol of uniqueSymbols) {
-    const markets = await listExchangesBySymbol(symbol, true)
-    exchangesBySymbol.set(symbol, markets)
-  }
-
-  logger.info({ symbolsLookedUp: uniqueSymbols.size }, 'Fetched cross-exchange listings')
-
-  // Expand: for each (symbol, date), add tasks for all exchanges listing the symbol
-  for (const pair of symbolDatePairs) {
-    const [symbol, date] = pair.split(':')
-    if (!symbol || !date) {
-      continue
-    }
-    const markets = exchangesBySymbol.get(symbol) ?? []
-
-    for (const market of markets) {
-      if (config.excludedExchanges.includes(market.exchange)) {
-        continue
-      }
-      if (!isListedOnDate(market, date)) {
-        continue
-      }
-      addTask(taskSet, market.exchange, symbol, date)
-    }
-  }
 
   const expandedTaskCount = taskSet.size
   logger.info(

@@ -217,6 +217,15 @@ services:
     network_mode: host
     profiles: ["worker"]
 
+  worker-audit-coverage:
+    image: {{ app_name }}:latest
+    env_file: {{ app_dir }}/.env
+    command: ["node", "dist/scripts/audit-backtest-coverage.js"]
+    volumes:
+      - {{ quotes_validation_reports_dir }}:/reports/quotes-validation
+    network_mode: host
+    profiles: ["worker"]
+
   worker-report-download-task-progress:
     image: {{ app_name }}:latest
     env_file: {{ app_dir }}/.env

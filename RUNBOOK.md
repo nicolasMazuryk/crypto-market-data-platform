@@ -79,8 +79,22 @@ npm run remote:create:funding-download-tasks   # 6. Create funding download task
 npm run remote:quote-sync                  # 7. Run quote sync
 npm run remote:report:download-task-progress  # 9. Report download task progress
 npm run remote:validate:quotes             # 8. Validate quotes data
+npm run remote:audit:coverage              # 11. Bidirectional funding<->orderbook coverage audit
 npm run backtest                           # 10. Run backtest locally
 ```
+
+If the audit exits non-zero with actionable holes (`missing_seconds`, `not_yet_downloaded`,
+`failed_retryable`, `task_missing`, `orphan_orderbook_day`, or a funding-interval violation), loop:
+
+```bash
+npm run remote:audit:coverage:fix   # re-queues retryable/missing keys as pending download_tasks
+npm run remote:quote-sync           # re-run the coordinator to pick them up
+npm run remote:audit:coverage       # re-check
+```
+
+Stop looping once the only remaining verdicts are `unobtainable` (archive 404s) and interpolation
+warnings — a hole that survives two `--fix` cycles usually means a parser bug or symbol-mapping
+mismatch, not a transient download failure.
 
 ## Activate Scheduled Sync
 

@@ -881,43 +881,38 @@ async function syncMarketFundingRates(
   const intervalMs = inferFundingIntervalMs(marketInfo)
 
   if (exchangeConfig.name === 'binance') {
-    const batch = await fetchBinanceFundingRateHistoryFromArchive(
-      market.exchange_symbol,
-      unifiedSymbol,
-      startMs,
-      cursorEndMs
-    )
-    if (batch.length === 0) {
-      if (syncMode === 'backfill') {
-        stats.completeToStart = true
+    // Archive only covers completed months; the current month's tail falls through to CCXT below.
+    const archiveEndMs = Math.min(monthStartUtc(cursorEndMs), cursorEndMs)
+
+    if (startMs < archiveEndMs) {
+      const batch = await fetchBinanceFundingRateHistoryFromArchive(
+        market.exchange_symbol,
+        unifiedSymbol,
+        startMs,
+        archiveEndMs
+      )
+
+      if (batch.length > 0) {
+        stats.batches += 1
+        stats.fetched += batch.length
+
+        const batchStats = await processFundingRateBatch(
+          exchangeConfig.name,
+          market,
+          unifiedSymbol,
+          batch,
+          startMs,
+          archiveEndMs,
+          now
+        )
+
+        stats.inserted += batchStats.inserted
+        stats.skippedExisting += batchStats.skippedExisting
+        stats.skippedInvalid += batchStats.skippedInvalid
       }
 
-      return stats
+      startMs = archiveEndMs
     }
-
-    stats.batches = 1
-    stats.fetched = batch.length
-
-    const batchStats = await processFundingRateBatch(
-      exchangeConfig.name,
-      market,
-      unifiedSymbol,
-      batch,
-      startMs,
-      cursorEndMs,
-      now
-    )
-
-    stats.inserted = batchStats.inserted
-    stats.skippedExisting = batchStats.skippedExisting
-    stats.skippedInvalid = batchStats.skippedInvalid
-
-    const timestamps = extractBatchTimestamps(batch, market, unifiedSymbol)
-    if (syncMode === 'backfill' && timestamps.length > 0 && Math.min(...timestamps) <= startMs) {
-      stats.completeToStart = true
-    }
-
-    return stats
   }
 
   if (fetchConfig.mode === 'page') {

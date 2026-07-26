@@ -494,6 +494,146 @@ export async function queryFundingEventsBelowThreshold(
   }))
 }
 
+export interface FundingEventTime {
+  exchange: string
+  symbol: string
+  funding_time: string
+  funding_rate: number
+}
+
+/**
+ * Individual (not day-aggregated) below-threshold funding events, for building the exact
+ * event windows the coverage audit checks orderbook data against.
+ */
+export async function queryFundingEventTimesBelowThreshold(
+  threshold: number,
+  dateStart: string,
+  dateEnd: string,
+  excludedExchanges: string[]
+): Promise<FundingEventTime[]> {
+  const client = getClickHouseClient()
+  const excludeClause =
+    excludedExchanges.length > 0
+      ? ` AND exchange NOT IN (${excludedExchanges.map((_, i) => `{exc_${String(i)}: String}`).join(', ')})`
+      : ''
+
+  const queryParams: Record<string, unknown> = {
+    threshold,
+    dateStart,
+    dateEnd,
+  }
+  for (let i = 0; i < excludedExchanges.length; i++) {
+    queryParams[`exc_${String(i)}`] = excludedExchanges[i]
+  }
+
+  const result = await client.query({
+    query: `
+      SELECT exchange, symbol, funding_time, funding_rate
+      FROM funding_rates FINAL
+      WHERE funding_rate < {threshold: Float64}
+        AND toDate(funding_time) >= {dateStart: Date}
+        AND toDate(funding_time) <= {dateEnd: Date}
+        ${excludeClause}
+      ORDER BY exchange, symbol, funding_time
+    `,
+    query_params: queryParams,
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{
+    exchange: string
+    symbol: string
+    funding_time: string
+    funding_rate: string | number
+  }>()
+
+  return rows.map(row => ({
+    exchange: row.exchange,
+    symbol: row.symbol,
+    funding_time: row.funding_time,
+    funding_rate: Number(row.funding_rate),
+  }))
+}
+
+export interface FundingIntervalViolation {
+  exchange: string
+  symbol: string
+  funding_time: string
+  delta_seconds: number
+  mode_interval_seconds: number
+}
+
+/**
+ * Interval-aware completeness check for a date range: infers each (exchange, symbol)'s funding
+ * interval as the mode of consecutive deltas, then flags any delta that isn't a whole multiple
+ * of it. Catches e.g. a 1h-interval symbol silently missing 3 of every 4 settlements, which the
+ * blanket `> 8h` check in listFundingRateTimeGaps would not.
+ */
+export async function listFundingIntervalViolations(
+  dateStart: string,
+  dateEnd: string,
+  excludedExchanges: string[]
+): Promise<FundingIntervalViolation[]> {
+  const client = getClickHouseClient()
+  const excludeClause =
+    excludedExchanges.length > 0
+      ? ` AND exchange NOT IN (${excludedExchanges.map((_, i) => `{exc_${String(i)}: String}`).join(', ')})`
+      : ''
+
+  const queryParams: Record<string, unknown> = { dateStart, dateEnd }
+  for (let i = 0; i < excludedExchanges.length; i++) {
+    queryParams[`exc_${String(i)}`] = excludedExchanges[i]
+  }
+
+  const result = await client.query({
+    query: `
+      WITH deltas AS (
+        SELECT
+          exchange,
+          symbol,
+          funding_time,
+          dateDiff('second', lagInFrame(funding_time) OVER (PARTITION BY exchange, symbol ORDER BY funding_time), funding_time) AS delta_seconds,
+          row_number() OVER (PARTITION BY exchange, symbol ORDER BY funding_time) AS rn
+        FROM funding_rates FINAL
+        WHERE toDate(funding_time) >= {dateStart: Date}
+          AND toDate(funding_time) <= {dateEnd: Date}
+          ${excludeClause}
+      ),
+      modes AS (
+        SELECT exchange, symbol, arrayElement(topK(1)(delta_seconds), 1) AS mode_interval_seconds
+        FROM deltas
+        WHERE rn > 1
+        GROUP BY exchange, symbol
+      )
+      SELECT d.exchange AS exchange, d.symbol AS symbol, d.funding_time AS funding_time, d.delta_seconds AS delta_seconds, m.mode_interval_seconds AS mode_interval_seconds
+      FROM deltas AS d
+      INNER JOIN modes AS m ON d.exchange = m.exchange AND d.symbol = m.symbol
+      WHERE d.rn > 1
+        AND m.mode_interval_seconds > 0
+        AND d.delta_seconds % m.mode_interval_seconds != 0
+      ORDER BY d.exchange, d.symbol, d.funding_time
+    `,
+    query_params: queryParams,
+    format: 'JSONEachRow',
+  })
+
+  const rows = await result.json<{
+    exchange: string
+    symbol: string
+    funding_time: string
+    delta_seconds: string | number
+    mode_interval_seconds: string | number
+  }>()
+
+  return rows.map(row => ({
+    exchange: row.exchange,
+    symbol: row.symbol,
+    funding_time: row.funding_time,
+    delta_seconds: Number(row.delta_seconds),
+    mode_interval_seconds: Number(row.mode_interval_seconds),
+  }))
+}
+
 export async function queryThresholdAnalysis(
   threshold: number,
   dateStart: string,

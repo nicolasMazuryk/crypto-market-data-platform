@@ -384,6 +384,136 @@ ORDER BY exchange ASC, symbol ASC, day ASC
   return result.json<OrderbookPerDayRow>()
 }
 
+export interface OrderbookDaySweepRow {
+  exchange: string
+  symbol: string
+  d: string
+  rows: string | number
+  interp: string | number
+  nulls: string | number
+}
+
+/**
+ * Cheap day-level pass over a date range: days with rows=86400 and nulls=0 are complete and can
+ * skip the per-second audit check entirely.
+ */
+export async function queryOrderbookDaySweep(dateStart: string, dateEnd: string): Promise<OrderbookDaySweepRow[]> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `
+      SELECT
+        exchange,
+        symbol,
+        toDate(ts) AS d,
+        count() AS rows,
+        countIf(is_interpolated) AS interp,
+        countIf(bid_close IS NULL OR ask_close IS NULL) AS nulls
+      FROM orderbooks
+      WHERE ts >= {dateStart: Date} AND ts < {dateEndExclusive: Date}
+      GROUP BY exchange, symbol, d
+      ORDER BY exchange, symbol, d
+    `,
+    query_params: { dateStart, dateEndExclusive: dateEnd },
+    format: 'JSONEachRow',
+    clickhouse_settings: { max_execution_time: 600 },
+  })
+
+  return result.json<OrderbookDaySweepRow>()
+}
+
+export interface OrderbookWindowRow {
+  ts_ms: string | number
+  bid_close: number | null
+  ask_close: number | null
+  is_interpolated: boolean | number
+}
+
+/**
+ * Fetches raw seconds for an (exchange, symbol) across the envelope covering a batch of exact
+ * event windows; callers bucket rows into individual windows in memory.
+ */
+export async function queryOrderbookRowsInEnvelope(
+  exchange: string,
+  symbol: string,
+  startMs: number,
+  endMs: number
+): Promise<OrderbookWindowRow[]> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `
+      SELECT toUnixTimestamp(ts) * 1000 AS ts_ms, bid_close, ask_close, is_interpolated
+      FROM orderbooks
+      WHERE exchange = {exchange: String} AND symbol = {symbol: String}
+        AND ts >= {startTime: DateTime} AND ts < {endTime: DateTime}
+      ORDER BY ts ASC
+    `,
+    query_params: {
+      exchange,
+      symbol,
+      startTime: toClickHouseDateTimeFromMs(startMs),
+      endTime: toClickHouseDateTimeFromMs(endMs),
+    },
+    format: 'JSONEachRow',
+  })
+
+  return result.json<OrderbookWindowRow>()
+}
+
+function toClickHouseDateTimeFromMs(ms: number): string {
+  return new Date(ms).toISOString().replace('T', ' ').replace('Z', '').slice(0, 19)
+}
+
+export interface OrderbookOrphanDayRow {
+  exchange: string
+  symbol: string
+  d: string
+}
+
+/**
+ * (exchange, symbol, day) present in orderbooks with zero funding_rates rows that day —
+ * orderbook data downloaded for a key the funding pipeline never asked for.
+ */
+export async function listOrphanOrderbookDays(dateStart: string, dateEnd: string): Promise<OrderbookOrphanDayRow[]> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `
+      SELECT o.exchange AS exchange, o.symbol AS symbol, o.d AS d
+      FROM (
+        SELECT DISTINCT exchange, symbol, toDate(ts) AS d
+        FROM orderbooks
+        WHERE ts >= {dateStart: Date} AND ts < {dateEndExclusive: Date}
+      ) AS o
+      LEFT ANTI JOIN (
+        SELECT DISTINCT exchange, symbol, toDate(funding_time) AS d
+        FROM funding_rates
+        WHERE toDate(funding_time) >= {dateStart: Date} AND toDate(funding_time) < {dateEndExclusive: Date}
+      ) AS f
+      ON o.exchange = f.exchange AND o.symbol = f.symbol AND o.d = f.d
+      ORDER BY o.exchange, o.symbol, o.d
+    `,
+    query_params: { dateStart, dateEndExclusive: dateEnd },
+    format: 'JSONEachRow',
+  })
+
+  return result.json<OrderbookOrphanDayRow>()
+}
+
+/** (exchange, symbol) pairs present in orderbooks but absent from markets entirely. */
+export async function listOrderbookSymbolsUnknownToMarkets(): Promise<OrderbookPair[]> {
+  const client = getClickHouseClient()
+  const result = await client.query({
+    query: `
+      SELECT DISTINCT o.exchange AS exchange, o.symbol AS symbol
+      FROM orderbooks AS o
+      LEFT ANTI JOIN markets AS m ON o.exchange = m.exchange AND o.symbol = m.symbol
+      ORDER BY o.exchange, o.symbol
+    `,
+    format: 'JSONEachRow',
+  })
+
+  return result.json<OrderbookPair>()
+}
+
 export async function queryOrderbookCrossExchangeOverlap(symbols: string[]): Promise<OrderbookCrossExchangeRow[]> {
   if (symbols.length === 0) {
     return []

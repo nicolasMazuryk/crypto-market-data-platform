@@ -18,6 +18,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY src/markets/delistings/*.json ./data/delistings/
 COPY src/db/migrations/*.sql ./data/migrations/
+COPY config/*.yaml ./config/
 COPY src/execution/persistence/drizzle/migrations/*.sql ./dist/execution/persistence/drizzle/migrations/
 COPY package.json ./
 CMD ["node", "dist/index.js"]

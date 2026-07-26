@@ -278,6 +278,52 @@ export async function updateTaskStatus(
   })
 }
 
+export interface DownloadTaskStatus {
+  status: DownloadTaskRow['status']
+  error_message: string | null
+}
+
+/**
+ * Batched status/error lookup for a set of (exchange, symbol, date) keys, keyed as
+ * `exchange:symbol:date`. Keys with no matching row are simply absent from the returned map.
+ */
+export async function getTaskStatusesForKeys(
+  keys: { exchange: string; symbol: string; date: string }[]
+): Promise<Map<string, DownloadTaskStatus>> {
+  const result = new Map<string, DownloadTaskStatus>()
+  if (keys.length === 0) {
+    return result
+  }
+
+  const client = getClickHouseClient()
+  const queryResult = await client.query({
+    query: `
+      SELECT exchange, symbol, toString(date) AS date, status, error_message
+      FROM download_tasks FINAL
+      WHERE (exchange, symbol, date) IN ({keys: Array(Tuple(String, String, Date))})
+    `,
+    query_params: { keys: keys.map(k => [k.exchange, k.symbol, k.date]) },
+    format: 'JSONEachRow',
+  })
+
+  const rows = await queryResult.json<{
+    exchange: string
+    symbol: string
+    date: string
+    status: DownloadTaskRow['status']
+    error_message: string | null
+  }>()
+
+  for (const row of rows) {
+    result.set(`${row.exchange}:${row.symbol}:${row.date}`, {
+      status: row.status,
+      error_message: row.error_message,
+    })
+  }
+
+  return result
+}
+
 export async function optimizeDownloadTasksTable(): Promise<void> {
   const client = getClickHouseClient()
   await client.command({
