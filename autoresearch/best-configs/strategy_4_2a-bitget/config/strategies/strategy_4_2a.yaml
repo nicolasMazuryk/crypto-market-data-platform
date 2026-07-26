@@ -4,7 +4,7 @@ strategy_id: 'strategy_4_2a'
 direction: 'long'
 negative_funding_threshold_percent: -1.8
 entry_offset_seconds: 5 # Enter at T_funding - 5s (timing optimization; avoid post-funding volatility)
-limit_offset_mult: 1.28
+limit_offset_mult: 1.4
 take_profit_pct: 2.0
 deadline_seconds: 300
 sl_multiplier: 4.0 # must be > limit_offset_mult

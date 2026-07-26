@@ -3,13 +3,13 @@
 
 strategy_id: 'strategy_4_1a'
 direction: 'long'
-negative_funding_threshold_percent: -1.0
+negative_funding_threshold_percent: -2.0
 entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
-ladder_count: 5
+ladder_count: 7
 ladder_top_mult: 1.2
 ladder_bottom_mult: 1.99
-take_profit_pct: 0.3
+take_profit_pct: 0.5
 deadline_seconds: 600
-sl_multiplier: 2.0
+sl_multiplier: 2.2
 amount_usd: 20
 leverage: 4

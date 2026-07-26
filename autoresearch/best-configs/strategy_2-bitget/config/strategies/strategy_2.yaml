@@ -3,9 +3,9 @@
 
 strategy_id: 'strategy_2'
 direction: 'long'
-negative_funding_threshold_percent: -0.7
+negative_funding_threshold_percent: -0.67
 entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
-retracement_pct: 1.4 # increased from 1.0 to test market over-retracement
+retracement_pct: 2.0 # test hard cap; continue stepping up from 1.8
 deadline_seconds: 600
 sl_multiplier: 4.0
 amount_usd: 20

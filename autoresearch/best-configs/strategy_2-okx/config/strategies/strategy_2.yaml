@@ -3,10 +3,10 @@
 
 strategy_id: 'strategy_2'
 direction: 'long'
-negative_funding_threshold_percent: -1.5
+negative_funding_threshold_percent: -1.2
 entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
-retracement_pct: 0.5
+retracement_pct: 0.56
 deadline_seconds: 600
-sl_multiplier: 4.0
+sl_multiplier: 3.3
 amount_usd: 20
 leverage: 4
