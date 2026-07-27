@@ -20,7 +20,7 @@ export interface BacktestResult {
 export async function runBacktest(strategyConfigPath: string, baseConfigPath?: string): Promise<BacktestResult> {
   const config = loadConfig(strategyConfigPath, baseConfigPath)
   const { report, trades } = await runBacktestEngine(config)
-  const reportPath = formatReport(report, config.base.reporting.output_dir)
+  const reportPath = await formatReport(report, config.base.reporting.output_dir)
   return { report, trades, reportPath }
 }
 

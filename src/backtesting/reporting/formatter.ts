@@ -1,10 +1,11 @@
 import fs from 'fs'
 import path from 'path'
 
+import { renderTimeBasedEquityCurveChart } from './equity-curve-chart.js'
 import type { BacktestReport } from './types.js'
 
-/** Write report to JSON file and print summary to console */
-export function formatReport(report: BacktestReport, outputDir: string): string {
+/** Write report to JSON file, render time-aligned equity curve chart, and print summary to console */
+export async function formatReport(report: BacktestReport, outputDir: string): Promise<string> {
   // Ensure output directory exists
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true })
@@ -15,6 +16,13 @@ export function formatReport(report: BacktestReport, outputDir: string): string 
   const filepath = path.join(outputDir, filename)
 
   fs.writeFileSync(filepath, JSON.stringify(report, null, 2))
+
+  const timePngPath = filepath.replace(/\.json$/, '.time.png')
+  await renderTimeBasedEquityCurveChart(report.equity_curve, report.equity_curve_timestamps, timePngPath).catch(
+    (e: unknown) => {
+      console.warn(`[chart] time render failed: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  )
 
   // Console summary
   const ts = report.trade_stats
