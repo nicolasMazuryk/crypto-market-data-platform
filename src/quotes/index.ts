@@ -148,7 +148,11 @@ export async function processDownloadTask(
     tempDir = await fs.mkdtemp(path.join(DOWNLOAD_TEMP_DIR, `${task.exchange}-${task.symbol}-${task.date}-`))
 
     const date = parseTaskDate(task.date)
-    const urls = downloader.constructUrls(task.symbol, date)
+    const urls = await (downloader.listUrls?.(task.symbol, date, {
+      onInfo: message => {
+        log?.(`${taskLabel}: ${message}`)
+      },
+    }) ?? Promise.resolve(downloader.constructUrls(task.symbol, date)))
     log?.(`${taskLabel}: downloading ${String(urls.length)} file(s)`)
 
     const downloadResult = await downloadFiles(urls, tempDir, {

@@ -5,10 +5,11 @@ import { gzipSync } from 'node:zlib'
 
 import { describe, expect, it } from 'vitest'
 
-import { parseBitgetPrice } from '../parsers/bitget-orderbook.js'
+import { bitgetTradesParser } from '../parsers/bitget-trades.js'
 import { createTradeQuoteEvent, splitCsvLine } from '../parsers/csv.js'
 import { gateOrderbookParser } from '../parsers/gate-orderbook.js'
 import { getParser } from '../parsers/index.js'
+import { createStoredZip } from './zip-fixture.js'
 
 describe('parser utilities', () => {
   it('handles empty CSV lines', () => {
@@ -56,11 +57,40 @@ describe('parser utilities', () => {
     expect(getParser('binance-trades').confidenceScore).toBe('low')
   })
 
-  it('treats Bitget sentinel and non-positive prices as missing', () => {
-    expect(parseBitgetPrice('-999999')).toBeNull()
-    expect(parseBitgetPrice(0)).toBeNull()
-    expect(parseBitgetPrice('-1')).toBeNull()
-    expect(parseBitgetPrice('0.5673')).toBe(0.5673)
+  it('exposes bitget trades parser metadata', () => {
+    expect(getParser('bitget-trades').sourceType).toBe('trades')
+    expect(getParser('bitget-trades').confidenceScore).toBe('low')
+  })
+
+  it('maps bitget taker sides to ask/bid, skipping the header and malformed rows', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'bitget-parser-'))
+    const filePath = path.join(tmpDir, '20260701_001.zip')
+    const lines = [
+      'trade_id,timestamp,price,side,volume,size',
+      '1,1782835202000,10.50,buy,105,10',
+      // out of order relative to the row above — must be sorted back into place
+      '2,1782835201000,10.40,sell,104,10',
+      '3,notanumber,10.60,buy,106,10',
+      '4,1782835203000,,sell,0,0',
+      '5,1782835204000,10.70,unknown,107,10',
+      '6,1782835205000,-1,buy,107,10',
+      '7,1782835206000,10.80,SELL,108,10',
+    ]
+
+    await fs.writeFile(filePath, createStoredZip('SLXUSDT_UMCBL_20260701_001.csv', lines.join('\n')))
+
+    const events = []
+    for await (const event of bitgetTradesParser.parse(filePath)) {
+      events.push(event)
+    }
+
+    await fs.rm(tmpDir, { recursive: true, force: true })
+
+    expect(events).toEqual([
+      { timestampMs: 1782835201000, bid: 10.4, ask: null, sourceType: 'trades' },
+      { timestampMs: 1782835202000, bid: null, ask: 10.5, sourceType: 'trades' },
+      { timestampMs: 1782835206000, bid: 10.8, ask: null, sourceType: 'trades' },
+    ])
   })
 
   it('handles gate orderbook make/take deltas after the initial set', async () => {

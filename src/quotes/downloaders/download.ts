@@ -24,13 +24,18 @@ const DEFAULT_BACKOFF_BASE_MS = 1_000
 const DEFAULT_BACKOFF_MAX_MS = 30_000
 const DEFAULT_TIMEOUT_MS = 300_000
 
-class DownloadNotFoundError extends Error {
-  readonly url: string
+// Bitget's CDN answers 403 (never 404) for absent keys, so both mean "missing".
+const NOT_FOUND_STATUSES = new Set([403, 404])
 
-  constructor(url: string) {
-    super(`File not found (404): ${url}`)
+export class DownloadNotFoundError extends Error {
+  readonly url: string
+  readonly status: number
+
+  constructor(url: string, status: number) {
+    super(`File not found (${String(status)}): ${url}`)
     this.name = 'DownloadNotFoundError'
     this.url = url
+    this.status = status
   }
 }
 
@@ -94,8 +99,8 @@ export async function downloadFile(url: string, destPath: string, options: Downl
         signal: controller.signal,
       })
 
-      if (response.status === 404) {
-        throw new DownloadNotFoundError(url)
+      if (NOT_FOUND_STATUSES.has(response.status)) {
+        throw new DownloadNotFoundError(url, response.status)
       }
 
       if (!response.ok) {
@@ -140,6 +145,62 @@ export async function downloadFile(url: string, destPath: string, options: Downl
   throw new Error(`Exceeded retry limit while downloading ${url}`)
 }
 
+/**
+ * HEAD-probes a URL. Returns false when the object is absent (403/404), true when
+ * it exists. 5xx and network errors are retried with the same backoff as downloads;
+ * exhausting the retries throws rather than reporting a false absence.
+ */
+export async function remoteFileExists(url: string, options: DownloadOptions = {}): Promise<boolean> {
+  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
+  const backoffBaseMs = options.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS
+  const backoffMaxMs = options.backoffMaxMs ?? DEFAULT_BACKOFF_MAX_MS
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+
+  let attempt = 0
+  while (attempt <= maxRetries) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      controller.abort()
+    }, timeoutMs)
+
+    try {
+      const response = await fetch(url, { method: 'HEAD', signal: controller.signal })
+
+      if (NOT_FOUND_STATUSES.has(response.status)) {
+        return false
+      }
+
+      if (!response.ok) {
+        throw new Error(`Probe failed with status ${String(response.status)}: ${url}`)
+      }
+
+      return true
+    } catch (error: unknown) {
+      const shouldRetry =
+        attempt < maxRetries &&
+        ((error instanceof Error && /status (5\d\d)/.test(error.message)) || isRetriableError(error))
+
+      if (!shouldRetry) {
+        if (error instanceof Error) {
+          throw error
+        }
+
+        throw new Error(String(error))
+      }
+
+      const delayMs = retryDelayMs(attempt, backoffBaseMs, backoffMaxMs)
+      options.onInfo?.(`Probe retry ${String(attempt + 1)}/${String(maxRetries)} in ${String(delayMs)}ms for ${url}`)
+      await sleep(delayMs)
+      attempt += 1
+      continue
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  throw new Error(`Exceeded retry limit while probing ${url}`)
+}
+
 export async function downloadFiles(
   urls: string[],
   destDir: string,
@@ -182,7 +243,7 @@ export async function downloadFiles(
         fileSize = await downloadFile(url, destPath, options)
       } catch (error: unknown) {
         if (skipNotFound && isNotFoundError(error)) {
-          options.onInfo?.(`Skipping missing file (404): ${url}`)
+          options.onInfo?.(`Skipping missing file (${String(error.status)}): ${url}`)
           continue
         }
 

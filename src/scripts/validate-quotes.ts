@@ -98,7 +98,7 @@ const EXPECTED_SOURCE_TYPE_BY_EXCHANGE: Record<string, 'orderbook' | 'trades'> =
   bybit: 'orderbook',
   okx: 'orderbook',
   gateio: 'orderbook',
-  bitget: 'orderbook',
+  bitget: 'trades',
   kucoin: 'orderbook',
 }
 
@@ -684,8 +684,28 @@ function computeCrossExchangeFromRows(rows: OrderbookCrossExchangeRow[]): CrossE
 // Main
 // ---------------------------------------------------------------------------
 
+function parseExchangeFilter(): Set<string> | null {
+  const raw = process.env.QUOTES_VALIDATION_EXCHANGES?.trim()
+  if (!raw) {
+    return null
+  }
+
+  const exchanges = raw
+    .split(',')
+    .map(value => value.trim())
+    .filter(value => value.length > 0)
+
+  return exchanges.length > 0 ? new Set(exchanges) : null
+}
+
 export async function runValidateQuotes(): Promise<void> {
-  const pairs = await listDistinctExchangeSymbolPairs()
+  const exchangeFilter = parseExchangeFilter()
+  const allPairs = await listDistinctExchangeSymbolPairs()
+  const pairs = exchangeFilter ? allPairs.filter(pair => exchangeFilter.has(pair.exchange)) : allPairs
+
+  if (exchangeFilter) {
+    console.log(`Restricting validation to exchange(s): ${[...exchangeFilter].sort().join(', ')}`)
+  }
 
   if (pairs.length === 0) {
     console.log('No orderbook datasets found in ClickHouse')
@@ -815,16 +835,24 @@ export async function runValidateQuotes(): Promise<void> {
     return { ...baseResult, criticalFailures, status }
   })
 
-  // Cross-exchange validation via SQL (no second streaming pass)
-  const symbolCountMap = new Map<string, number>()
-  for (const pair of pairs) {
-    symbolCountMap.set(pair.symbol, (symbolCountMap.get(pair.symbol) ?? 0) + 1)
-  }
-  const multiExchangeSymbols = [...symbolCountMap.entries()].filter(([, count]) => count >= 2).map(([symbol]) => symbol)
+  // Cross-exchange validation via SQL (no second streaming pass). Skipped under an
+  // exchange filter, where the comparison would be against exchanges not validated.
+  let crossExchange: CrossExchangeResult[] = []
+  if (exchangeFilter) {
+    console.log('Skipping cross-exchange validation (exchange filter active)')
+  } else {
+    const symbolCountMap = new Map<string, number>()
+    for (const pair of pairs) {
+      symbolCountMap.set(pair.symbol, (symbolCountMap.get(pair.symbol) ?? 0) + 1)
+    }
+    const multiExchangeSymbols = [...symbolCountMap.entries()]
+      .filter(([, count]) => count >= 2)
+      .map(([symbol]) => symbol)
 
-  console.log(`Running cross-exchange validation for ${String(multiExchangeSymbols.length)} symbol(s)…`)
-  const crossExchangeRows = await queryOrderbookCrossExchangeOverlap(multiExchangeSymbols)
-  const crossExchange = computeCrossExchangeFromRows(crossExchangeRows)
+    console.log(`Running cross-exchange validation for ${String(multiExchangeSymbols.length)} symbol(s)…`)
+    const crossExchangeRows = await queryOrderbookCrossExchangeOverlap(multiExchangeSymbols)
+    crossExchange = computeCrossExchangeFromRows(crossExchangeRows)
+  }
 
   const report: QuoteValidationReport = {
     generatedAt: new Date().toISOString(),

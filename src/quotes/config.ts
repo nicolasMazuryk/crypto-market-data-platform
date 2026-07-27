@@ -10,6 +10,11 @@ function parseInteger(value: string | undefined, fallback: number): number {
   return Number.isNaN(parsed) ? fallback : parsed
 }
 
+function parseNonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed === undefined || trimmed === '' ? undefined : trimmed
+}
+
 export const DOWNLOAD_TEMP_DIR = path.resolve(
   process.env.DOWNLOAD_TEMP_DIR ?? path.join(os.tmpdir(), 'arbinet-downloads')
 )
@@ -24,3 +29,5 @@ export const DOWNLOAD_STALE_AGE_MS = parseInteger(process.env.DOWNLOAD_STALE_AGE
 export const WORKER_INDEX = parseInteger(process.env.WORKER_INDEX, 0)
 export const WORKER_COUNT = parseInteger(process.env.WORKER_COUNT, 1)
 export const STALE_RECOVERY_MINUTES = parseInteger(process.env.STALE_RECOVERY_MINUTES, 60)
+/** Restrict a sync run to a single exchange's pending tasks. Undefined = all exchanges. */
+export const QUOTE_SYNC_EXCHANGE = parseNonEmpty(process.env.QUOTE_SYNC_EXCHANGE)

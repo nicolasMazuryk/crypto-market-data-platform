@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import { closeClickHouseClient } from '../db/client.js'
 import { listPendingTasks, resetStaleTasks } from '../db/queries/downloadTasks.js'
-import { STALE_RECOVERY_MINUTES, WORKER_COUNT, WORKER_INDEX } from '../quotes/config.js'
+import { QUOTE_SYNC_EXCHANGE, STALE_RECOVERY_MINUTES, WORKER_COUNT, WORKER_INDEX } from '../quotes/config.js'
 import { syncQuotes } from '../quotes/index.js'
 
 function toError(error: unknown): Error {
@@ -29,7 +29,11 @@ export async function runSyncQuotes(): Promise<void> {
     }
   }
 
-  const tasks = await listPendingTasks(undefined, undefined, WORKER_INDEX, WORKER_COUNT)
+  if (QUOTE_SYNC_EXCHANGE) {
+    console.info(`Restricting run to exchange=${QUOTE_SYNC_EXCHANGE}`)
+  }
+
+  const tasks = await listPendingTasks(QUOTE_SYNC_EXCHANGE, undefined, WORKER_INDEX, WORKER_COUNT)
   if (tasks.length === 0) {
     console.info('No pending download tasks found')
     return

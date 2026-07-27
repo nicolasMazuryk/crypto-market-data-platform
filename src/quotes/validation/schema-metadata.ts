@@ -6,7 +6,7 @@ const EXPECTED_SOURCE_TYPE_BY_EXCHANGE: Record<string, 'orderbook' | 'trades'> =
   bybit: 'orderbook',
   okx: 'orderbook',
   gateio: 'orderbook',
-  bitget: 'orderbook',
+  bitget: 'trades',
   kucoin: 'orderbook',
 }
 
