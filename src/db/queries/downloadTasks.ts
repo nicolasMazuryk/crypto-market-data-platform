@@ -1,3 +1,5 @@
+import { TupleParam } from '@clickhouse/client'
+
 import { logger } from '../../logger.js'
 import { getClickHouseClient } from '../client.js'
 import { toClickHouseDateTime, type DownloadTaskRow } from '../types.js'
@@ -302,7 +304,7 @@ export async function getTaskStatusesForKeys(
       FROM download_tasks FINAL
       WHERE (exchange, symbol, date) IN ({keys: Array(Tuple(String, String, Date))})
     `,
-    query_params: { keys: keys.map(k => [k.exchange, k.symbol, k.date]) },
+    query_params: { keys: keys.map(k => new TupleParam([k.exchange, k.symbol, k.date])) },
     format: 'JSONEachRow',
   })
 
