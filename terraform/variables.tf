@@ -30,5 +30,5 @@ variable "image" {
 variable "volume_size" {
   description = "Size of the data volume in GB"
   type        = number
-  default     = 70
+  default     = 100
 }
