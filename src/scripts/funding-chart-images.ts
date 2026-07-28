@@ -5,7 +5,9 @@ import { createClient } from '@clickhouse/client'
 import { Command } from 'commander'
 
 import { loadConfig } from '../funding-charts/config.js'
+import type { LoadConfigOverrides } from '../funding-charts/config.js'
 import { runOrchestrator } from '../funding-charts/orchestrator.js'
+import { loadEventsFromReport } from '../funding-charts/report-events.js'
 import { streamFundingEvents } from '../funding-charts/queries.js'
 import { openSshTunnel } from '../funding-charts/ssh-tunnel.js'
 import type { ClickHouseConnectionConfig } from '../funding-charts/types.js'
@@ -16,6 +18,10 @@ interface CliOptions {
   dryRun: boolean
   limit?: number
   workers?: number
+  fromReport?: string
+  outputDir?: string
+  preSeconds?: number
+  postSeconds?: number
 }
 
 const program = new Command()
@@ -25,6 +31,14 @@ program
   .option('--dry-run', 'count matching events without rendering')
   .option('--limit <n>', 'limit number of events to process', v => parseInt(v, 10))
   .option('--workers <n>', 'override worker count', v => parseInt(v, 10))
+  .option(
+    '--from-report <path>',
+    'render one chart per executed trade in a backtest report, with that trade overlaid ' +
+      '(replaces the threshold/date query)'
+  )
+  .option('--output-dir <dir>', 'override reporting output_dir from config.yaml')
+  .option('--pre-seconds <n>', 'override window seconds before T0', v => parseInt(v, 10))
+  .option('--post-seconds <n>', 'override window seconds after T0', v => parseInt(v, 10))
   .allowUnknownOption()
   .parse(process.argv)
 
@@ -60,12 +74,39 @@ async function buildRemoteConnection(): Promise<{ conn: ClickHouseConnectionConf
 }
 
 async function main(): Promise<void> {
-  const overrides = opts.workers !== undefined ? { workers: opts.workers } : {}
+  const overrides: LoadConfigOverrides = {
+    ...(opts.workers === undefined ? {} : { workers: opts.workers }),
+    ...(opts.outputDir === undefined ? {} : { outputDir: opts.outputDir }),
+    ...(opts.preSeconds === undefined ? {} : { preSeconds: opts.preSeconds }),
+    ...(opts.postSeconds === undefined ? {} : { postSeconds: opts.postSeconds }),
+  }
   const chartConfig = loadConfig(opts.config, overrides)
+
+  // Report-driven mode: events come from the report's trade log, not from a threshold query.
+  const reportEvents = opts.fromReport === undefined ? undefined : loadEventsFromReport(opts.fromReport)
+  if (reportEvents) {
+    const withOverlay = reportEvents.filter(e => e.trade !== undefined).length
+    logger.info(
+      { report: opts.fromReport, events: reportEvents.length, with_trade_overlay: withOverlay },
+      'loaded events from backtest report'
+    )
+    if (withOverlay < reportEvents.length) {
+      logger.warn(
+        { missing: reportEvents.length - withOverlay },
+        'some trades lack entry/exit geometry — those charts render without a trade overlay'
+      )
+    }
+  }
 
   const { conn, closeTunnel } = await buildRemoteConnection()
 
   try {
+    if (opts.dryRun && reportEvents) {
+      const count = opts.limit === undefined ? reportEvents.length : Math.min(opts.limit, reportEvents.length)
+      logger.info({ count }, 'dry-run: report events to render')
+      return
+    }
+
     if (opts.dryRun) {
       const client = createClient({
         url: `http://${conn.host}:${conn.httpPort}`,
@@ -87,7 +128,7 @@ async function main(): Promise<void> {
       return
     }
 
-    await runOrchestrator(chartConfig, conn, opts.limit)
+    await runOrchestrator(chartConfig, conn, opts.limit, reportEvents)
   } finally {
     closeTunnel()
   }

@@ -32,6 +32,9 @@ const ChartConfigSchema = z.object({
 
 export interface LoadConfigOverrides {
   workers?: number
+  outputDir?: string
+  preSeconds?: number
+  postSeconds?: number
 }
 
 export function loadConfig(configPath: string, overrides: LoadConfigOverrides = {}): ChartConfig {
@@ -50,9 +53,9 @@ export function loadConfig(configPath: string, overrides: LoadConfigOverrides = 
       from: validated.date_range?.from ?? null,
       to: validated.date_range?.to ?? null,
     },
-    pre_seconds: validated.pre_seconds,
-    post_seconds: validated.post_seconds,
-    output_dir: validated.output_dir,
+    pre_seconds: overrides.preSeconds ?? validated.pre_seconds,
+    post_seconds: overrides.postSeconds ?? validated.post_seconds,
+    output_dir: overrides.outputDir ?? validated.output_dir,
     image_width: validated.image_width,
     image_height: validated.image_height,
     overwrite: validated.overwrite,

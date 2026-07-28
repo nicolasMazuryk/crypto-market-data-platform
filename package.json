@@ -95,6 +95,7 @@
     "logs:errors": "tail -f logs/error.log",
     "logs:clean": "rm -rf logs/*.log",
     "charts:funding": "tsx src/scripts/funding-chart-images.ts",
+    "charts:funding:report": "tsx src/scripts/funding-chart-images.ts --from-report",
     "verify:live": "./scripts/run-live-verification.sh"
   },
   "devDependencies": {

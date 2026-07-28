@@ -9,10 +9,15 @@ import type { ChartConfig, ClickHouseConnectionConfig, FundingEvent, WorkerMessa
 
 const WORKER_PATH = fileURLToPath(new URL('./worker-bootstrap.mjs', import.meta.url))
 
+/**
+ * @param presetEvents - pre-collected events (e.g. from a backtest report). When provided the
+ *   threshold/date query is skipped entirely and these events are rendered as-is.
+ */
 export async function runOrchestrator(
   chartConfig: ChartConfig,
   clickhouse: ClickHouseConnectionConfig,
-  limit?: number
+  limit?: number,
+  presetEvents?: FundingEvent[]
 ): Promise<void> {
   const client = createClient({
     url: `http://${clickhouse.host}:${clickhouse.httpPort}`,
@@ -22,12 +27,17 @@ export async function runOrchestrator(
     request_timeout: 600_000,
   })
 
-  logger.info('collecting funding events...')
-
   const events: FundingEvent[] = []
-  for await (const event of streamFundingEvents(chartConfig, client)) {
-    events.push(event)
-    if (limit !== undefined && events.length >= limit) break
+
+  if (presetEvents) {
+    logger.info({ total: presetEvents.length }, 'using pre-collected funding events')
+    events.push(...(limit === undefined ? presetEvents : presetEvents.slice(0, limit)))
+  } else {
+    logger.info('collecting funding events...')
+    for await (const event of streamFundingEvents(chartConfig, client)) {
+      events.push(event)
+      if (limit !== undefined && events.length >= limit) break
+    }
   }
 
   const total = events.length

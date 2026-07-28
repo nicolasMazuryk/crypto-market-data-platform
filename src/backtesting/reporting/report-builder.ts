@@ -178,25 +178,36 @@ export function buildReport(input: BuildReportInput): BacktestReport {
   // state (trade or no-position error) gets one entry, sorted chronologically for determinism.
   let tradeLog: TradeLogEntry[] | undefined
   if (config.base.reporting.include_trade_log) {
-    const tradeEntries: TradeLogEntry[] = trades.map(t => ({
-      timestamp: t.funding_time.toISOString(),
-      symbol: t.symbol,
-      exchange: t.exchange,
-      trigger_funding_rate: t.funding_rate,
-      cumulative_funding_rate: t.cumulative_funding_rate ?? t.funding_rate,
-      funding_events_collected: t.funding_events_collected ?? 1,
-      delta_pnl: t.pnl.delta_pnl * 100,
-      spread_pnl: t.pnl.spread_pnl * 100,
-      funding_pnl: t.pnl.funding_pnl * 100,
-      fees: t.pnl.fees * 100,
-      net_pnl: t.pnl.net_pnl * 100,
-      exit_reason: t.exit_reason,
-      error_code: null,
-      hold_duration: t.hold_duration,
-      fill_count: t.fill_count,
-      funding_received: t.funding_received,
-      t_drop_offset_s: t.t_drop_offset_s ?? null,
-    }))
+    const tradeEntries: TradeLogEntry[] = trades.map(t => {
+      // hold_duration is defined as exit − entry, so entry is recoverable from exit_time alone.
+      const exitTs = t.exit_time ?? null
+      const entryTs = exitTs ? new Date(exitTs.getTime() - t.hold_duration * 1000) : null
+      return {
+        timestamp: t.funding_time.toISOString(),
+        symbol: t.symbol,
+        exchange: t.exchange,
+        trigger_funding_rate: t.funding_rate,
+        cumulative_funding_rate: t.cumulative_funding_rate ?? t.funding_rate,
+        funding_events_collected: t.funding_events_collected ?? 1,
+        delta_pnl: t.pnl.delta_pnl * 100,
+        spread_pnl: t.pnl.spread_pnl * 100,
+        funding_pnl: t.pnl.funding_pnl * 100,
+        fees: t.pnl.fees * 100,
+        net_pnl: t.pnl.net_pnl * 100,
+        exit_reason: t.exit_reason,
+        error_code: null,
+        hold_duration: t.hold_duration,
+        entry_timestamp: entryTs ? entryTs.toISOString() : null,
+        exit_timestamp: exitTs ? exitTs.toISOString() : null,
+        entry_price: t.entry_price,
+        exit_price: t.exit_price,
+        sl_price: t.sl_price ?? null,
+        tp_price: t.tp_price ?? null,
+        fill_count: t.fill_count,
+        funding_received: t.funding_received,
+        t_drop_offset_s: t.t_drop_offset_s ?? null,
+      }
+    })
     const errorEntries: TradeLogEntry[] = errorEvents.map(e => ({
       timestamp: e.funding_time.toISOString(),
       symbol: e.symbol,
@@ -212,6 +223,12 @@ export function buildReport(input: BuildReportInput): BacktestReport {
       exit_reason: null,
       error_code: e.error_code,
       hold_duration: null,
+      entry_timestamp: null,
+      exit_timestamp: null,
+      entry_price: null,
+      exit_price: null,
+      sl_price: null,
+      tp_price: null,
       fill_count: null,
       funding_received: null,
       t_drop_offset_s: e.t_drop_offset_s,

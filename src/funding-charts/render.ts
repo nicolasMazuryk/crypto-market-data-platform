@@ -1,6 +1,6 @@
 import { createCanvas } from '@napi-rs/canvas'
 
-import type { ChartConfig, FundingEvent, OrderbookRow } from './types.js'
+import type { ChartConfig, FundingEvent, OrderbookRow, TradeOverlay } from './types.js'
 
 const PALETTE = {
   bg: '#0d1117',
@@ -16,6 +16,11 @@ const PALETTE = {
   badgeBg: '#161b22',
   positiveRate: '#26a69a',
   negativeRate: '#ef5350',
+  slLine: '#ff7043',
+  tpLine: '#66bb6a',
+  entryMarker: '#f0b90b',
+  exitMarker: '#e0e3eb',
+  holdBand: '#7aa2ff',
 } as const
 
 const MARGIN = { top: 60, right: 55, bottom: 50, left: 12 } as const
@@ -92,6 +97,16 @@ export function renderChart(event: FundingEvent, rows: OrderbookRow[], config: C
     }
     if (ao !== null && isFinite(ao)) yMax = Math.max(yMax, ao)
     if (ac !== null && isFinite(ac)) yMax = Math.max(yMax, ac)
+  }
+
+  // Trade levels must stay on-canvas even when SL/TP sit outside the observed price range.
+  if (event.trade) {
+    const t = event.trade
+    for (const price of [t.entry_price, t.exit_price, t.sl_price, t.tp_price]) {
+      if (price === null || !isFinite(price)) continue
+      yMin = Math.min(yMin, price)
+      yMax = Math.max(yMax, price)
+    }
   }
 
   if (!isFinite(yMin) || !isFinite(yMax)) {
@@ -253,6 +268,20 @@ export function renderChart(event: FundingEvent, rows: OrderbookRow[], config: C
     }
   }
 
+  // Trade overlay (report-driven runs only)
+  if (event.trade) {
+    drawTradeOverlay(ctx, event.trade, {
+      plotX,
+      plotY,
+      plotW,
+      plotH,
+      slotWidth,
+      windowStart,
+      numCandles,
+      toY,
+    })
+  }
+
   // Bottom time axis
   const timeTickInterval = 10
   for (let i = 0; i < numCandles; i++) {
@@ -289,6 +318,128 @@ export function renderChart(event: FundingEvent, rows: OrderbookRow[], config: C
   drawHeader(ctx, event, W, plotX, PALETTE)
 
   return canvas.toBuffer('image/png')
+}
+
+interface PlotGeometry {
+  plotX: number
+  plotY: number
+  plotW: number
+  plotH: number
+  slotWidth: number
+  windowStart: number
+  numCandles: number
+  toY: (price: number) => number
+}
+
+/**
+ * Draw the realized trade: hold band, SL/TP levels, entry/exit markers.
+ *
+ * Timestamps outside the rendered window are clamped to the plot edge so a deadline exit beyond
+ * `post_seconds` still shows which direction it lies in rather than vanishing.
+ */
+function drawTradeOverlay(
+  ctx: ReturnType<ReturnType<typeof createCanvas>['getContext']>,
+  trade: TradeOverlay,
+  geo: PlotGeometry
+): void {
+  const { plotX, plotY, plotW, plotH, slotWidth, windowStart, numCandles, toY } = geo
+
+  const xAt = (ts: Date): number => {
+    const idx = Math.floor(ts.getTime() / 1000) - windowStart
+    const clamped = Math.min(Math.max(idx, 0), numCandles - 1)
+    return plotX + (clamped + 0.5) * slotWidth
+  }
+
+  const entryX = xAt(trade.entry_ts)
+  const exitX = xAt(trade.exit_ts)
+
+  // Hold span
+  ctx.save()
+  ctx.globalAlpha = 0.08
+  ctx.fillStyle = PALETTE.holdBand
+  ctx.fillRect(entryX, plotY, Math.max(1, exitX - entryX), plotH)
+  ctx.restore()
+
+  // SL / TP levels
+  const levels: { price: number | null; color: string; label: string }[] = [
+    { price: trade.sl_price, color: PALETTE.slLine, label: 'SL' },
+    { price: trade.tp_price, color: PALETTE.tpLine, label: 'TP' },
+  ]
+
+  for (const level of levels) {
+    if (level.price === null || !isFinite(level.price)) continue
+    const y = hp(toY(level.price))
+    const pctFromEntry = ((level.price - trade.entry_price) / trade.entry_price) * 100
+
+    ctx.save()
+    ctx.strokeStyle = level.color
+    ctx.setLineDash([6, 4])
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(plotX, y)
+    ctx.lineTo(plotX + plotW, y)
+    ctx.stroke()
+    ctx.restore()
+
+    // Label sits inside the plot: the right margin is too narrow for price + percent.
+    ctx.fillStyle = level.color
+    ctx.font = 'bold 11px monospace'
+    ctx.textAlign = 'right'
+    ctx.fillText(`${level.label} ${formatPrice(level.price)} (${pctFromEntry.toFixed(2)}%)`, plotX + plotW - 4, y - 5)
+  }
+
+  // Entry ▲ / exit ▼ markers. Entry and exit are often only seconds apart, so each label is
+  // pushed away from the other price to keep the two from colliding.
+  const entryLabelAbove = trade.entry_price >= trade.exit_price
+  drawMarker(
+    ctx,
+    entryX,
+    toY(trade.entry_price),
+    'up',
+    PALETTE.entryMarker,
+    `ENTRY ${formatPrice(trade.entry_price)}`,
+    {
+      labelAbove: entryLabelAbove,
+    }
+  )
+  drawMarker(ctx, exitX, toY(trade.exit_price), 'down', PALETTE.exitMarker, `EXIT ${formatPrice(trade.exit_price)}`, {
+    labelAbove: !entryLabelAbove,
+  })
+}
+
+function drawMarker(
+  ctx: ReturnType<ReturnType<typeof createCanvas>['getContext']>,
+  x: number,
+  y: number,
+  dir: 'up' | 'down',
+  color: string,
+  label: string,
+  opts: { labelAbove: boolean }
+): void {
+  // 'up' = ▲ sitting below the price point, 'down' = ▼ sitting above it. Canvas y grows downward.
+  const size = 7
+  const gap = 4
+  const tipY = dir === 'up' ? y + gap : y - gap
+  const baseY = dir === 'up' ? y + gap + size : y - gap - size
+
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.moveTo(x, tipY)
+  ctx.lineTo(x - size * 0.7, baseY)
+  ctx.lineTo(x + size * 0.7, baseY)
+  ctx.closePath()
+  ctx.fill()
+
+  ctx.font = 'bold 10px monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText(label, x, opts.labelAbove ? y - gap - size - 4 : y + gap + size + 11)
+}
+
+/** Crypto prices span many magnitudes; keep enough significant digits for sub-cent symbols. */
+function formatPrice(price: number): string {
+  const abs = Math.abs(price)
+  const digits = abs >= 100 ? 2 : abs >= 1 ? 4 : abs >= 0.01 ? 6 : 8
+  return price.toFixed(digits)
 }
 
 function drawHeader(
@@ -332,4 +483,32 @@ function drawHeader(
   ctx.fillStyle = badgeColor
   ctx.font = 'bold 18px monospace'
   ctx.fillText(rateStr, badgeX + badgeW / 2, badgeY + 38)
+
+  // Trade outcome badge, left of the funding badge (report-driven runs only)
+  if (!event.trade) return
+
+  const trade = event.trade
+  const outcomeW = 170
+  const outcomeX = badgeX - outcomeW - 8
+
+  ctx.fillStyle = palette.badgeBg
+  ctx.fillRect(outcomeX, badgeY, outcomeW, badgeH)
+  ctx.strokeStyle = palette.badgeBorder
+  ctx.lineWidth = 0.5
+  ctx.strokeRect(outcomeX, badgeY, outcomeW, badgeH)
+
+  ctx.fillStyle = palette.axisText
+  ctx.font = '10px monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText(trade.exit_reason.toUpperCase(), outcomeX + outcomeW / 2, badgeY + 16)
+
+  const pnlSign = trade.net_pnl >= 0 ? '+' : ''
+  const holdSeconds = Math.round((trade.exit_ts.getTime() - trade.entry_ts.getTime()) / 1000)
+  ctx.fillStyle = trade.net_pnl >= 0 ? palette.positiveRate : palette.negativeRate
+  ctx.font = 'bold 16px monospace'
+  ctx.fillText(
+    `${pnlSign}${trade.net_pnl.toFixed(3)}%  ${holdSeconds.toString()}s`,
+    outcomeX + outcomeW / 2,
+    badgeY + 38
+  )
 }

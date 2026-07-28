@@ -1,8 +1,26 @@
+/**
+ * Realized trade for one funding event, sourced from a backtest report's `trade_log`.
+ * Present only on report-driven runs; threshold-driven runs leave `FundingEvent.trade` undefined
+ * and render exactly as before.
+ */
+export interface TradeOverlay {
+  entry_ts: Date
+  exit_ts: Date
+  entry_price: number
+  exit_price: number
+  sl_price: number | null
+  tp_price: number | null
+  exit_reason: string
+  /** Net P&L in percent, as stored in the report trade log. */
+  net_pnl: number
+}
+
 export interface FundingEvent {
   exchange: string
   symbol: string
   funding_time: Date
   funding_rate: number
+  trade?: TradeOverlay
 }
 
 export interface OrderbookRow {

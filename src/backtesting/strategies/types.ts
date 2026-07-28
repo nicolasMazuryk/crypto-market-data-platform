@@ -59,6 +59,10 @@ export interface TradeResult {
   exit_spread?: number
   /** Actual exit time of the trade; used by the runner to prevent re-entry while a position is open */
   exit_time?: Date
+  /** Stop-loss price level active for the trade (chart overlays / audit) */
+  sl_price?: number
+  /** Take-profit price level live at exit; undefined when TP never armed (chart overlays / audit) */
+  tp_price?: number
   /** Localized T_drop timestamp (strategy_1, strategy_2 only) */
   real_settlement_ts?: string
   /** Whether a qualifying drop candle was localized (false = fallback to the window edge) */

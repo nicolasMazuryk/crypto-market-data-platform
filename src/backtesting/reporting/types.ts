@@ -115,6 +115,18 @@ export interface TradeLogEntry {
   exit_reason: ExitReason | null
   error_code: ErrorCode | null
   hold_duration: number | null
+  /** Entry fill time, ISO-8601. Null for error entries and strategies that omit `exit_time`. */
+  entry_timestamp: string | null
+  /** Exit fill time, ISO-8601. Null for error entries and strategies that omit `exit_time`. */
+  exit_timestamp: string | null
+  /** Entry fill price (weighted average for ladder strategies). */
+  entry_price: number | null
+  /** Exit fill price. */
+  exit_price: number | null
+  /** Stop-loss level active for the trade; null when the strategy does not report one. */
+  sl_price: number | null
+  /** Take-profit level live at exit; null when TP never armed or is unreported. */
+  tp_price: number | null
   fill_count: number | null
   funding_received: boolean | null
   t_drop_offset_s: number | null

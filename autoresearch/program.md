@@ -77,11 +77,11 @@ Proposals outside any of these ranges will be rejected by the loader. Do not pro
 
 ### strategy_2 (LONG — retracement exit)
 
-- `negative_funding_threshold_percent`: −2.0 <= v < 0.1
+- `negative_funding_threshold_percent`: -1.6 <= v < 0.4
 - `entry_offset_seconds`: **LOCKED** — do not propose changes to this parameter
-- `retracement_pct`: 0 < v <= 2.0 ← **fraction**, not percent
+- `retracement_pct`: 0.2 < v <= 1.0 ← **fraction**, not percent
 - `deadline_seconds`: **LOCKED** — do not propose changes to this parameter
-- `sl_multiplier`: >= 0.5 AND <= 4.0 ← SL at entry × (1 − F × mult)
+- `sl_multiplier`: >= 1.5 AND <= 3.0 ← SL at entry × (1 − F × mult)
 - `funding_fee_timeout_seconds`: **LOCKED** — do not propose changes to this parameter
 
 ### strategy_3a (SHORT — ride the drop)
