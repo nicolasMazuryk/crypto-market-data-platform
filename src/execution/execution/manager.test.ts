@@ -987,7 +987,10 @@ describe('UNDOC-03: spawnRetracementTracker re-arm on start', () => {
 
   // Task 22: S2 (strategy_2) retracement funding-fee gate now checks both bounds of the
   // ±5s tolerance window around fundingTs (previously only checked the lower bound).
-  function makeFundingEventRetracementState(now: number, fundingTs: number): { intent: TradeIntent; state: IntentState } {
+  function makeFundingEventRetracementState(
+    now: number,
+    fundingTs: number
+  ): { intent: TradeIntent; state: IntentState } {
     const intent = makeIntent({
       id: 'retracement-intent',
       volume: 0.001,
@@ -1780,9 +1783,7 @@ describe('Task 19: R11 ladder lifecycle (strategy_4_1a)', () => {
     })
     await new Promise(r => setTimeout(r, 20))
 
-    const firstTp = vi
-      .mocked(rest.createOrder)
-      .mock.calls.find(c => c[0].type === 'limit' && c[0].reduceOnly === true)
+    const firstTp = vi.mocked(rest.createOrder).mock.calls.find(c => c[0].type === 'limit' && c[0].reduceOnly === true)
     expect(firstTp).toBeDefined()
     expect(firstTp![0].price).toBeCloseTo(49500 * 1.005)
     expect(firstTp![0].qty).toBeCloseTo(0.0005)

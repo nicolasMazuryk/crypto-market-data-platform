@@ -93,9 +93,7 @@ export class Strategy2 implements BaseStrategy {
     // fixed T_settle + funding_fee_timeout_seconds fallback. On the no_drop_localized fallback,
     // tDropTs is already the window edge, so the non-missed branch covers that arming source too.
     const missed = eventMissDraw(event.exchange, event.symbol, event.funding_time) < this.wsEventConfig.missRate
-    const armMs = missed
-      ? event.funding_time.getTime() + this.config.funding_fee_timeout_seconds * 1000
-      : tDropEpochMs
+    const armMs = missed ? event.funding_time.getTime() + this.config.funding_fee_timeout_seconds * 1000 : tDropEpochMs
     const armTs = toClickHouseDateTime(new Date(armMs))
 
     // Simulate SL + dynamic TP online, advancing the gate one candle at a time. P_low is learned

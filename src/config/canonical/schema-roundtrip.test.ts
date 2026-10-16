@@ -9,10 +9,11 @@ import { STRATEGY_DEFS, ALL_STRATEGY_IDS } from './strategies.js'
 
 // Structural fields the registry doesn't model (no canonical param row): required-with-no-
 // default extras on specific strategies' btExtra/liveExtra shapes.
-const STRUCTURAL_EXTRAS: Partial<Record<StrategyId, { bt?: Record<string, unknown>; live?: Record<string, unknown> }>> = {
-  strategy_3a: { bt: { tp_mode: 'A' } },
-  strategy_6: { live: { mainSide: 'long' } },
-}
+const STRUCTURAL_EXTRAS: Partial<Record<StrategyId, { bt?: Record<string, unknown>; live?: Record<string, unknown> }>> =
+  {
+    strategy_3a: { bt: { tp_mode: 'A' } },
+    strategy_6: { live: { mainSide: 'long' } },
+  }
 
 // Fallback values for the 2 required-with-no-default canonical params (main_amount_usd,
 // and strategy_6's leverage) — everything else is covered by defaultFor().

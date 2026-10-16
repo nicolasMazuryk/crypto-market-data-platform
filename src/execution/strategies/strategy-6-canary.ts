@@ -54,8 +54,7 @@ export function evaluateStrategy6CanaryGate(metrics: Strategy6CanaryMetrics): Ca
     metrics.shadowPhaseMissEstimateRate * STRATEGY_6_CANARY_THRESHOLDS.fundingEventTimeoutRateMultiplier
   if (timeoutRate > timeoutCeiling) breaches.push('funding_event_timeout_rate')
 
-  const slippageCeiling =
-    metrics.assumedMarketSlippagePct * STRATEGY_6_CANARY_THRESHOLDS.mainSlippageP90Multiplier
+  const slippageCeiling = metrics.assumedMarketSlippagePct * STRATEGY_6_CANARY_THRESHOLDS.mainSlippageP90Multiplier
   if (metrics.mainSlippagePctP90 > slippageCeiling) breaches.push('main_slippage_p90')
 
   if (!metrics.fundingAttributionAuditPassed) breaches.push('funding_attribution_audit')

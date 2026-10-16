@@ -86,11 +86,7 @@ export function detectRealFundingSettlement(
         ? ((row.bid_high - row.bid_low) / row.bid_open) * 100
         : 0
 
-    if (
-      best === null ||
-      dropMove > best.dropMove ||
-      (dropMove === best.dropMove && redRange > best.redRange)
-    ) {
+    if (best === null || dropMove > best.dropMove || (dropMove === best.dropMove && redRange > best.redRange)) {
       best = { ts: row.ts, dropMove, redRange }
     }
   }

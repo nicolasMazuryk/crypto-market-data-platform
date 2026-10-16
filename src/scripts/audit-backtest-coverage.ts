@@ -81,7 +81,10 @@ export function parseAuditConfig(): AuditConfig {
     .filter(Boolean)
 
   const trimmedReportPath = process.env.AUDIT_REPORT_PATH?.trim()
-  const reportPath = trimmedReportPath && trimmedReportPath.length > 0 ? trimmedReportPath : '/reports/quotes-validation/coverage-audit.json'
+  const reportPath =
+    trimmedReportPath && trimmedReportPath.length > 0
+      ? trimmedReportPath
+      : '/reports/quotes-validation/coverage-audit.json'
 
   const baseConfigPath = process.env.BASE_CONFIG_PATH ?? path.join(process.cwd(), 'config', 'base_config.yaml')
   const { preFundingSeconds, postFundingSeconds } = loadWindowSecondsFromBaseConfig(baseConfigPath)
@@ -110,7 +113,11 @@ export interface EventWindow {
 }
 
 /** [T-pre, T+post+1) — e.g. pre=60, post=120 -> 181-second window. */
-export function computeEventWindow(fundingTimeMs: number, preFundingSeconds: number, postFundingSeconds: number): EventWindow {
+export function computeEventWindow(
+  fundingTimeMs: number,
+  preFundingSeconds: number,
+  postFundingSeconds: number
+): EventWindow {
   return {
     startMs: fundingTimeMs - preFundingSeconds * 1000,
     endMs: fundingTimeMs + (postFundingSeconds + 1) * 1000,
@@ -169,7 +176,11 @@ export function classifyEvent(params: {
     return 'task_missing'
   }
 
-  if (taskStatuses.some(status => status?.status === 'pending' || status?.status === 'downloading' || status?.status === 'processing')) {
+  if (
+    taskStatuses.some(
+      status => status?.status === 'pending' || status?.status === 'downloading' || status?.status === 'processing'
+    )
+  ) {
     return 'not_yet_downloaded'
   }
 
@@ -288,7 +299,11 @@ export async function auditFundingToOrderbook(config: AuditConfig): Promise<Even
   const results: EventAuditResult[] = []
 
   for (const event of auditEvents) {
-    const { startMs, endMs } = computeEventWindow(event.fundingTimeMs, config.preFundingSeconds, config.postFundingSeconds)
+    const { startMs, endMs } = computeEventWindow(
+      event.fundingTimeMs,
+      config.preFundingSeconds,
+      config.postFundingSeconds
+    )
     const startDay = toDateStringUtc(startMs)
     const endDay = toDateStringUtc(endMs - 1)
 
@@ -321,7 +336,11 @@ export async function auditFundingToOrderbook(config: AuditConfig): Promise<Even
     }
 
     for (const event of needsSecondLevelCheck) {
-      const { startMs, endMs } = computeEventWindow(event.fundingTimeMs, config.preFundingSeconds, config.postFundingSeconds)
+      const { startMs, endMs } = computeEventWindow(
+        event.fundingTimeMs,
+        config.preFundingSeconds,
+        config.postFundingSeconds
+      )
       addTaskKey(event.exchange, event.symbol, toDateStringUtc(startMs))
       addTaskKey(event.exchange, event.symbol, toDateStringUtc(endMs - 1))
     }
@@ -329,7 +348,11 @@ export async function auditFundingToOrderbook(config: AuditConfig): Promise<Even
     const taskStatuses = await getTaskStatusesForKeys(taskKeyList)
 
     for (const event of needsSecondLevelCheck) {
-      const { startMs, endMs } = computeEventWindow(event.fundingTimeMs, config.preFundingSeconds, config.postFundingSeconds)
+      const { startMs, endMs } = computeEventWindow(
+        event.fundingTimeMs,
+        config.preFundingSeconds,
+        config.postFundingSeconds
+      )
       const rows = await queryOrderbookRowsInEnvelope(event.exchange, event.symbol, startMs, endMs)
 
       const secondsPresent = rows.length
@@ -381,7 +404,10 @@ function buildSummary(results: EventAuditResult[]): Record<EventVerdict, number>
   return summary
 }
 
-function buildWorstSymbols(results: EventAuditResult[], limit = 25): { exchange: string; symbol: string; count: number }[] {
+function buildWorstSymbols(
+  results: EventAuditResult[],
+  limit = 25
+): { exchange: string; symbol: string; count: number }[] {
   const counts = new Map<string, { exchange: string; symbol: string; count: number }>()
   for (const result of results) {
     if (result.verdict === 'ok') {
@@ -497,9 +523,7 @@ export async function runAuditBacktestCoverage(): Promise<void> {
   }
 
   const hasActionableHoles =
-    report.actionable.length > 0 ||
-    report.orphanOrderbookDays.length > 0 ||
-    report.fundingIntervalViolations.length > 0
+    report.actionable.length > 0 || report.orphanOrderbookDays.length > 0 || report.fundingIntervalViolations.length > 0
 
   process.exitCode = hasActionableHoles ? 1 : 0
 }

@@ -227,14 +227,10 @@ describe('LONG/SHORT co-run guard (§11.1)', () => {
   }
 
   it('rejects strategy_3a + strategy_1 both enabled (SHORT vs LONG)', () => {
-    expect(() =>
-      parseEngineConfig(baseRaw({ strategies: [strategy1Raw(), strategy3aRaw()] }))
-    ).toThrow(ConfigError)
+    expect(() => parseEngineConfig(baseRaw({ strategies: [strategy1Raw(), strategy3aRaw()] }))).toThrow(ConfigError)
   })
 
   it('allows strategy_3a + strategy_6 both enabled (strategy_6 exempt from the guard)', () => {
-    expect(() =>
-      parseEngineConfig(baseRaw({ strategies: [strategy6Raw(), strategy3aRaw()] }))
-    ).not.toThrow()
+    expect(() => parseEngineConfig(baseRaw({ strategies: [strategy6Raw(), strategy3aRaw()] }))).not.toThrow()
   })
 })

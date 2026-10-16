@@ -122,7 +122,13 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
     const now = clock.now()
     const exchangeOrderId = `shadow-${req.clientOrderId}`
     logger.info({ event: 'strategy6.shadow.order', ...req }, 'strategy6.shadow.order')
-    const ack: OrderAck = { clientOrderId: req.clientOrderId, exchangeOrderId, status: 'accepted', submittedAt: now, ackedAt: now }
+    const ack: OrderAck = {
+      clientOrderId: req.clientOrderId,
+      exchangeOrderId,
+      status: 'accepted',
+      submittedAt: now,
+      ackedAt: now,
+    }
     const fillDelayMs = 150
     setTimeout(() => {
       const price = req.price ?? refPrice(req.exchange, req.symbol) ?? 0
@@ -3557,9 +3563,7 @@ export function createExecutionManager(opts: ExecutionManagerOptions): Execution
         for (const rung of rungs) {
           const rungQty = alignToLotStep(check.qty * rung.qtyFraction, market)
           const limitPrice =
-            intent.side === 'long'
-              ? price * (1 - rung.priceOffsetPct / 100)
-              : price * (1 + rung.priceOffsetPct / 100)
+            intent.side === 'long' ? price * (1 - rung.priceOffsetPct / 100) : price * (1 + rung.priceOffsetPct / 100)
           if (rungQty <= 0 || !meetsMinNotional(rungQty, limitPrice, market)) continue
           pAvgFullNotional += limitPrice * rungQty
           pAvgFullQty += rungQty

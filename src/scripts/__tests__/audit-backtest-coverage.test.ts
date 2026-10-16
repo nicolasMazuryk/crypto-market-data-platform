@@ -77,23 +77,21 @@ describe('isUnobtainableError', () => {
 describe('classifyEvent', () => {
   it('is ok when the full window is present with no null prices', async () => {
     const { classifyEvent } = await import('../audit-backtest-coverage.js')
-    expect(
-      classifyEvent({ secondsPresent: 181, windowSeconds: 181, hasNullPrice: false, taskStatuses: [] })
-    ).toBe('ok')
+    expect(classifyEvent({ secondsPresent: 181, windowSeconds: 181, hasNullPrice: false, taskStatuses: [] })).toBe('ok')
   })
 
   it('is missing_seconds when partially present', async () => {
     const { classifyEvent } = await import('../audit-backtest-coverage.js')
-    expect(
-      classifyEvent({ secondsPresent: 90, windowSeconds: 181, hasNullPrice: false, taskStatuses: [] })
-    ).toBe('missing_seconds')
+    expect(classifyEvent({ secondsPresent: 90, windowSeconds: 181, hasNullPrice: false, taskStatuses: [] })).toBe(
+      'missing_seconds'
+    )
   })
 
   it('is missing_seconds when full but has a null price', async () => {
     const { classifyEvent } = await import('../audit-backtest-coverage.js')
-    expect(
-      classifyEvent({ secondsPresent: 181, windowSeconds: 181, hasNullPrice: true, taskStatuses: [] })
-    ).toBe('missing_seconds')
+    expect(classifyEvent({ secondsPresent: 181, windowSeconds: 181, hasNullPrice: true, taskStatuses: [] })).toBe(
+      'missing_seconds'
+    )
   })
 
   it('is task_missing when zero seconds and no download_tasks row', async () => {
@@ -239,7 +237,12 @@ describe('auditFundingToOrderbook: S5 cross-exchange expansion', () => {
 
     // The second-level query and status lookup should only run for bybit (the incomplete day).
     expect(queryOrderbookRowsInEnvelopeMock).toHaveBeenCalledTimes(1)
-    expect(queryOrderbookRowsInEnvelopeMock).toHaveBeenCalledWith('bybit', 'BTCUSDT', expect.any(Number), expect.any(Number))
+    expect(queryOrderbookRowsInEnvelopeMock).toHaveBeenCalledWith(
+      'bybit',
+      'BTCUSDT',
+      expect.any(Number),
+      expect.any(Number)
+    )
   })
 
   it('excludes exchanges in FUNDING_DOWNLOAD_TASKS_EXCLUDED_EXCHANGES from S5 expansion', async () => {
@@ -249,10 +252,7 @@ describe('auditFundingToOrderbook: S5 cross-exchange expansion', () => {
     queryFundingEventTimesBelowThresholdMock.mockResolvedValue([
       { exchange: 'binance', symbol: 'BTCUSDT', funding_time: '2026-05-01 08:00:00', funding_rate: -0.004 },
     ])
-    listExchangesBySymbolMock.mockResolvedValue([
-      makeMarket({ exchange: 'binance' }),
-      makeMarket({ exchange: 'mexc' }),
-    ])
+    listExchangesBySymbolMock.mockResolvedValue([makeMarket({ exchange: 'binance' }), makeMarket({ exchange: 'mexc' })])
     queryOrderbookDaySweepMock.mockResolvedValue([
       { exchange: 'binance', symbol: 'BTCUSDT', d: '2026-05-01', rows: 86_400, interp: 0, nulls: 0 },
     ])
