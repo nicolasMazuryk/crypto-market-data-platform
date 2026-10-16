@@ -1,6 +1,6 @@
 import type { Config } from 'drizzle-kit'
 
-const postgresUrl = process.env.EXECUTION_POSTGRES_URL ?? 'postgresql://arbinet:<POSTGRES_PASSWORD>@localhost:5432/arbinet'
+const postgresUrl = process.env.EXECUTION_POSTGRES_URL ?? ''
 
 export default {
   schema: './src/execution/persistence/drizzle/schema.ts',
