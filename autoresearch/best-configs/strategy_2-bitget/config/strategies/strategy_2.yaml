@@ -3,10 +3,10 @@
 
 strategy_id: 'strategy_2'
 direction: 'long'
-negative_funding_threshold_percent: -0.67
+negative_funding_threshold_percent: -0.6
 entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
-retracement_pct: 2.0 # test hard cap; continue stepping up from 1.8
+retracement_pct: 0.63 # test fractional optimum beyond iter 37's 0.62 peak; 37% recovery target
 deadline_seconds: 600
-sl_multiplier: 4.0
+sl_multiplier: 0.5
 amount_usd: 20
 leverage: 4

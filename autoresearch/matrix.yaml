@@ -62,6 +62,6 @@ runs:
   # - strategy: strategy_4_2a
   #   exchange: okx
   #   agent: claude
-  - strategy: strategy_4_2a
-    exchange: bitget
-    agent: claude
+  # - strategy: strategy_4_2a
+  #   exchange: bitget
+  #   agent: claude

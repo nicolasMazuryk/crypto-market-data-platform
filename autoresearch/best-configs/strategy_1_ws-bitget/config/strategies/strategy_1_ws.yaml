@@ -3,7 +3,7 @@
 
 strategy_id: 'strategy_1_ws'
 direction: 'long'
-negative_funding_threshold_percent: -0.56
+negative_funding_threshold_percent: -2.0
 entry_offset_seconds: 3 # Enter at T_funding - 3s (clamped to new >=3 bound)
 funding_fee_timeout_seconds: 90
 amount_usd: 20
