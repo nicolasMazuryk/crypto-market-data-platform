@@ -8,7 +8,6 @@ logs/
 .env
 .env.local
 coverage/
-package-lock.json
 
 charts/
 
@@ -31,3 +30,22 @@ terraform/terraform.tfvars
 
 # Framework
 tasks/
+
+# Secrets and local state — never commit
+.env*
+!.env.example
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform/terraform.tfvars
+.mcp.json
+live-configs/registry.yaml
+backups/
+config/.fleet-tmp/
+.sst/
+market-data/
+reports/
+*.zip
+__claude/
+.claude/skills/
+dist/
