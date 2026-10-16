@@ -1,5 +1,4 @@
 ---
-grafana_admin_password: 'changeme'
 prometheus_retention_days: 30
 prometheus_image: prom/prometheus:v2.54.0
 alertmanager_image: prom/alertmanager:v0.27.0

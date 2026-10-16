@@ -6,6 +6,11 @@
     - ../group_vars/all.yml
 
   tasks:
+    - name: Assert required secrets are set
+      ansible.builtin.include_tasks: ../tasks/assert-required-secrets.yml
+      vars:
+        required_secrets: [postgres_password, clickhouse_password, grafana_admin_password]
+
     # ── Safety: block in-hours deploys unless explicitly acknowledged ─────────
     - name: Check if execution engine is running (live mode)
       ansible.builtin.command:

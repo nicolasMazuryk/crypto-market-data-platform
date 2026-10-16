@@ -29,7 +29,7 @@ ansible/inventory/hosts.ini
 terraform/terraform.tfvars
 
 # Framework
-tasks/
+/tasks/
 
 # Secrets and local state — never commit
 .env*

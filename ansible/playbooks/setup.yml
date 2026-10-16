@@ -6,6 +6,11 @@
     - ../group_vars/all.yml
 
   pre_tasks:
+    - name: Assert required secrets are set
+      ansible.builtin.include_tasks: ../tasks/assert-required-secrets.yml
+      vars:
+        required_secrets: [postgres_password, clickhouse_password, grafana_admin_password]
+
     - name: Ensure persistent quote validation reports directory exists
       ansible.builtin.file:
         path: '{{ quotes_validation_reports_dir }}'

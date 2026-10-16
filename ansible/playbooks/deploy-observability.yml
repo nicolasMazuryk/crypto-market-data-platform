@@ -6,6 +6,11 @@
     - ../group_vars/all.yml
 
   tasks:
+    - name: Assert required secrets are set
+      ansible.builtin.include_tasks: ../tasks/assert-required-secrets.yml
+      vars:
+        required_secrets: [grafana_admin_password]
+
     - name: Template docker-compose.prod.yml
       ansible.builtin.template:
         src: ../roles/app/templates/docker-compose.prod.yml.j2
