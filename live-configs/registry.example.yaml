@@ -1,0 +1,20 @@
+# Copy to live-configs/registry.yaml (gitignored). The provisioning CLI reads and
+# writes that file at runtime, so real credentials live only on your machine.
+# Validate with: npm run registry:validate live-configs/registry.yaml
+combinations:
+  - exchange: binance
+    assigned_strategy: strategy_1_ws
+    allocated_capital_usdt: 100
+    status: active
+    sub_account_id: sub-account-1
+    sub_account_label: sub-account-1
+    api_key: REPLACE_ME
+    api_secret: REPLACE_ME
+    api_passphrase: ""
+    ip_allow_list:
+      - 203.0.113.10
+      - 203.0.113.11
+    provisioning_mode: full_api
+    created_at: 2026-01-01T00:00:00.000Z
+    last_assigned_at: 2026-01-01T00:00:00.000Z
+    notes: ""
