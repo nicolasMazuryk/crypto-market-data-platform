@@ -1,8 +1,8 @@
 {
-  "name": "datapipeline",
+  "name": "crypto-market-data-platform",
   "version": "1.0.0",
   "type": "module",
-  "description": "A modern TypeScript project",
+  "description": "ClickHouse-backed market and funding-rate data platform with a backtester, an automated parameter-research loop and a live execution fleet across six crypto exchanges.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
@@ -96,7 +96,9 @@
     "logs:clean": "rm -rf logs/*.log",
     "charts:funding": "tsx src/scripts/funding-chart-images.ts",
     "charts:funding:report": "tsx src/scripts/funding-chart-images.ts --from-report",
-    "verify:live": "./scripts/run-live-verification.sh"
+    "verify:live": "./scripts/run-live-verification.sh",
+    "build": "tsc",
+    "test:ci": "vitest run --exclude \"src/db/**\" --exclude \"**/node_modules/**\" --exclude \"**/dist/**\" --exclude \".autoresearch/**\""
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -146,5 +148,14 @@
     "ws": "^8.18.2",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
+  },
+  "license": "MIT",
+  "author": "nicolas <nicolasmazuryk@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nicolasMazuryk/crypto-market-data-platform.git"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
