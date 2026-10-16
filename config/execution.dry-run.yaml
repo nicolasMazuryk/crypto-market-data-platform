@@ -14,7 +14,7 @@ strategies:
     enabled: false
     negativeFundingThresholdPercent: -0.5 # % — entry threshold (e.g. -0.5 = −0.5 % per 8 h)
     entryOffsetSeconds: 3 # s — enter N seconds before funding time
-    exitOffsetSeconds: 6 # s — exit N seconds after funding time
+    exitOffsetSeconds: 10 # s — exit N seconds after funding time
     amountUsd: 10 # USD — notional per intent
     leverage: 4 # x — leverage applied at the exchange
 

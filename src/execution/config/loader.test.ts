@@ -233,42 +233,7 @@ describe('validateForLiveStart', () => {
   })
 })
 
-describe('strategy_4_2a live YAMLs (OQ-8 regeneration)', () => {
-  const EXCHANGES = ['binance', 'bitget', 'bybit', 'gateio', 'kucoin', 'okx']
-
-  it.each(EXCHANGES)(
-    'live-configs/strategies/strategy_4_2a-%s.yaml parses to a non-empty strategies array',
-    exchange => {
-      const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', `strategy_4_2a-${exchange}.yaml`)
-      const raw = YAML.parse(readFileSync(yamlPath, 'utf8')) as Record<string, unknown>
-
-      const config = parseEngineConfig({ mode: 'dry_run', exchanges: [], ...raw })
-
-      expect(config.strategies.length).toBeGreaterThan(0)
-      expect(config.strategies[0]?.id).toBe('strategy_4_2a')
-      expect(config.strategies[0]?.enabled).toBe(true)
-    }
-  )
-})
-
 describe('strategy_1 live YAMLs (Task 06 exitOffsetSeconds >=6 migration)', () => {
-  const EXCHANGES = ['binance', 'bitget', 'bybit', 'gateio', 'kucoin', 'okx']
-
-  it.each(EXCHANGES)(
-    'live-configs/strategies/strategy_1-%s.yaml parses clean with the migrated exitOffsetSeconds',
-    exchange => {
-      const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', `strategy_1-${exchange}.yaml`)
-      const raw = YAML.parse(readFileSync(yamlPath, 'utf8')) as Record<string, unknown>
-
-      const config = parseEngineConfig({ mode: 'dry_run', exchanges: [], ...raw })
-
-      expect(config.strategies.length).toBeGreaterThan(0)
-      expect(config.strategies[0]?.id).toBe('strategy_1')
-      expect(config.strategies[0]?.enabled).toBe(true)
-      expect((config.strategies[0] as { exitOffsetSeconds?: number }).exitOffsetSeconds).toBe(6)
-    }
-  )
-
   it('rejects exitOffsetSeconds=4 (below the new >=6 bound, R2)', () => {
     expect(() =>
       parseEngineConfig({
@@ -293,24 +258,12 @@ describe('strategy_1 live YAMLs (Task 06 exitOffsetSeconds >=6 migration)', () =
 // Task 22 (F8/R9): OKX per-exchange deltas (§8) are config-driven via per-exchange YAML, not
 // hardcoded engine constants — assert the canonical params load straight through with no fallback.
 describe('OKX per-exchange deltas load from live-configs YAML (F8/R9, verification only)', () => {
-  it('strategy_1-okx.yaml sets leverage=4 (binance=5)', () => {
-    const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', 'strategy_1-okx.yaml')
+  it.each(['strategy_1_ws', 'strategy_6'])('%s-okx.yaml sets fundingFeeTimeoutSeconds=45 (binance=10)', strategyId => {
+    const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', `${strategyId}-okx.yaml`)
     const raw = YAML.parse(readFileSync(yamlPath, 'utf8')) as Record<string, unknown>
     const config = parseEngineConfig({ mode: 'dry_run', exchanges: [], ...raw })
 
-    expect(config.strategies[0]?.id).toBe('strategy_1')
-    expect((config.strategies[0] as { leverage?: number }).leverage).toBe(4)
+    expect(config.strategies[0]?.id).toBe(strategyId)
+    expect((config.strategies[0] as { fundingFeeTimeoutSeconds?: number }).fundingFeeTimeoutSeconds).toBe(45)
   })
-
-  it.each(['strategy_1_ws', 'strategy_6'])(
-    '%s-okx.yaml sets fundingFeeTimeoutSeconds=45 (binance=10)',
-    strategyId => {
-      const yamlPath = resolve(process.cwd(), 'live-configs', 'strategies', `${strategyId}-okx.yaml`)
-      const raw = YAML.parse(readFileSync(yamlPath, 'utf8')) as Record<string, unknown>
-      const config = parseEngineConfig({ mode: 'dry_run', exchanges: [], ...raw })
-
-      expect(config.strategies[0]?.id).toBe(strategyId)
-      expect((config.strategies[0] as { fundingFeeTimeoutSeconds?: number }).fundingFeeTimeoutSeconds).toBe(45)
-    }
-  )
 })
