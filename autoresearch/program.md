@@ -32,7 +32,7 @@ The only paths you may touch are **relative to that CWD**:
 - Proposal file to create: `.autoresearch/results/<tag>/proposal.json`
   (the harness has created the directory; just write the file)
 
-Do **not** read or write under `/Users/nicolas/Documents/datapipeline/config/strategies/...` or any
+Do **not** read or write under `/Users/nicolas/code/datapipeline/config/strategies/...` or any
 other absolute path outside the worktree
 
 ## What you must not do
